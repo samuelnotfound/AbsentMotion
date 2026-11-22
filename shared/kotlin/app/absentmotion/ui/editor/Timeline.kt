@@ -2143,7 +2143,6 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
         fun marker(x: Float) {
             drawRoundRect(WorkAreaColor, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
             drawCircle(WorkAreaColor, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
-            drawLine(WorkAreaColor.copy(alpha = 0.32f), Offset(x, rulerH), Offset(x, size.height), 1.dp.toPx())
         }
         marker(startX)
         marker(endX)
