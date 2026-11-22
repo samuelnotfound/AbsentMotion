@@ -7,10 +7,7 @@ import app.absentmotion.ui.editor.deskSp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,7 +35,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -72,10 +67,7 @@ import app.absentmotion.ui.editor.PanelIcons
 import app.absentmotion.ui.editor.rememberHaptic
 import app.absentmotion.ui.theme.Am
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.sin
 import androidx.compose.ui.res.stringResource
 import app.absentmotion.R
 import app.absentmotion.ui.HoldName
@@ -85,13 +77,9 @@ internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn
     Box(modifier) {
         when (tab) {
             0 -> PositionTab(state, layer, onFlip)
-            1 -> when {
-                turn == null -> RotationTab(state, layer)
-                deskLayout || state.settings.rotateFree -> TurnTab(state, layer, turn)
-                else -> AxesTab(state, layer, turn)
-            }
+            1 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
-            3 -> TiltTab(state, layer, turn)
+            3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             4 -> SkewTab(state, layer)
             else -> PivotTab(state, layer, onFlip)
         }
@@ -296,59 +284,29 @@ private fun DrawScope.corner(xPx: Float, yPx: Float, dx: Float, dy: Float) {
 @Composable
 private fun RotationTab(state: EditorState, layer: Layer) {
     val angle = layer.rotation
-    val timing = remember { LongArray(2) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    Box(
-        Modifier.fillMaxSize().holdAndDoubleTap(timing) { state.editSelected { it.withRotation(0f) } }.pointerInput(state) {
-            awaitEachGesture {
-                val down = awaitFirstDown()
-                val centre = Offset(size.width / 2f, size.height / 2f)
-                var last = dialAngle(down.position - centre)
-                var fine: Boolean? = null
-                drag(down.id) { change ->
-                    if (fine == null && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) fine = timing.heldBeforeMoving(change.uptimeMillis, viewConfiguration.longPressTimeoutMillis)
-                    val now = dialAngle(change.position - centre)
-                    var delta = now - last
-                    if (delta > 180f) delta -= 360f else if (delta < -180f) delta += 360f
-                    last = now
-                    change.consume()
-                    if (fine == true) delta *= FINE_FACTOR
-                    if (delta != 0f) state.editSelected(key = "rotate") { l -> l.withRotation(l.rotation + delta) }
-                }
-                state.endGesture()
-                if (fine != null) rulerTip(context)
-            }
-        },
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val centre = Offset(size.width / 2f, size.height / 2f)
-            val radius = 227.px.toPx()
-            drawCircle(Am.Well, radius, centre, style = Stroke(7.px.toPx()))
-            drawArc(
-                PanelGreen, startAngle = 0f, sweepAngle = -(angle % 360f), useCenter = false,
-                topLeft = centre - Offset(radius, radius), size = Size(radius * 2, radius * 2), style = Stroke(6.px.toPx()),
-            )
-            val radians = Math.toRadians(angle.toDouble())
-            val knob = centre + Offset((radius * cos(radians)).toFloat(), (-radius * sin(radians)).toFloat())
-            drawCircle(Color.Black.copy(alpha = 0.25f), 49.px.toPx(), knob + Offset(0f, 2.px.toPx()))
-            drawCircle(Am.OnDark, 49.px.toPx(), knob)
-        }
-        Box(
-            Modifier.align(Alignment.Center).height(140.px).widthIn(min = 267.px).clip(PanelShape).background(Am.Field).typeOnDoubleTap {
+    val label = stringResource(R.string.tilt_z_rotation)
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
+            NumberBox(formatFixed(angle, 1) + "º", Am.Accent, Modifier.width(177.px).height(70.px)) {
                 state.keypad = KeypadRequest(listOf(KeypadField(ROTATION_LABEL, angle, "\u00B0")), 0) { v ->
                     state.editSelected { it.withRotation(v[0]) }
                 }
-            }.padding(horizontal = 24.px),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(formatFixed(angle, 1).removeSuffix(".0") + "º", color = Am.Accent, fontSize = 32.5.sp, maxLines = 1, softWrap = false)
+            }
+            Caption(label, Modifier.width(177.px).height(23.px))
         }
+        RulerSpinner(
+            Am.Accent,
+            onDrag = { dx ->
+                state.editSelected(key = "rotate") { it.withRotation(it.rotation + dx * AXIS_DEGREES_PER_DP) }
+            },
+            onEnd = { state.endGesture() },
+            modifier = Modifier.padding(top = 122.px).fillMaxWidth().height(415.px),
+            onReset = { state.editSelected { it.withRotation(0f) } },
+        )
     }
 }
 
 private const val ROTATION_LABEL = ""
-
-private fun dialAngle(fromCentre: Offset): Float = Math.toDegrees(atan2(-fromCentre.y, fromCentre.x).toDouble()).toFloat()
 
 internal class Sides(val x: Float, val y: Float, val upright: Boolean)
 
@@ -519,52 +477,8 @@ private fun SkewTab(state: EditorState, layer: Layer) {
 }
 
 private const val DEGREES_PER_DP = 0.25f
+private const val AXIS_DEGREES_PER_DP = 0.5f
 
-@Composable
-private fun TiltTab(state: EditorState, layer: Layer, turn: Turn?) {
-    if (turn != null) TurnHook(state, turn)
-    var active by remember { mutableIntStateOf(0) }
-    val tilt = layer.tilt
-    val labels = listOf(stringResource(R.string.tilt_x_rotation), stringResource(R.string.tilt_y_rotation))
-    fun openKeypad(which: Int) {
-        active = which
-        state.keypad = KeypadRequest(labels.mapIndexed { i, label -> KeypadField(label, tilt[i], "\u00B0") }, which) { v -> state.editSelected { it.withTilt(v[0], v[1]) } }
-    }
-    fun colour(which: Int) = if (active == which) Am.Accent else Am.OnDark
-
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 42.px)) {
-            Row {
-                NumberBox(formatFixed(tilt[0], 1) + "º", colour(0), Modifier.width(177.px).height(70.px), onSelect = { active = 0 }) { openKeypad(0) }
-                Spacer(Modifier.width(14.px))
-                NumberBox(formatFixed(tilt[1], 1) + "º", colour(1), Modifier.width(177.px).height(70.px), onSelect = { active = 1 }) { openKeypad(1) }
-            }
-            Row(Modifier.height(23.px)) {
-                Caption(labels[0], Modifier.width(177.px).fillMaxHeight())
-                Spacer(Modifier.width(14.px))
-                Caption(labels[1], Modifier.width(177.px).fillMaxHeight())
-            }
-        }
-        for (which in 0..1) {
-            RulerSpinner(
-                colour(which),
-                onDrag = { dx ->
-                    val d = dx * TILT_PER_DP
-                    state.editSelected(key = "tilt-$which") { l ->
-                        val t = l.tilt
-                        l.withTilt(if (which == 0) t[0] + d else t[0], if (which == 1) t[1] + d else t[1])
-                    }
-                },
-                onEnd = { state.endGesture() },
-                modifier = Modifier.padding(top = (if (which == 0) 137 else 345).px).fillMaxWidth().height((if (which == 0) 194 else 193).px),
-                onStart = { active = which },
-                onReset = { state.editSelected { l -> l.tilt.let { t -> l.withTilt(if (which == 0) 0f else t[0], if (which == 1) 0f else t[1]) } } },
-            )
-        }
-    }
-}
-
-private const val TILT_PER_DP = 0.5f
 
 internal class PivotFrame(val world: android.graphics.Matrix, val box: FloatArray?) {
     fun local(at: Pt, v: Pt): Pt? {
@@ -711,7 +625,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
                     onDrag = { dx ->
                         state.editSelected(key = "axis-$which") { l ->
                             val v = turn.values(l)
-                            v[which] += dx * TILT_PER_DP
+                            v[which] += dx * AXIS_DEGREES_PER_DP
                             turn.withValues(l, v)
                         }
                     },
