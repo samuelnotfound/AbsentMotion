@@ -235,7 +235,7 @@ public:
     bool layerBounds(int64_t layerId, double timeMs, float ltrb[4]) override;
     int64_t hitTest(float x, float y, double timeMs) override;
     bool still(double timeMs, int width, int height, std::vector<uint8_t>* rgba) override;
-    bool previewStill(double timeMs, int width, int height, bool accurateBlur, std::vector<uint8_t>* rgba) override;
+    bool previewStill(double timeMs, int width, int height, bool accurateBlur, bool camera, std::vector<uint8_t>* rgba) override;
     bool shapeIcon(const std::string& xml, int size, uint32_t color, std::vector<uint8_t>* rgba) override;
     bool layerOutline(int64_t layerId, double timeMs, std::string* svg) override;
 
@@ -1468,9 +1468,10 @@ bool EngineImpl::still(double timeMs, int width, int height, std::vector<uint8_t
     }, rgba);
 }
 
-bool EngineImpl::previewStill(double timeMs, int width, int height, bool accurateBlur, std::vector<uint8_t>* rgba) {
+bool EngineImpl::previewStill(double timeMs, int width, int height, bool accurateBlur, bool camera, std::vector<uint8_t>* rgba) {
     if (fScene.width <= 0) return false;
-    SetCameraView(true);
+    const bool previousCamera = CameraViewOn();
+    SetCameraView(camera);
     const bool made = this->offscreen(width, height, false, [&](SkCanvas* canvas) {
         canvas->scale((float)width / fScene.width, (float)height / fScene.height);
         const LayerEffects fx = this->layerEffects();
@@ -1479,6 +1480,7 @@ bool EngineImpl::previewStill(double timeMs, int width, int height, bool accurat
         SetFastShutterBlur(false);
     }, rgba);
     SetFastShutterBlur(false);
+    SetCameraView(previousCamera);
     return made;
 }
 

@@ -74,7 +74,8 @@ class NativeEngine(backend: Backend = Backend.GANESH) : AutoCloseable {
     fun stillInto(timeMs: Double, width: Int, height: Int, out: ByteArray): Boolean = DesktopNative.stillInto(handle, timeMs, width, height, out)
     fun exportFrame(timeMs: Double, width: Int, height: Int, out: ByteArray): Int = DesktopNative.exportFrame(handle, timeMs, width, height, out)
     fun exportFlush(out: ByteArray?): Int = if (handle == 0L) 0 else DesktopNative.exportFlush(handle, out)
-    fun previewStill(timeMs: Double, width: Int, height: Int, accurateBlur: Boolean): ByteArray? = DesktopNative.still(handle, timeMs, width, height, accurateBlur)
+    fun previewStill(timeMs: Double, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true): ByteArray? =
+        DesktopNative.still(handle, timeMs, width, height, accurateBlur, camera)
     fun shapeIcon(xml: String, size: Int, color: Int): ByteArray? = DesktopNative.shapeIcon(handle, xml, size, color)
 
     override fun close() {

@@ -75,6 +75,8 @@ value class Scene(val node: XmlNode) {
     val workAreaStartFrame: Int get() = (node["workAreaStart"]?.toIntOrNull() ?: 0).coerceIn(0, lastFrame.coerceAtLeast(0))
     val workAreaEndFrame: Int get() = (node["workAreaEnd"]?.toIntOrNull() ?: lastFrame.coerceAtLeast(0) + 1).coerceIn(workAreaStartFrame + 1, lastFrame.coerceAtLeast(0) + 1)
 
+    val workArea: IntRange get() = workAreaStartFrame until workAreaEndFrame
+
     fun withWorkArea(startFrame: Int, endFrame: Int): Scene {
         val last = lastFrame.coerceAtLeast(0)
         val start = startFrame.coerceIn(0, last)

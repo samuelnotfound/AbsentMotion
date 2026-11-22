@@ -88,6 +88,26 @@ class PreviewCacheTest {
         assertEquals(key, CacheKey("p", Scene(edited.node.copy(attrs = edited.node.attrs - "bgcolor")), 1, false))
     }
 
+    @Test fun resizingTheWorkAreaKeepsCachedFramesAndAllowsFillingBothEnds() {
+        val scene = Scene.create("", 100, 100, 30, 0).let { Scene(it.node.with("totalTime", "1000")) }
+        val narrowed = scene.withWorkArea(10, 15)
+        val expanded = scene.withWorkArea(8, 17)
+        val cache = CacheKey("p", narrowed, 1, false)
+        assertTrue(cache.matchesFrames(cache.copy(scene = expanded)))
+        assertFalse(cache.matchesFrames(cache.copy(scene = expanded, camera = false)))
+        assertTrue(previewDirtyRanges(narrowed, expanded).isEmpty())
+        assertEquals((8..16).filter { it != 12 }.toSet(), previewOrder(16, 12, first = 8).toSet())
+        FrameStore(narrowed.workArea.first, 100).use { store ->
+            narrowed.workArea.forEach { assertTrue(store.put(it, byteArrayOf(1))) }
+            val missing = expanded.workArea.filterNot { it in store }
+            assertEquals(listOf(8, 9, 15, 16), missing)
+            missing.forEach { assertTrue(store.put(it, byteArrayOf(2))) }
+            assertEquals(9, store.countIn(expanded.workArea))
+            assertEquals(5, store.countIn(narrowed.workArea))
+            assertArrayEquals(byteArrayOf(1), store[10])
+        }
+    }
+
     @Test fun theLineStaysUpWhileTheCacheCatchesUpWithAnEdit() {
         val scene = Scene.parse("""<scene width="100" height="100" fps="30" totalTime="1000"><shape id="1" startTime="0" endTime="999"/></scene>""")
         val edited = Scene(scene.node.copy(attrs = scene.node.attrs + ("bgcolor" to "#ff00ff00")))
