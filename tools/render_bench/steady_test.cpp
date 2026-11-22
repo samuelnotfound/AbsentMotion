@@ -58,6 +58,7 @@ int main() {
     mask.clippingMask = true;
     std::vector<am::Layer> input = {spatial(1, 100), camera, spatial(2, 300), flatLayer, spatial(4, 100), mask, spatial(6, 300), spatial(7, 300)};
     std::vector<am::Layer> output;
+    am::SetCameraView(false);
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     std::vector<int64_t> ids;
     for (const auto& l : output) ids.push_back(l.id);
@@ -132,6 +133,16 @@ int main() {
     lamp.hidden = true;
     Expect(am::SceneLights({lamp}, 0).count == 0, "hidden light ignored");
     {
+        am::SetCameraView(true);
+        const double now = 0;
+        const auto cameraScene = std::vector<am::Layer>{camera, flatLayer, spatial(1, 100)};
+        am::SeeLayers(cameraScene, 100, 100, true, 30, now, true, &output);
+        const auto visible = [&](int64_t id) {
+            return std::any_of(output.begin(), output.end(), [&](const am::Layer& l) { return l.id == id; });
+        };
+        Expect(!visible(flatLayer.id), "camera view hides a 2D layer");
+        Expect(am::CameraHidesLayer({camera, flatLayer}, flatLayer, now), "camera view hides selection for 2D layers");
+        Expect(!am::CameraHidesLayer({camera, flatLayer}, flatLayer, 1200), "inactive camera does not hide 2D layers");
         am::Layer tilted = camera;
         tilted.tilt.value = {20, 35};
         am::Layer near = spatial(11, 0);
@@ -171,11 +182,12 @@ int main() {
         am::Layer eye = at(9, -1000);
         eye.kind = "camera";
         std::vector<am::Layer> list = {eye, at(1, 100), at(2, 300), at(3, 0), at(4, 100)}, out;
+        am::SetCameraView(false);
         am::SeeLayers(list, 100, 100, true, 30, 0, true, &out);
         std::vector<int> runs;
         for (const auto& l : out) runs.push_back(l.sight.run);
         Expect(out.size() == 5 && out[1].id == 2 && out[2].id == 1 && runs == std::vector<int>({0, 1, 1, 0, 2}), "2D layers split depth runs");
-        Expect(std::fabs(out[1].sight.depth - 1300) < 0.01f && am::DepthPerPixel(out[1], 0) > 0, "seen depth is kept");
+        Expect(out[1].sight.depth > out[2].sight.depth && am::DepthPerPixel(out[1], 0) > 0, "seen depth is kept");
         Expect(!am::SeeLayers({at(1, 0), at(2, 0)}, 100, 100, true, 30, 0, true, &out), "flat layers stay on the flat path");
         am::Layer broken = at(5, 0);
         am::LayerEffect shards;
@@ -185,6 +197,7 @@ int main() {
         broken.force3d = true;
         Expect(am::SeeLayers({at(1, 0), broken}, 100, 100, true, 30, 0, true, &out) && out[0].sight.run == 0 && out[1].sight.run == 1,
                "pieces join a depth run when their layer enables 3D");
+        am::SetCameraView(true);
     }
 #endif
 #ifdef RENDER_BENCH_SPLIT

@@ -189,6 +189,12 @@ void SetCameraView(bool on) { gCameraView = on; }
 
 bool CameraViewOn() { return gCameraView; }
 
+bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs) {
+    if (!gCameraView || layer.spatial() || !DrawsInScene(layer)) return false;
+    const Layer* camera = ActiveCamera(layers, timeMs);
+    return camera && camera->activeAt(timeMs);
+}
+
 LightSet SceneLights(const std::vector<Layer>& layers, double timeMs) {
     LightSet result;
     for (const Layer& layer : layers) {
@@ -432,6 +438,7 @@ float DepthPerPixel(const Layer& l, double timeMs) {
 
 bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen) {
     const Layer* camera = top && gCameraView ? ActiveCamera(layers, timeMs) : nullptr;
+    const bool cameraOnly = camera && camera->activeAt(timeMs);
     if (!camera && std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
     const double beforeMs = timeMs - 1000.0 / std::max(fps, 1);
     const View now = camera ? LayerView(layers, *camera, width, height, timeMs) : DefaultView(width, height);
@@ -449,7 +456,7 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         copy.placed = true;
         copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height};
         float d = 0;
-        bool drop = false;
+        bool drop = cameraOnly && !l.spatial() && DrawsInScene(l);
         if (l.spatial() && DrawsInScene(l)) {
             const Seen s = Look(now, p);
             d = s.depth;
@@ -494,7 +501,7 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         };
         for (size_t i = 0; i < starts.size(); i++) {
             const Layer& layer = layers[starts[i]];
-            if (Idle(layer, timeMs)) continue;
+            if (Idle(layer, timeMs) || dropped[starts[i]]) continue;
             if (layer.spatial()) slots.push_back(i);
             else flush();
         }
@@ -505,7 +512,7 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         bool open = false;
         for (size_t k : order) {
             const Layer& layer = layers[starts[k]];
-            if (Idle(layer, timeMs)) continue;
+            if (Idle(layer, timeMs) || dropped[starts[k]]) continue;
             if (!layer.spatial()) {
                 open = false;
                 continue;

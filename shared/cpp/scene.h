@@ -309,6 +309,7 @@ double RetimedTime(const Retiming& r, int startTime, int endTime, double at);
 void SetCameraView(bool on);
 SkMatrix PlaneMatrix(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs);
 bool CameraViewOn();
+bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs);
 bool CameraFrame(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, SkPoint corners[4]);
 bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen);
 bool SeenPlacement(const Layer& layer, double timeMs, Placement* placement);
