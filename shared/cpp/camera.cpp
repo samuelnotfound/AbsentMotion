@@ -45,14 +45,14 @@ View DefaultView(int width, int height) {
     return v;
 }
 
-View LayerView(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, bool depthOrder = false) {
+View LayerView(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs) {
     const Placement p = EffectivePlacement(layers, camera, timeMs);
     View v;
     v.middle = {width / 2.0f, height / 2.0f};
     v.eye = p.location;
     v.eyeZ = p.z;
     v.rotation = p.rotation;
-    if (depthOrder) v.tilt = p.tilt.transpose();
+    v.tilt = p.tilt.transpose();
     v.focal = FocalLength(width, height, camera.camera.fov.get(0, camera.localTime(timeMs), kDefaultFov));
     v.orthographic = camera.camera.orthographic;
     return v;
@@ -97,24 +97,15 @@ SkM44 Space(const View& v, const Placement& p) {
 
 bool Solid(const Layer& l, const Placement& p) { return p.tilt != SkM44() || l.kind == "model"; }
 
-bool HasComponent(const Anim& a, size_t component) {
-    const auto nonzero = [component](const std::vector<float>& v) { return component < v.size() && v[component] != 0; };
-    if (nonzero(a.value) || (a.hasLead && nonzero(a.lead.v))) return true;
-    return std::any_of(a.keys.begin(), a.keys.end(), [&](const Keyframe& k) { return nonzero(k.v); });
-}
-
 bool Deep(const Layer& l, double timeMs) {
     return std::any_of(l.effects.begin(), l.effects.end(), [&](const LayerEffect& e) {
         return !e.hidden && ((ParticleEffect(e.id) && e.value("depth", l.localTime(timeMs), 0) >= 0.5f) || e.id == "absent.scatter3d" || e.id == "absent.fracture3d");
     });
 }
 
-bool Spatial(const Layer& l, const Placement& p, double timeMs) {
-    if (l.force3d || p.z != 0 || Solid(l, p) || HasComponent(l.location, 2) || HasComponent(l.tilt, 0) || HasComponent(l.tilt, 1)) return true;
-    return Deep(l, timeMs);
-}
+bool DrawsInScene(const Layer& l) { return l.kind != "camera" && l.kind != "nullobj" && l.kind != "light" && l.kind != "audio"; }
 
-bool Idle(const Layer& l, double timeMs) { return l.kind == "camera" || l.kind == "nullobj" || l.kind == "light" || !l.activeAt(timeMs); }
+bool Idle(const Layer& l, double timeMs) { return !DrawsInScene(l) || !l.activeAt(timeMs); }
 
 LayerEffect Effect(const char* id, std::vector<std::pair<const char*, std::vector<float>>> values) {
     LayerEffect e;
@@ -169,9 +160,10 @@ void AddCameraEffects(const Layer& camera, double timeMs, float depth, SkPoint b
 
 }
 
-SkMatrix PlaneMatrix(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs, bool depthOrder) {
+SkMatrix PlaneMatrix(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs) {
+    if (!layer.spatial()) return SkMatrix::I();
     const Layer* camera = gCameraView ? ActiveCamera(layers, timeMs) : nullptr;
-    const View v = camera ? LayerView(layers, *camera, width, height, timeMs, depthOrder) : DefaultView(width, height);
+    const View v = camera ? LayerView(layers, *camera, width, height, timeMs) : DefaultView(width, height);
     const Placement p = EffectivePlacement(layers, layer, timeMs);
     if (v.tilt != SkM44()) {
         Placement plane{};
@@ -241,13 +233,13 @@ SkV3 Illuminate(const LightSet& lights, SkV3 normal, SkV3 position) {
     return sum;
 }
 
-bool CameraFrame(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, SkPoint corners[4], bool depthOrder) {
+bool CameraFrame(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, SkPoint corners[4]) {
     if (width <= 0 || height <= 0) return false;
     const Placement p = EffectivePlacement(layers, camera, timeMs);
     const bool flat = camera.camera.orthographic;
     const float focal = FocalLength(width, height, camera.camera.fov.get(0, camera.localTime(timeMs), kDefaultFov));
     const float reach = (flat ? std::max(-p.z, kNearest) : 1) / focal;
-    const SkM44 turn = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * (depthOrder ? p.tilt : SkM44());
+    const SkM44 turn = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * p.tilt;
     const float w = width * 0.5f * reach, h = height * 0.5f * reach;
     const SkPoint offsets[4] = {{-w, -h}, {w, -h}, {w, h}, {-w, h}};
     bool seen = true;
@@ -272,14 +264,14 @@ bool SeenPlacement(const Layer& l, double timeMs, Placement* out) {
     const Sight& s = l.sight;
     if (!s.layers) return false;
     Placement p = EffectivePlacement(*s.layers, *s.layer, timeMs);
-    if (l.kind != "camera") {
-        const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs, s.depthOrder) : DefaultView(s.width, s.height);
+    if (l.spatial() && l.kind != "camera") {
+        const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs) : DefaultView(s.width, s.height);
         if (l.projected) {
             p.space = Space(v, p);
             p.turn = v.tilt * SkM44::Rotate({0, 0, 1}, (p.rotation - v.rotation) * 3.14159265f / 180) * p.tilt;
         } else {
             const Seen seen = Look(v, p);
-            if (v.tilt != SkM44() && Spatial(l, p, timeMs)) p.turn = v.tilt;
+            if (v.tilt != SkM44()) p.turn = v.tilt;
             p.location = seen.location;
             p.scale = seen.scale;
             p.rotation = seen.rotation;
@@ -293,7 +285,7 @@ bool SeenPlacement(const Layer& l, double timeMs, Placement* out) {
 void SeenPieces(const Layer& l, double timeMs, SkPoint center, const SkM44& orientation, PieceView* view) {
     const Sight& s = l.sight;
     if (!s.layers || !s.layer || !s.camera || l.projected || l.kind == "camera") return;
-    const View v = LayerView(*s.layers, *s.camera, s.width, s.height, timeMs, s.depthOrder);
+    const View v = LayerView(*s.layers, *s.camera, s.width, s.height, timeMs);
     const Placement p = EffectivePlacement(*s.layers, *s.layer, timeMs);
     const SkM44 turn = v.tilt * SkM44::Rotate({0, 0, 1}, -v.rotation * 3.14159265f / 180);
     const SkV4 anchor = turn.map(p.location.fX - v.eye.fX, p.location.fY - v.eye.fY, p.z - v.eyeZ, 0);
@@ -311,7 +303,7 @@ bool SeenFlat(const Layer& l, double timeMs, depth::Flat* out) {
     *out = depth::Flat();
     const Sight& s = l.sight;
     if (!s.layers || !s.layer) return false;
-    const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs, s.depthOrder) : DefaultView(s.width, s.height);
+    const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs) : DefaultView(s.width, s.height);
     const Seen seen = Look(v, EffectivePlacement(*s.layers, *s.layer, timeMs));
     out->focal = v.focal;
     out->orthographic = v.orthographic;
@@ -432,53 +424,42 @@ void SplitSeen(std::vector<Layer>* seen, double timeMs) {
 float DepthPerPixel(const Layer& l, double timeMs) {
     const Sight& s = l.sight;
     if (!s.layers || !s.layer) return 0;
-    const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs, s.depthOrder) : DefaultView(s.width, s.height);
+    const View v = s.camera ? LayerView(*s.layers, *s.camera, s.width, s.height, timeMs) : DefaultView(s.width, s.height);
     const float depth = Look(v, EffectivePlacement(*s.layers, *s.layer, timeMs)).depth;
     return (v.orthographic ? std::max(-v.eyeZ, kNearest) : std::max(depth, kNearest)) / v.focal;
 }
 
-bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen,
-               bool pieces) {
+bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen) {
     const Layer* camera = top && gCameraView ? ActiveCamera(layers, timeMs) : nullptr;
-    if (!camera) {
-        bool flat = true;
-        for (const Layer& l : layers) {
-            const Placement p = EffectivePlacement(layers, l, timeMs);
-            flat = flat && p.z == 0 && !Solid(l, p) && !(pieces && Spatial(l, p, timeMs));
-        }
-        if (flat) return false;
-    }
+    if (!camera && std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
     const double beforeMs = timeMs - 1000.0 / std::max(fps, 1);
-    const View now = camera ? LayerView(layers, *camera, width, height, timeMs, depthOrder) : DefaultView(width, height);
-    const View before = camera ? LayerView(layers, *camera, width, height, beforeMs, depthOrder) : now;
+    const View now = camera ? LayerView(layers, *camera, width, height, timeMs) : DefaultView(width, height);
+    const View before = camera ? LayerView(layers, *camera, width, height, beforeMs) : now;
     const bool smears = camera && MotionBlurTune(*camera, camera->localTime(timeMs)) > 0;
 
     std::vector<Layer> copies;
     std::vector<float> depth;
     std::vector<bool> dropped;
-    static thread_local std::vector<bool> spatial;
-    spatial.clear();
     copies.reserve(layers.size());
     for (const Layer& l : layers) {
         const Placement p = EffectivePlacement(layers, l, timeMs);
         Layer copy = l;
         copy.parent = 0;
         copy.placed = true;
-        copy.sight = {&layers, &l, camera, width, height, depthOrder};
+        copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height};
         float d = 0;
         bool drop = false;
-        if (l.kind != "camera") {
+        if (l.spatial() && DrawsInScene(l)) {
             const Seen s = Look(now, p);
             d = s.depth;
             drop = !s.visible;
-            copy.projected = Solid(l, p) || (camera && now.tilt != SkM44() && Spatial(l, p, timeMs));
+            copy.projected = Solid(l, p) || (camera && now.tilt != SkM44());
             if (camera) AddCameraEffects(*camera, timeMs, d, smears ? Look(before, EffectivePlacement(layers, l, beforeMs)).location : s.location, s.location, &copy);
         }
         copy.sight.depth = d;
         copies.push_back(std::move(copy));
         depth.push_back(d);
         dropped.push_back(drop);
-        if (depthOrder) spatial.push_back(Spatial(l, p, timeMs));
     }
 
     std::vector<size_t> starts;
@@ -487,14 +468,11 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
     }
     std::vector<size_t> order(starts.size());
     std::iota(order.begin(), order.end(), 0);
-    const auto farther = [&](size_t a, size_t b) { return depth[starts[a]] > depth[starts[b]]; };
     const auto mark = [&](size_t k, int run) {
         const size_t end = k + 1 < starts.size() ? starts[k + 1] : copies.size();
         for (size_t i = starts[k]; i < end; i++) copies[i].sight.run = run;
     };
-    if (!depthOrder || !camera) {
-        std::stable_sort(order.begin(), order.end(), farther);
-    } else {
+    {
         static thread_local std::vector<size_t> slots, sorted;
         slots.clear();
         sorted.clear();
@@ -515,8 +493,8 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         };
         for (size_t i = 0; i < starts.size(); i++) {
             const Layer& layer = layers[starts[i]];
-            if (layer.kind == "camera" || layer.kind == "nullobj" || layer.kind == "light") continue;
-            if (spatial[starts[i]]) slots.push_back(i);
+            if (Idle(layer, timeMs)) continue;
+            if (layer.spatial()) slots.push_back(i);
             else flush();
         }
         flush();
@@ -526,8 +504,8 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         bool open = false;
         for (size_t k : order) {
             const Layer& layer = layers[starts[k]];
-            if (layer.kind == "camera" || layer.kind == "nullobj" || layer.kind == "light") continue;
-            if (!spatial[starts[k]]) {
+            if (Idle(layer, timeMs)) continue;
+            if (!layer.spatial()) {
                 open = false;
                 continue;
             }

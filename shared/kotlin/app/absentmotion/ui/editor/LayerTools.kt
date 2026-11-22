@@ -246,7 +246,7 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
         val more = listOfNotNull(
             if (kind == "shape" && still.isShapeTemplate == true) Tile(EditPoints) { state.requestPoints(enter = true) } else null,
             if (kind == "shape" && drawn && still.let(ShapeCatalog::paramsFor).orEmpty().isNotEmpty()) Tile(EditShape) { state.panel = EditorPanel.EditShape } else null,
-            if (state.scene.depthOrder && kind in setOf("shape", "text", "drawing", "embedScene")) Tile(ThreeDLayer, active = still?.node?.get("threeD") == "true") {
+            if (kind in setOf("shape", "text", "drawing", "embedScene", "nullobj")) Tile(ThreeDLayer, active = still?.uses3D == true) {
                 state.editSelected { it.copy(node = it.node.with("threeD", if (it.node["threeD"] == "true") null else "true")) }
             } else null,
             if (still?.canCrop == true) Tile(Crop) { state.openCrop() } else null,
@@ -471,8 +471,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val canPivot = !desk && selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
-    val threeD = shown == ROTATE_TAB && (selected.kind != "camera" || state.scene.depthOrder)
-    val turn = if (move) turnFor(selected, catalog, shown, threeD) else null
+    val turn = if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null
     var menuOpen by remember { mutableStateOf(false) }
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && !(move && shown == ROTATE_TAB && turn != null)
     val known = if (!named) null else when {

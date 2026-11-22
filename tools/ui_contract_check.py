@@ -213,15 +213,16 @@ class UiContracts(unittest.TestCase):
         self.assertEqual(4, text.count('val t = RulerMath.travel('))
         self.assertEqual(4, text.count('if (limit?.invoke(t) != true) { shift +='))
 
-    def test_rotate_and_tilt_tabs_turn_three_d_objects_on_the_preview(self):
+    def test_rotate_uses_preview_gestures_only_for_three_d_layers(self):
         text = source('ui/editor/Preview.kt')
         turn = 'moved && turning != null && !(canvasGesture && fingers > 1)'
         self.assertIn(turn, text)
         self.assertLess(text.index(turn), text.index('moved && state.selectedId != null && !(canvasGesture && fingers > 1)'))
-        self.assertIn('if (turn != null) TurnHook(state, turn)', source('ui/editor/panels/MoveTransformPanel.kt'))
+        tools = source('ui/editor/LayerTools.kt')
+        self.assertIn('if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null', tools)
         panel = source('ui/editor/panels/MoveTransformPanel.kt')
-        for line in ('turn == null -> RotationTab(state, layer)', '|| state.settings.rotateFree -> TurnTab(state, layer, turn)', 'else -> AxesTab(state, layer, turn)'):
-            self.assertIn(line, panel)
+        self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)', panel)
+        self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])
         self.assertIn('TurnHook(state, turn)', panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0])
 
     def test_media_search_opens_from_a_square_over_the_grid(self):
