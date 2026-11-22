@@ -86,14 +86,18 @@ internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn
     }
 }
 
+private val transformAxisOrder = listOf(2, 0, 1)
+
 @Composable
 private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
     val at = layer.location
     var depth by remember(layer.id) { mutableStateOf(false) }
     val deep by rememberUpdatedState(depth)
     fun openKeypad(active: Int) {
-        val fields = listOf(KeypadField("X", at[0]), KeypadField("Y", at[1]), KeypadField("Z", at[2]))
-        state.keypad = KeypadRequest(fields, active) { v -> state.editSelected { it.withTransform("location", v[0], v[1], v[2]) } }
+        val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), at[it]) }
+        state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(active)) { v ->
+            state.editSelected { it.withTransform("location", v[1], v[2], v[0]) }
+        }
     }
     val others by produceState(emptyList<SnapOther>(), layer.id, state.scene.layers, state.timeMs, state.playing) {
         if (state.playing) return@produceState
@@ -153,18 +157,18 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?)
         }
         Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
             Row {
+                NumberBox(formatFixed(at[2], 2), if (depth) Am.Accent else Am.OnDark, Modifier.width(177.px).height(70.px), fontSize = 10.5f, onSelect = { depth = true }) { depth = true; openKeypad(2) }
+                Spacer(Modifier.width(20.px))
                 Row(Modifier.width(354.px).height(70.px).clip(PanelShape).background(Am.Field)) {
                     ValueCell(formatFixed(at[0], 2), if (depth) Am.OnDark else Am.Accent, Modifier.weight(1f), "X", { depth = false }) { depth = false; openKeypad(0) }
                     ValueCell(formatFixed(at[1], 2), if (depth) Am.OnDark else Am.Accent, Modifier.weight(1f), "Y", { depth = false }) { depth = false; openKeypad(1) }
                 }
-                Spacer(Modifier.width(20.px))
-                NumberBox(formatFixed(at[2], 2), if (depth) Am.Accent else Am.OnDark, Modifier.width(177.px).height(70.px), fontSize = 10.5f, onSelect = { depth = true }) { depth = true; openKeypad(2) }
             }
             Row(Modifier.height(23.px)) {
+                Caption("Z", Modifier.width(177.px).fillMaxHeight())
+                Spacer(Modifier.width(20.px))
                 Caption("X", Modifier.width(177.px).fillMaxHeight())
                 Caption("Y", Modifier.width(177.px).fillMaxHeight())
-                Spacer(Modifier.width(20.px))
-                Caption("Z", Modifier.width(177.px).fillMaxHeight())
             }
         }
     }
@@ -604,22 +608,23 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     val labels = listOf(stringResource(R.string.tilt_x_rotation), stringResource(R.string.tilt_y_rotation), stringResource(R.string.tilt_z_rotation))
     fun openKeypad(which: Int) {
         axis = which
-        state.keypad = KeypadRequest(labels.mapIndexed { i, label -> KeypadField(label, values[i], "\u00B0") }, which) { v ->
-            state.editSelected { turn.withValues(it, v.toFloatArray()) }
+        val fields = transformAxisOrder.map { KeypadField(labels[it], values[it], "\u00B0") }
+        state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
+            state.editSelected { turn.withValues(it, floatArrayOf(v[1], v[2], v[0])) }
         }
     }
     fun colour(which: Int) = if (turn.linked(which, axis)) Am.Accent else Am.OnDark
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.px)) {
-                for (i in 0..2) NumberBox(formatFixed(values[i], 1) + "º", colour(i), Modifier.width(177.px).height(70.px), fontSize = 13.5f, onSelect = { axis = i }) { openKeypad(i) }
+                for (i in transformAxisOrder) NumberBox(formatFixed(values[i], 1) + "º", colour(i), Modifier.width(177.px).height(70.px), fontSize = 13.5f, onSelect = { axis = i }) { openKeypad(i) }
             }
             Row(Modifier.height(23.px), androidx.compose.foundation.layout.Arrangement.spacedBy(20.px)) {
-                for (label in labels) Caption(label, Modifier.width(177.px).fillMaxHeight())
+                for (i in transformAxisOrder) Caption(labels[i], Modifier.width(177.px).fillMaxHeight())
             }
         }
-        for (which in 0..2) {
-            Box(Modifier.padding(top = (122 + which * 139).px).fillMaxWidth().height(137.px)) {
+        for ((row, which) in transformAxisOrder.withIndex()) {
+            Box(Modifier.padding(top = (122 + row * 139).px).fillMaxWidth().height(137.px)) {
                 RulerSpinner(
                     colour(which),
                     onDrag = { dx ->
