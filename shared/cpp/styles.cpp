@@ -2123,6 +2123,7 @@ SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs) {
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {
+    if (CameraHidesLayer(scene.layers, layer, timeMs)) return false;
     SelectionBounds(layer, timeMs, SkMatrix::I()).toQuad(corners);
     std::vector<Layer> storage;
     const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage);

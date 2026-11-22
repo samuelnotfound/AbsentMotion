@@ -250,7 +250,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         DrawCameraFrames(canvas, scene, timeMs, camera, selectedId, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
         float xy[8];
         const Layer* selected = selectedId != 0 ? scene.layer(selectedId) : nullptr;
-        if (selected && selected->kind == "camera") selected = nullptr;
+        if (selected && (selected->kind == "camera" || CameraHidesLayer(scene.layers, *selected, timeMs))) selected = nullptr;
         if (selected && handles == -2) {
             if (selected->activeAt(timeMs)) {
                 DrawMotionPath(canvas, scene, *selected, timeMs, scene.fps, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
