@@ -131,6 +131,22 @@ private fun EditorBody(state: EditorState, onExit: () -> Unit) {
         confirmButton = { TextButton({ state.easingHint = false }) { Text(stringResource(R.string.ok), color = Am.Accent) } },
         containerColor = Am.Field, titleContentColor = Am.OnDark, textContentColor = Am.OnDark,
     )
+    state.groupAsk?.let { group ->
+        fun choose(keep3D: Boolean) {
+            state.groupAsk = null
+            group(keep3D)
+        }
+        AlertDialog(
+            onDismissRequest = { state.groupAsk = null },
+            title = { Text(stringResource(R.string.structure_group_space)) },
+            confirmButton = { TextButton({ choose(true) }) { Text(stringResource(R.string.structure_group_keep_3d), color = Am.Accent) } },
+            dismissButton = {
+                TextButton({ state.groupAsk = null }) { Text(stringResource(R.string.cancel), color = Am.OnDark) }
+                TextButton({ choose(false) }) { Text(stringResource(R.string.structure_group_flatten_2d), color = Am.Accent) }
+            },
+            containerColor = Am.Field, titleContentColor = Am.OnDark,
+        )
+    }
     if (state.ungroupAsk) androidx.compose.material3.AlertDialog(
         onDismissRequest = { state.ungroupAsk = false },
         text = { Text(stringResource(R.string.ungroup_loses_style), color = Am.OnDark) },

@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">%1$s에서 빼기</string>
     <string name="added_effect_show_creator_category">카테고리로 표시</string>
     <string name="added_effect_remove_creator_category">카테고리에서 빼기</string>
+    <string name="structure_group_space">그룹 차원</string>
+    <string name="structure_group_keep_3d">3D 유지</string>
+    <string name="structure_group_flatten_2d">2D로 평면화</string>
 </resources>

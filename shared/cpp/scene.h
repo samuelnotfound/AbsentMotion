@@ -139,6 +139,7 @@ struct Sight {
     const Layer* layer = nullptr;
     const Layer* camera = nullptr;
     int width = 0, height = 0;
+    bool cameraOnly = false;
     int run = 0;
     float depth = 0;
     std::vector<depth::Cut> cuts;
@@ -311,7 +312,7 @@ SkMatrix PlaneMatrix(const std::vector<Layer>& layers, const Layer& layer, int w
 bool CameraViewOn();
 bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs);
 bool CameraFrame(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, SkPoint corners[4]);
-bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen);
+bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen, bool cameraOnly = false);
 bool SeenPlacement(const Layer& layer, double timeMs, Placement* placement);
 void SeenPieces(const Layer& layer, double timeMs, SkPoint center, const SkM44& orientation, PieceView* view);
 bool SeenFlat(const Layer& layer, double timeMs, depth::Flat* flat);

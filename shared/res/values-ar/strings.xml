@@ -2860,4 +2860,7 @@
     <string name="added_effect_remove_from_category">إزالة من %1$s</string>
     <string name="added_effect_show_creator_category">إظهار كفئة</string>
     <string name="added_effect_remove_creator_category">إزالة من الفئات</string>
+    <string name="structure_group_space">أبعاد المجموعة</string>
+    <string name="structure_group_keep_3d">إبقاء ثلاثي الأبعاد</string>
+    <string name="structure_group_flatten_2d">تسطيح إلى ثنائي الأبعاد</string>
 </resources>

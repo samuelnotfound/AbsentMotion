@@ -2761,4 +2761,7 @@
     <string name="added_effect_remove_from_category">Rimuovi da %1$s</string>
     <string name="added_effect_show_creator_category">Mostra come categoria</string>
     <string name="added_effect_remove_creator_category">Rimuovi dalle categorie</string>
+    <string name="structure_group_space">Dimensione del gruppo</string>
+    <string name="structure_group_keep_3d">Mantieni il 3D</string>
+    <string name="structure_group_flatten_2d">Appiattisci in 2D</string>
 </resources>

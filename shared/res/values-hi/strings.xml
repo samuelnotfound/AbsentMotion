@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">%1$s से हटाएँ</string>
     <string name="added_effect_show_creator_category">श्रेणी के रूप में दिखाएँ</string>
     <string name="added_effect_remove_creator_category">श्रेणियों से हटाएँ</string>
+    <string name="structure_group_space">समूह का आयाम</string>
+    <string name="structure_group_keep_3d">3D बनाए रखें</string>
+    <string name="structure_group_flatten_2d">2D में समतल करें</string>
 </resources>

@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">%1$sから外す</string>
     <string name="added_effect_show_creator_category">カテゴリとして表示</string>
     <string name="added_effect_remove_creator_category">カテゴリから外す</string>
+    <string name="structure_group_space">グループの次元</string>
+    <string name="structure_group_keep_3d">3Dを維持</string>
+    <string name="structure_group_flatten_2d">2Dに平面化</string>
 </resources>

@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">%1$s থেকে সরান</string>
     <string name="added_effect_show_creator_category">বিভাগ হিসেবে দেখান</string>
     <string name="added_effect_remove_creator_category">বিভাগ থেকে সরান</string>
+    <string name="structure_group_space">গ্রুপের মাত্রা</string>
+    <string name="structure_group_keep_3d">থ্রিডি রাখুন</string>
+    <string name="structure_group_flatten_2d">টু-ডিতে সমতল করুন</string>
 </resources>

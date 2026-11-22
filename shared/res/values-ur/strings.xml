@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">‏%1$s سے ہٹائیں</string>
     <string name="added_effect_show_creator_category">زمرے کے طور پر دکھائیں</string>
     <string name="added_effect_remove_creator_category">زمروں سے ہٹائیں</string>
+    <string name="structure_group_space">گروپ کی جہت</string>
+    <string name="structure_group_keep_3d">سہ جہتی رکھیں</string>
+    <string name="structure_group_flatten_2d">دو جہتی بنائیں</string>
 </resources>
