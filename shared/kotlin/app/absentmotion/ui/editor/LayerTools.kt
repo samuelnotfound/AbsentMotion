@@ -186,7 +186,7 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
                 }
             }
             Spacer(Modifier.width(17.px))
-            val spatial = still?.node?.get("threeD") == "true"
+            val spatial = still?.uses3D == true
             SmallTool(ThreeDLayer.icon, stringResource(ThreeDLayer.label), Modifier.width(183.px).semantics { selected = spatial }, ToolShape,
                 enabled = kind in setOf("shape", "text", "drawing", "embedScene", "nullobj"), active = spatial) {
                 state.editSelected { it.copy(node = it.node.with("threeD", if (spatial) null else "true")) }
@@ -479,8 +479,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val canPivot = !desk && selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
-    val threeD = shown == ROTATE_TAB && (selected.kind != "camera" || state.scene.depthOrder)
-    val turn = if (move) turnFor(selected, catalog, shown, threeD) else null
+    val turn = if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null
     var menuOpen by remember { mutableStateOf(false) }
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && !(move && shown == ROTATE_TAB && turn != null)
     val known = if (!named) null else when {

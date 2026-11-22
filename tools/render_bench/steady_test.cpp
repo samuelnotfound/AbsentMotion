@@ -46,11 +46,14 @@ int main() {
         l.kind = "shape";
         l.endTime = 1000;
         l.location.value = {50, 50, z};
+        l.force3d = true;
         return l;
     };
     am::Layer camera = spatial(9, -1000);
     camera.kind = "camera";
-    am::Layer flatLayer = spatial(3, 0);
+    am::Layer flatLayer = spatial(3, 200);
+    flatLayer.force3d = false;
+    flatLayer.tilt.value = {35, 40};
     am::Layer mask = spatial(5, 300);
     mask.clippingMask = true;
     std::vector<am::Layer> input = {spatial(1, 100), camera, spatial(2, 300), flatLayer, spatial(4, 100), mask, spatial(6, 300), spatial(7, 300)};
@@ -58,13 +61,16 @@ int main() {
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     std::vector<int64_t> ids;
     for (const auto& l : output) ids.push_back(l.id);
-    Expect(ids == std::vector<int64_t>({2, 9, 1, 3, 6, 7, 4, 5}), "depth groups, ties and mask");
+    Expect(ids == std::vector<int64_t>({2, 9, 1, 3, 6, 7, 4, 5}), "2D layers separate depth runs");
+    const auto flatPlacement = am::EffectivePlacement(input, flatLayer, 0);
+    Expect(flatPlacement.z == 0 && flatPlacement.tilt == SkM44(), "2D placement ignores saved depth and tilt");
     input[0].location.value[2] = 300;
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     ids.clear();
     for (const auto& l : output) ids.push_back(l.id);
     Expect(ids[0] == 1 && ids[2] == 2, "depth ties keep order");
     am::Layer particles = spatial(8, 0);
+    particles.force3d = false;
     am::LayerEffect effect;
     effect.id = "absent.particles";
     am::Property depth;
@@ -77,7 +83,7 @@ int main() {
     Expect(output[1].id == 1 && output[2].id == 8 && output[3].id == 2, "flat particles split groups");
     input[2].effects[0].props[0].anim.value = {1};
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
-    Expect(output[1].id == 2 && output[2].id == 1 && output[3].id == 8, "depth particles join group");
+    Expect(output[1].id == 1 && output[2].id == 8 && output[3].id == 2, "depth particles do not enable 3D on their layer");
     particles.effects.clear();
     particles.force3d = true;
     input[2] = particles;
@@ -134,7 +140,7 @@ int main() {
         const auto find = [](const std::vector<am::Layer>& list) { return *std::find_if(list.begin(), list.end(), [](const am::Layer& l) { return l.id == 11; }); };
         const bool placed = am::SeenPlacement(find(seenBefore), 0, &from) && am::SeenPlacement(find(seenAfter), 0, &to);
         const SkVector want = to.location - from.location;
-        const SkVector got = am::PlaneMatrix(before, near, 100, 100, 0, true).mapVector(3, 2);
+        const SkVector got = am::PlaneMatrix(before, near, 100, 100, 0).mapVector(3, 2);
         Expect(placed && want.length() > 0.1f && (got - want).length() < 0.02f * want.length(), "drag plane follows camera tilt");
     }
 #endif
@@ -153,6 +159,7 @@ int main() {
             l.kind = "shape";
             l.endTime = 1000;
             l.location.value = {50, 50, z};
+            l.force3d = z != 0;
             return l;
         };
         am::Layer eye = at(9, -1000);
@@ -163,14 +170,15 @@ int main() {
         for (const auto& l : out) runs.push_back(l.sight.run);
         Expect(out.size() == 5 && out[1].id == 2 && out[2].id == 1 && runs == std::vector<int>({0, 1, 1, 0, 2}), "2D layers split depth runs");
         Expect(std::fabs(out[1].sight.depth - 1300) < 0.01f && am::DepthPerPixel(out[1], 0) > 0, "seen depth is kept");
-        Expect(!am::SeeLayers({at(1, 0), at(2, 0)}, 100, 100, true, 30, 0, true, &out, true), "flat layers stay on the flat path");
+        Expect(!am::SeeLayers({at(1, 0), at(2, 0)}, 100, 100, true, 30, 0, true, &out), "flat layers stay on the flat path");
         am::Layer broken = at(5, 0);
         am::LayerEffect shards;
         shards.id = "absent.fracture3d";
         broken.effects.push_back(shards);
         Expect(!am::SeeLayers({at(1, 0), broken}, 100, 100, true, 30, 0, true, &out), "flat pieces stay flat by layer");
-        Expect(am::SeeLayers({at(1, 0), broken}, 100, 100, true, 30, 0, true, &out, true) && out[0].sight.run == 0 && out[1].sight.run == 1,
-               "flat pieces join a run by piece");
+        broken.force3d = true;
+        Expect(am::SeeLayers({at(1, 0), broken}, 100, 100, true, 30, 0, true, &out) && out[0].sight.run == 0 && out[1].sight.run == 1,
+               "pieces join a depth run when their layer enables 3D");
     }
 #endif
 #ifdef RENDER_BENCH_SPLIT

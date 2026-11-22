@@ -61,7 +61,7 @@ static void DrawMotionPath(SkCanvas* canvas, const Scene& scene, const Layer& la
     paint.setAntiAlias(true);
     const float t = layer.localTime(timeMs);
     auto place = [&](double ms, SkPoint own) {
-        const SkMatrix seen = PlaneMatrix(siblings, layer, scene.width, scene.height, ms, scene.depthOrder);
+        const SkMatrix seen = PlaneMatrix(siblings, layer, scene.width, scene.height, ms);
         return toTarget.mapPoint(seen.mapPoint(layer.parent != 0 ? EffectivePlacement(siblings, layer, ms).location : own));
     };
     std::vector<SkPoint> points;
@@ -125,7 +125,7 @@ static void DrawCameraFrames(SkCanvas* canvas, const Scene& scene, double timeMs
         if (l.kind != "camera" || !l.activeAt(timeMs)) continue;
         const bool selected = l.id == selectedId;
         SkPoint q[4];
-        if (!(seenThrough && &l == active) && CameraFrame(scene.layers, l, scene.width, scene.height, timeMs, q, scene.depthOrder)) {
+        if (!(seenThrough && &l == active) && CameraFrame(scene.layers, l, scene.width, scene.height, timeMs, q)) {
             toTarget.mapPoints(q);
             const SkPath box = SkPath::Polygon({q, 4}, true);
             if (selected) {

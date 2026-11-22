@@ -257,6 +257,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     val id: Long get() = node["id"]?.toLongOrNull() ?: 0
     val kind: String get() = node.name
+    val uses3D: Boolean get() = node["threeD"] == "true" || kind == "camera" || kind == "light" || kind == "model"
 
     val link: String? get() = node["link"]
 
