@@ -60,6 +60,12 @@ jobs:
           keyAlias=timeline-test
           keyPassword=android
           EOF
+      - name: Check grouping and the workspace cache
+        run: |
+          ./gradlew :app:testFossDebugUnitTest --no-daemon \
+            --tests app.absentmotion.editor.GroupAndSnapTest \
+            --tests app.absentmotion.editor.PreviewCacheTest \
+            --tests app.absentmotion.editor.PreviewDependenciesTest
       - name: Build the signed timeline APK
         run: |
           ./gradlew :app:assembleFossRelease -PamTimelineTest=true --no-daemon
