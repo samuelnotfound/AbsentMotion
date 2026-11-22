@@ -159,7 +159,7 @@ data class EffectDefinition(
         return number?.let { kotlin.math.round(it).toInt() } in values
     }
 
-    fun runtimeXml(): String = XmlNode("effect", listOfNotNull("id" to id, sksl?.let { "sksl" to it }).toMap(),
+    fun runtimeXml(): String = XmlNode("effect", listOfNotNull("id" to id, category?.let { "category" to it }, sksl?.let { "sksl" to it }).toMap(),
         params.map { XmlNode("param", mapOf("name" to it.id, "value" to it.missingDefault)) }).toXml()
 
     companion object {

@@ -17,7 +17,7 @@ FRAMES = [0, 1, 15, 30, 45, 60, 75, 90, 105, 119]
 
 def effect_xml(key):
     d = json.loads((EFFECTS / f"{key}.json").read_text())
-    attrs = f'id="absent.{key}"' + (f" sksl={quoteattr(d['sksl'])}" if d.get("sksl") and not d.get("native") else "")
+    attrs = f'id="absent.{key}" category={quoteattr(d["category"])}' + (f" sksl={quoteattr(d['sksl'])}" if d.get("sksl") and not d.get("native") else "")
     params = []
     for p in d.get("params", []):
         v = p.get("legacyDefault", p.get("default"))

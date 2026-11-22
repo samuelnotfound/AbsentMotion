@@ -59,10 +59,12 @@ private:
         bool palette = false;
         bool matrix = false;
         bool glyphs = false;
+        bool spatial = false;
         std::map<std::string, Anim> defaults;
         std::map<std::string, std::string> texts;
     };
     const Definition* find(const std::string& id) const;
+    bool allowed(const Layer& layer, const LayerEffect& effect, const Definition* definition) const;
     int liftAt(const Layer& layer) const;
     bool needs(const Layer& layer, bool Definition::*input) const;
     int method(const LayerEffect& e, const Definition* d, float t) const;
