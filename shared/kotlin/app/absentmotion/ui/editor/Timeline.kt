@@ -260,6 +260,8 @@ private const val MAX_ZOOM = 1000f
 private val TickColor get() = Am.Line
 private val CacheBarColor = Color(0xFF45C46A)
 private val CacheBarHeight = 3.dp
+private val WorkAreaColor = Color(0xFFFF9B45)
+private val WorkAreaHitZone = 14.dp
 private val RulerMajor get() = Am.Inactive
 private val RulerMinor get() = Am.Inactive.copy(alpha = 0.7f)
 private val RetimeMarkColor get() = Am.Gold.copy(alpha = 0.67f)
@@ -653,6 +655,7 @@ private sealed interface Hit {
     data object Empty : Hit
 
     data object Readout : Hit
+    data class WorkAreaEdge(val start: Boolean) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
@@ -665,7 +668,7 @@ private sealed interface Hit {
     data class Row(val id: Long) : Hit
 }
 
-private enum class Drag(val edit: Boolean = false) { Scrub, Scroll, Pinch, Spent, Select, TrimStart(true), TrimEnd(true), Reorder(true), Lift(true), Key(true) }
+private enum class Drag(val edit: Boolean = false) { Scrub, Scroll, Pinch, Spent, Select, TrimStart(true), TrimEnd(true), Reorder(true), Lift(true), Key(true), WorkAreaStart(true), WorkAreaEnd(true) }
 
 private const val KEY_MOVE = "keyframe-move"
 private const val MOVE_EDIT = "clip-move"
@@ -1114,6 +1117,15 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun hitAt(at: Offset): Hit {
         if (at.y < rulerH) {
             if (deskLayout && at.x < headerWidth) return Hit.Corner
+            if (!state.lookOnly) {
+                val time = timeScale()
+                val startX = time.x(TimelineMath.frameTimeMs(state.scene.workAreaStartFrame, fps))
+                val endX = time.x(TimelineMath.frameTimeMs(state.scene.workAreaEndFrame, fps))
+                val inTimeline = { x: Float -> !deskLayout || x >= headerWidth }
+                val nearStart = inTimeline(startX) && abs(at.x - startX) <= WorkAreaHitZone.px
+                val nearEnd = inTimeline(endX) && abs(at.x - endX) <= WorkAreaHitZone.px
+                if (nearStart || nearEnd) return Hit.WorkAreaEdge(nearStart && (!nearEnd || abs(at.x - startX) <= abs(at.x - endX)))
+            }
             val origin = timeScale().originX
             if (deskLayout && origin < headerWidth) return Hit.Ruler
             val centre = (origin + PlayheadWidth.px / 2).let { if (deskLayout) maxOf(it, headerWidth + PillInset.px + PillWidth.px / 2) else it }
@@ -1166,7 +1178,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
             is Hit.Key -> select(hit.id)
             Hit.Readout -> state.toggleBookmark()
             Hit.Empty, Hit.Ruler, is Hit.Row -> state.clearSelection()
-            Hit.Corner, is Hit.Grip, is Hit.Handle -> Unit
+            Hit.Corner, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
         }
     }
 
@@ -1273,6 +1285,10 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     fun beginDrag(hit: Hit, moved: Offset): Drag {
         return when {
+            hit is Hit.WorkAreaEdge && !state.lookOnly -> {
+                state.playing = false
+                if (hit.start) Drag.WorkAreaStart else Drag.WorkAreaEnd
+            }
             hit is Hit.Grip && !state.lookOnly -> {
                 state.playing = false
                 val layer = layers.firstOrNull { it.id == hit.id }
@@ -1311,6 +1327,15 @@ private class TimelineView(val state: EditorState, density: Density, private val
             }
             Drag.Reorder -> reorderTo(at.y)
             Drag.Key -> keyBy(delta.x)
+            Drag.WorkAreaStart, Drag.WorkAreaEnd -> {
+                val last = state.scene.lastFrame.coerceAtLeast(0)
+                val frame = TimelineMath.nearestFrame(timeScale().time(at.x), fps).coerceIn(0, last + 1)
+                if (drag == Drag.WorkAreaStart) {
+                    state.edit("work-area-start") { it.withWorkArea(frame.coerceAtMost(it.workAreaEndFrame - 1), it.workAreaEndFrame) }
+                } else {
+                    state.edit("work-area-end") { it.withWorkArea(it.workAreaStartFrame, frame.coerceAtLeast(it.workAreaStartFrame + 1)) }
+                }
+            }
             Drag.Pinch, Drag.Spent, Drag.Lift, Drag.Select -> Unit
         }
     }
@@ -1723,7 +1748,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                 previous = at
                 hit = view.hitAt(at).takeIf { !view.state.lookOnly || it == Hit.Ruler }
                 moved = false
-                resizing = view.nearHeaderEdge(at.x)
+                resizing = hit !is Hit.WorkAreaEdge && view.nearHeaderEdge(at.x)
                 view.resizingHeader = resizing
                 rubbering = false
                 view.desktopCancel = false
@@ -1734,6 +1759,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     is Hit.Eye -> view.state.toggleHidden(h.id)
                     is Hit.Locked -> view.state.hint(R.string.layer_locked_hint)
                     is Hit.Grip -> { view.selectDesktop(h.id, false, false); drag = view.beginDrag(h, Offset.Zero) }
+                    is Hit.WorkAreaEdge -> drag = view.beginDrag(h, Offset.Zero)
                     is Hit.Key -> {
                         val scope = if (h.id == view.state.selectedId) view.state.keyScope else null
                         view.selectDesktop(h.id, false, false)
@@ -1899,7 +1925,9 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
                 drag == null -> {
                     val moved = first.position - down.position
                     if (moved.getDistance() > viewConfiguration.touchSlop) {
-                        drag = view.beginDrag(hit, moved)
+                        val started = view.beginDrag(hit, moved)
+                        drag = started
+                        if (started == Drag.WorkAreaStart || started == Drag.WorkAreaEnd) view.dragBy(started, moved, first.position)
                         first.consume()
                     }
                 }
@@ -1929,6 +1957,7 @@ private fun DrawScope.drawTimeline(view: TimelineView, measurer: TextMeasurer, s
         if (view.layers.isNotEmpty()) drawRuler(time, fps, state.scene.lastFrame, step)
         if (view.layers.isNotEmpty() && (state.scene.isElement || state.inGroup)) drawRetimeMarks(state.scene, time)
     }
+    if (view.layers.isNotEmpty()) drawWorkArea(view, time, fps, if (desktop) view.headerWidth else 0f, view.rulerH)
     if (view.layers.isNotEmpty() && !state.inGroup) drawCacheBar(state, time, fps, if (desktop) view.headerWidth else 0f, view.rulerH)
     val stripe = TimelineMath.frameTimeMs(2 * step, fps) * time.pxPerMs
     fun paint(row: Int, layer: Layer) {
@@ -2091,6 +2120,32 @@ private fun DrawScope.drawBookmark(x: Float, outline: Path) {
     }
     outline.close()
     drawPath(outline, colour)
+}
+
+private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
+    val scene = view.state.scene
+    val startX = time.x(TimelineMath.frameTimeMs(scene.workAreaStartFrame, fps))
+    val endX = time.x(TimelineMath.frameTimeMs(scene.workAreaEndFrame, fps))
+    val clipLeft = left.coerceIn(0f, size.width)
+    clipRect(left = clipLeft, right = size.width, bottom = size.height) {
+        val from = max(startX, clipLeft)
+        val to = min(endX, size.width)
+        if (to > from) {
+            drawRect(WorkAreaColor.copy(alpha = 0.08f), Offset(from, 0f), Size(to - from, rulerH))
+            val stripTop = rulerH - CacheBarHeight.toPx() - 3.dp.toPx()
+            drawRect(WorkAreaColor.copy(alpha = 0.72f), Offset(from, stripTop), Size(to - from, 2.dp.toPx()))
+        }
+        val stemTop = 2.dp.toPx()
+        val stemBottom = (rulerH - CacheBarHeight.toPx() - 4.dp.toPx()).coerceAtLeast(stemTop + 1.dp.toPx())
+        val stemWidth = 3.dp.toPx()
+        fun marker(x: Float) {
+            drawRoundRect(WorkAreaColor, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
+            drawCircle(WorkAreaColor, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
+            drawLine(WorkAreaColor.copy(alpha = 0.32f), Offset(x, rulerH), Offset(x, size.height), 1.dp.toPx())
+        }
+        marker(startX)
+        marker(endX)
+    }
 }
 
 private fun DrawScope.drawCacheBar(state: EditorState, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
