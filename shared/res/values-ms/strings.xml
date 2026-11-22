@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">Alih keluar daripada %1$s</string>
     <string name="added_effect_show_creator_category">Tunjukkan sebagai kategori</string>
     <string name="added_effect_remove_creator_category">Alih keluar daripada kategori</string>
+    <string name="structure_group_space">Dimensi kumpulan</string>
+    <string name="structure_group_keep_3d">Kekalkan 3D</string>
+    <string name="structure_group_flatten_2d">Ratakan kepada 2D</string>
 </resources>

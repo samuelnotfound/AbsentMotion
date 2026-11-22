@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">นำออกจาก %1$s</string>
     <string name="added_effect_show_creator_category">แสดงเป็นหมวดหมู่</string>
     <string name="added_effect_remove_creator_category">นำออกจากหมวดหมู่</string>
+    <string name="structure_group_space">มิติของกลุ่ม</string>
+    <string name="structure_group_keep_3d">คง 3D ไว้</string>
+    <string name="structure_group_flatten_2d">ทำให้แบนเป็น 2D</string>
 </resources>

@@ -435,10 +435,10 @@ float DepthPerPixel(const Layer& l, double timeMs) {
     return (v.orthographic ? std::max(-v.eyeZ, kNearest) : std::max(depth, kNearest)) / v.focal;
 }
 
-bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen) {
+bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen, bool cameraOnly) {
     const Layer* camera = top && gCameraView ? ActiveCamera(layers, timeMs) : nullptr;
-    const bool cameraOnly = camera && camera->activeAt(timeMs);
-    if (!camera && std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
+    cameraOnly = cameraOnly || (camera && camera->activeAt(timeMs));
+    if (!cameraOnly && !camera && std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
     const double beforeMs = timeMs - 1000.0 / std::max(fps, 1);
     const View now = camera ? LayerView(layers, *camera, width, height, timeMs) : DefaultView(width, height);
     const View before = camera ? LayerView(layers, *camera, width, height, beforeMs) : now;
@@ -453,7 +453,7 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         Layer copy = l;
         copy.parent = 0;
         copy.placed = true;
-        copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height};
+        copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height, cameraOnly && l.spatial()};
         float d = 0;
         bool drop = cameraOnly && !l.spatial() && DrawsInScene(l);
         if (l.spatial() && DrawsInScene(l)) {

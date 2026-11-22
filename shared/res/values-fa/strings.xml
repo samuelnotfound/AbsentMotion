@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">حذف از %1$s</string>
     <string name="added_effect_show_creator_category">نمایش به‌عنوان دسته</string>
     <string name="added_effect_remove_creator_category">حذف از دسته‌ها</string>
+    <string name="structure_group_space">بُعد گروه</string>
+    <string name="structure_group_keep_3d">حفظ حالت سه‌بعدی</string>
+    <string name="structure_group_flatten_2d">تخت کردن به دوبعدی</string>
 </resources>

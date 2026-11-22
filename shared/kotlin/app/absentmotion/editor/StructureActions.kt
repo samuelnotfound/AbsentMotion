@@ -143,6 +143,7 @@ private fun Scene.groupNode(attrs: Map<String, String>, children: List<XmlNode>,
             linkedMapOf(
                 "title" to "", "width" to "$width", "height" to "$height", "exportWidth" to "$width", "exportHeight" to "$height",
                 "bgcolor" to "#00000000", "totalTime" to "$totalTime", "fps" to "$fps", "retime" to "off",
+                "precompose" to "dynamicResolution",
             ),
             children,
         ),
@@ -154,10 +155,10 @@ fun EditorState.addEmptyGroup() {
     addAndSelect(scene.groupNode(attrs, emptyList(), attrs.getValue("endTime").toInt() - attrs.getValue("startTime").toInt()))
 }
 
-fun EditorState.groupLayers(ids: Set<Long>, blend: String? = null, anchor: Pair<Float, Float>? = null) {
+private fun EditorState.groupLayers(ids: Set<Long>, blend: String?, anchor: Pair<Float, Float>?, keep3D: Boolean) {
     val id = Layer.newId()
     val label = numbered(AppText.get(R.string.model_layer_group))
-    edit { s -> s.grouped(ids, blend, id, label, sampleMs).let { g -> anchor?.let { (x, y) -> g.withAnchorAt(id, x, y) } ?: g } }
+    edit { s -> s.grouped(ids, blend, id, label, sampleMs, keep3D).let { g -> anchor?.let { (x, y) -> g.withAnchorAt(id, x, y) } ?: g } }
     if (scene.layer(id) == null) return
     MultiSelect.clear()
     selectedId = id
@@ -166,10 +167,16 @@ fun EditorState.groupLayers(ids: Set<Long>, blend: String? = null, anchor: Pair<
 
 suspend fun EditorState.groupLayersCentred(ids: Set<Long>, blend: String? = null) {
     val before = scene
-    val boxes = ids.mapNotNull { engine.layerBounds(it, sampleMs) }
+    val members = before.layers.filter { it.id in ids && it.kind != "camera" }.map { it.id }.toSet()
+    if (members.isEmpty()) return
+    val at = sampleMs
+    val boxes = members.mapNotNull { engine.layerBounds(it, at) }
     if (scene.node !== before.node) return
     val anchor = if (boxes.isEmpty()) null else ((boxes.minOf { it[0] } + boxes.maxOf { it[2] }) / 2f) to ((boxes.minOf { it[1] } + boxes.maxOf { it[3] }) / 2f)
-    groupLayers(ids, blend, anchor)
+    playing = false
+    groupAsk = { keep3D ->
+        if (scene.node === before.node) groupLayers(members, blend, anchor, keep3D)
+    }
 }
 
 internal fun Scene.withAnchorAt(id: Long, x: Float, y: Float): Scene = update(id) { group ->
@@ -177,7 +184,7 @@ internal fun Scene.withAnchorAt(id: Long, x: Float, y: Float): Scene = update(id
     group.withTransform("location", x, y, group.location[2]).withTransform("pivot", x - inner.width / 2f, y - inner.height / 2f)
 }
 
-internal fun Scene.grouped(ids: Set<Long>, blend: String?, id: Long, label: String, atMs: Int? = null): Scene {
+internal fun Scene.grouped(ids: Set<Long>, blend: String?, id: Long, label: String, atMs: Int? = null, keep3D: Boolean = false): Scene {
     val list = layers
     val inside = list.filter { it.id in ids && it.kind != "camera" }.map { it.id }.toSet()
     if (inside.isEmpty()) return this
@@ -195,6 +202,7 @@ internal fun Scene.grouped(ids: Set<Long>, blend: String?, id: Long, label: Stri
     }
     val attrs = linkedMapOf("id" to "$id", "label" to label, "startTime" to "$start", "endTime" to "$end")
     if (top in stranded) attrs["clippingMask"] = "true"
+    if (keep3D) attrs["threeD"] = "true"
     val group = groupNode(attrs, nested, end - start)
     return Scene(flat.node.copy(children = flat.node.children.mapNotNull { node ->
         val layerId = if (node.name in Scene.LAYER_TAGS) Layer(node).id else null

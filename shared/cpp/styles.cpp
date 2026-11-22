@@ -576,7 +576,7 @@ struct Override {
 void DrawOne(SkCanvas* canvas, const std::vector<Layer>& siblings, const Layer& l, double timeMs,
              const MediaPictures& pictures, const Override& ov);
 void DrawList(SkCanvas* canvas, const std::vector<Layer>& layers, int width, int height, bool top, double timeMs,
-              const MediaPictures& pictures);
+              const MediaPictures& pictures, bool cameraOnly = false);
 
 void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictures& pictures) {
     canvas->translate(-l.innerWidth / 2.0f, -l.innerHeight / 2.0f);
@@ -607,7 +607,7 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
     if (l.fixedPrecompose && l.innerWidth > 0 && l.innerHeight > 0) {
         if (auto surface = canvas->makeSurface(SkImageInfo::MakeN32Premul(l.innerWidth, l.innerHeight))) {
             surface->getCanvas()->drawColor((SkColor)l.innerBackground);
-            DrawList(surface->getCanvas(), l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures);
+            DrawList(surface->getCanvas(), l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures, l.sight.cameraOnly);
             canvas->drawImage(surface->makeImageSnapshot(), 0, 0, SkSamplingOptions(SkFilterMode::kLinear));
             return;
         }
@@ -622,7 +622,7 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
         background.setColor((SkColor)l.innerBackground);
         canvas->drawRect(SkRect::MakeWH((float)l.innerWidth, (float)l.innerHeight), background);
     }
-    DrawList(canvas, l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures);
+    DrawList(canvas, l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures, l.sight.cameraOnly);
     if (framed) canvas->restore();
 }
 
@@ -1983,8 +1983,12 @@ static bool ContainsOne(const std::vector<Layer>& siblings, const Layer& l, doub
     const SkPoint inner = {local.fX + l.innerWidth / 2.0f, local.fY + l.innerHeight / 2.0f};
     const double innerTime = NestedTime(l, timeMs);
     if (innerTime >= 0 && (l.innerBackground >> 24) != 0 && SkRect::MakeWH(l.innerWidth, l.innerHeight).contains(inner.fX, inner.fY)) return true;
-    for (auto it = l.inner().rbegin(); innerTime >= 0 && it != l.inner().rend(); ++it) {
-        if (Contains(l.inner(), *it, innerTime, inner, l.innerWidth, l.innerHeight, masks)) return true;
+    if (innerTime < 0) return false;
+    if (l.fixedPrecompose && !SkRect::MakeIWH(l.innerWidth, l.innerHeight).contains(inner.fX, inner.fY)) return false;
+    std::vector<Layer> seen;
+    const auto& children = SeeLayers(l.inner(), l.innerWidth, l.innerHeight, false, l.retiming.fps, innerTime, false, &seen, l.sight.cameraOnly) ? seen : l.inner();
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (Contains(children, *it, innerTime, inner, l.innerWidth, l.innerHeight, masks)) return true;
     }
     return false;
 }
@@ -2252,11 +2256,11 @@ void Collect(SkCanvas* canvas, const std::vector<Layer>& layers, const Layer& l,
 }
 
 void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int height, bool top, double timeMs,
-              const MediaPictures& pictures) {
+              const MediaPictures& pictures, bool cameraOnly) {
     std::vector<Layer> inherited, storage;
     const std::vector<Layer>& source = InheritEffects(listed, &inherited) ? inherited : listed;
     const bool pieces = gScene && gScene->depthOrder && gScene->pieceOrder;
-    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage);
+    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage, cameraOnly);
     if (seen) FaceForward(&storage);
     if (seen && !pieces) SplitSeen(&storage, timeMs);
     const std::vector<Layer>& layers = seen ? storage : source;

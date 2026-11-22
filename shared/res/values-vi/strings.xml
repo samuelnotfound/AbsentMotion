@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">Bỏ khỏi %1$s</string>
     <string name="added_effect_show_creator_category">Hiện thành danh mục</string>
     <string name="added_effect_remove_creator_category">Bỏ khỏi danh mục</string>
+    <string name="structure_group_space">Chiều không gian của nhóm</string>
+    <string name="structure_group_keep_3d">Giữ 3D</string>
+    <string name="structure_group_flatten_2d">Làm phẳng thành 2D</string>
 </resources>
