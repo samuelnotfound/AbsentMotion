@@ -453,11 +453,12 @@ JNIEXPORT jboolean JNICALL JNI(renderPreview)(JNIEnv* e, jobject, jlong h, jdoub
     am::SetFastShutterBlur(false);
     return surface->readPixels(info, reinterpret_cast<void*>(address), (size_t)rowBytes, 0, 0);
 }
-JNIEXPORT jbyteArray JNICALL JNI(still)(JNIEnv* e, jobject, jlong h, jdouble time, jint w, jint height, jboolean accurate) {
+JNIEXPORT jbyteArray JNICALL JNI(still)(JNIEnv* e, jobject, jlong h, jdouble time, jint w, jint height, jboolean accurate, jboolean camera) {
     Desktop* d = ptr(h);
     if (d->scene.width <= 0) return nullptr;
     std::vector<uint8_t> rgba;
-    am::SetCameraView(true);
+    const bool previousCamera = am::CameraViewOn();
+    am::SetCameraView(camera == JNI_TRUE);
     const am::LayerEffects fx = d->effects();
     const bool ok = d->offscreen(w, height, false, [&](SkCanvas* c) {
         c->scale((float)w / d->scene.width, (float)height / d->scene.height);
@@ -465,6 +466,7 @@ JNIEXPORT jbyteArray JNICALL JNI(still)(JNIEnv* e, jobject, jlong h, jdouble tim
         am::DrawScene(c, d->scene, time, d->media(), &fx);
         am::SetFastShutterBlur(false);
     }, &rgba);
+    am::SetCameraView(previousCamera);
     return ok ? bytes(e, rgba) : nullptr;
 }
 JNIEXPORT jboolean JNICALL JNI(stillInto)(JNIEnv* e, jobject, jlong h, jdouble time, jint w, jint height, jbyteArray out) {

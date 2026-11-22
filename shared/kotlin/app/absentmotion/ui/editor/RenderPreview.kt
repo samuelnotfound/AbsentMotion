@@ -57,6 +57,7 @@ import app.absentmotion.R
 import app.absentmotion.editor.EditorPanel
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.PreviewCache
+import app.absentmotion.editor.matchesFrames
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.Presence
 import app.absentmotion.ui.theme.presence
@@ -72,9 +73,8 @@ internal class LiveHandoff {
 }
 
 internal fun cacheMatches(state: EditorState, resources: Long): Boolean =
-    PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused && PreviewCache.key == PreviewCache.keyOf(state, resources) && state.soloMode == 0 && !state.pixelMode &&
-        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && (state.selectedId == null || state.playing) && state.drawing == null && state.panel != EditorPanel.EditText &&
-        (state.cameraMode || state.scene.layers.none { it.kind == "camera" })
+    PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused && PreviewCache.key?.matchesFrames(PreviewCache.keyOf(state, resources)) == true && state.soloMode == 0 && !state.pixelMode &&
+        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && (state.selectedId == null || state.playing) && state.drawing == null && state.panel != EditorPanel.EditText
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -184,6 +184,7 @@ internal fun RenderPreviewNotes(state: EditorState, cachedPlaying: State<Boolean
     LaunchedEffect(state.exportOpen) {
         if (state.exportOpen) PreviewCache.cancel()
     }
+    LaunchedEffect(state.scene.workArea) { PreviewCache.cancel() }
     val context = LocalContext.current
     val scope = LocalEditorScope.current
     val resources by state.engine.mediaRevision.collectAsState()
@@ -243,8 +244,7 @@ private fun AutomaticPreview(state: EditorState) {
                 snapshotFlow {
                     PreparationRequest(PreviewCache.keyOf(state), state.frame,
                         !state.playing && !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
-                            state.drawing == null && state.panel != EditorPanel.EditText &&
-                            (state.cameraMode || state.scene.layers.none { it.kind == "camera" }), PreviewCache.fit, PreviewCache.checkerCell)
+                            state.drawing == null && state.panel != EditorPanel.EditText, PreviewCache.fit, PreviewCache.checkerCell)
                 }.collectLatest { request ->
                     delay(100)
                     PreviewCache.follow(request.key)
@@ -254,7 +254,7 @@ private fun AutomaticPreview(state: EditorState) {
                     fun current() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && PreviewCache.idle() && !thermal.hot &&
                         !state.playing && !state.exportOpen && state.scene == request.key.scene && state.frame == request.frame &&
                         state.settings.fullMotionBlur == request.key.accurateBlur && state.settings.androidEmoji == request.key.androidEmoji &&
-                        state.settings.previewQuality.divisor == request.key.divisor &&
+                        state.settings.previewQuality.divisor == request.key.divisor && state.cameraMode == request.key.camera &&
                         state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && state.drawing == null && state.panel != EditorPanel.EditText
                     if (current()) PreviewCache.prepare(state, context, ::current)
                 }

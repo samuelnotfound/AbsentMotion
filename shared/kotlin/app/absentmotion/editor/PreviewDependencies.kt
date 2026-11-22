@@ -7,17 +7,17 @@ import app.absentmotion.model.effects
 import app.absentmotion.model.isMask
 import app.absentmotion.model.leansOnBelow
 
-internal fun previewOrder(last: Int, playhead: Int, run: Int = 1): List<Int> {
-    val end = last.coerceAtLeast(0)
-    val at = playhead.coerceIn(0, end)
+internal fun previewOrder(last: Int, playhead: Int, run: Int = 1, first: Int = 0): List<Int> {
+    val end = last.coerceAtLeast(first)
+    val at = playhead.coerceIn(first, end)
     val step = run.coerceAtLeast(1)
     return buildList {
         var ahead = at + 1
         var behind = at - 1
-        while (ahead <= end || behind >= 0) {
+        while (ahead <= end || behind >= first) {
             repeat(2 * step) { if (ahead <= end) add(ahead++) }
-            if (behind >= 0) {
-                val from = maxOf(0, behind - step + 1)
+            if (behind >= first) {
+                val from = maxOf(first, behind - step + 1)
                 for (frame in from..behind) add(frame)
                 behind = from - 1
             }
@@ -25,14 +25,23 @@ internal fun previewOrder(last: Int, playhead: Int, run: Int = 1): List<Int> {
     }
 }
 
-private fun XmlNode.visual(): XmlNode = copy(attrs = attrs - setOf("label", "lock"), children = children.map { it.visual() })
+private val workAreaAttrs = setOf("workAreaStart", "workAreaEnd")
+
+internal fun Scene.samePreviewFrames(other: Scene): Boolean =
+    node === other.node || node.name == other.node.name && node.text == other.node.text &&
+        node.attrs - workAreaAttrs == other.node.attrs - workAreaAttrs && node.children == other.node.children
+
+private fun XmlNode.visual(): XmlNode {
+    val keys = setOf("label", "lock")
+    return copy(attrs = attrs - if (name == "scene") keys + workAreaAttrs else keys, children = children.map { it.visual() })
+}
 
 private fun sameVisual(a: XmlNode?, b: XmlNode?): Boolean = a === b || a != null && b != null && a.visual() == b.visual()
 
 private fun Scene.visualLayers(): List<Layer> = layers.filter { it.kind != "audio" }
 
 private fun Scene.visualHeader(): XmlNode = node.copy(
-    attrs = node.attrs - setOf("title", "modifiedTime", "totalTime", "createdTime"),
+    attrs = node.attrs - (setOf("title", "modifiedTime", "totalTime", "createdTime") + workAreaAttrs),
     children = node.children.filter { it.name !in Scene.LAYER_TAGS && it.name != "bookmark" },
 )
 

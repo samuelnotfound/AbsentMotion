@@ -456,7 +456,7 @@ class EngineThread(private val background: Int, private val context: Context? = 
         }
     }
 
-    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, accept: () -> Boolean): ByteArray? {
+    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true, accept: () -> Boolean): ByteArray? {
         if (closed || playing || mediaJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
         try {
             return withContext(dispatcher) {
@@ -464,7 +464,7 @@ class EngineThread(private val background: Int, private val context: Context? = 
                 applyPending(timeMs)
                 syncVideo(document, timeMs)
                 val started = System.nanoTime()
-                engine().previewStill(timeMs.toDouble(), width, height, accurateBlur).also { lastStillMs = (System.nanoTime() - started) / 1e6 }
+                engine().previewStill(timeMs.toDouble(), width, height, accurateBlur, camera).also { lastStillMs = (System.nanoTime() - started) / 1e6 }
             }
         } finally { captureLock.unlock() }
     }
@@ -526,8 +526,8 @@ class EngineThread(private val background: Int, private val context: Context? = 
             applyFonts(timeMs); syncVideo(document, timeMs, strict = true); interpolation?.apply(document, timeMs, engine()); engine().exportFrame(timeMs.toDouble(), width, height, out)
         }
         suspend fun lastFrameInto(out: ByteArray?): Int = withContext(NonCancellable + dispatcher) { engine?.exportFlush(out) ?: 0 }
-        suspend fun previewStill(timeMs: Int, width: Int, height: Int, accurateBlur: Boolean): ByteArray? = withContext(dispatcher) {
-            applyFonts(timeMs); syncVideo(document, timeMs); engine().previewStill(timeMs.toDouble(), width, height, accurateBlur)
+        suspend fun previewStill(timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true): ByteArray? = withContext(dispatcher) {
+            applyFonts(timeMs); syncVideo(document, timeMs); engine().previewStill(timeMs.toDouble(), width, height, accurateBlur, camera)
         }
         suspend fun attach(surface: Surface): Long = throw UnsupportedOperationException("Surface export is not used on desktop")
         suspend fun detach(target: Long) {}
