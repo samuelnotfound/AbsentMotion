@@ -210,6 +210,8 @@ def scene(show, effect, preset=None):
     else:
         half = show.get("half") or {"move": RENDER // 4, "repeat": RENDER // 12}.get(show.get("layout"), RENDER // 2)
         layers.append(layer(2, show["photo"], fx, half, show.get("keys"), total - 1, show.get("shape", ".rect")))
+    if effect and (effect.get("category") == "3d" or effect["id"] == "particles"):
+        layers[-1] = re.sub(r"<(shape|text|drawing) ", r'<\1 threeD="true" ', layers[-1], count=1)
     if "split" in show:
         layers.append(layer(3, f'{show["photo"]}-before{round(show["split"] * 100)}', end=total - 1))
     return (f'<scene title="thumb" width="{RENDER}" height="{RENDER}" fps="{fps}" totalTime="{total}" bgcolor="#00000000">'

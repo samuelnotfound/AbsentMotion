@@ -84,8 +84,14 @@ int main() {
     input[2].effects[0].props[0].anim.value = {1};
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     Expect(output[1].id == 1 && output[2].id == 8 && output[3].id == 2, "depth particles do not enable 3D on their layer");
-    particles.effects.clear();
+    am::EffectRuntime runtime;
+    am::LayerEffect pieces;
+    pieces.id = "absent.scatter3d";
+    particles.effects = {pieces};
+    Expect(!runtime.active(particles), "3D effects are bypassed on flat layers");
     particles.force3d = true;
+    Expect(runtime.active(particles), "3D effects resume with the layer toggle");
+    particles.effects.clear();
     input[2] = particles;
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     Expect(output[1].id == 2 && output[2].id == 1 && output[3].id == 8, "flat explicit 3d layer joins group");

@@ -98,6 +98,7 @@ SkM44 Space(const View& v, const Placement& p) {
 bool Solid(const Layer& l, const Placement& p) { return p.tilt != SkM44() || l.kind == "model"; }
 
 bool Deep(const Layer& l, double timeMs) {
+    if (!l.spatial()) return false;
     return std::any_of(l.effects.begin(), l.effects.end(), [&](const LayerEffect& e) {
         return !e.hidden && ((ParticleEffect(e.id) && e.value("depth", l.localTime(timeMs), 0) >= 0.5f) || e.id == "absent.scatter3d" || e.id == "absent.fracture3d");
     });
