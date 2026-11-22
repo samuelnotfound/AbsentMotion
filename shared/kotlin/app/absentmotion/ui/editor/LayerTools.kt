@@ -471,7 +471,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val canPivot = !desk && selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
-    val threeD = !desk && shown == ROTATE_TAB && (state.settings.rotate3d || layer.hasTilt()) && (selected.kind != "camera" || state.scene.depthOrder)
+    val threeD = shown == ROTATE_TAB && (selected.kind != "camera" || state.scene.depthOrder)
     val turn = if (move) turnFor(selected, catalog, shown, threeD) else null
     var menuOpen by remember { mutableStateOf(false) }
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && !(move && shown == ROTATE_TAB && turn != null)
@@ -511,10 +511,6 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
                 Presence(menuOpen) {
                     TransformMenu(state, shown, turn, extra = if (desk) null else { close ->
                         if (canPivot && tab == 0) MenuRow(stringResource(R.string.a11y_tab_pivot), trailing = if (pivotMode) PanelIcons.Check else null, divider = true) { pivotMode = !pivotMode; close() }
-                        if (tab == ROTATE_TAB && (selected.kind != "camera" || state.scene.depthOrder)) {
-                            MenuRow(stringResource(R.string.transform_3d_rotation), enabled = !layer.hasTilt() && (turn?.effect ?: -1) < 0, trailing = if (state.settings.rotate3d || turn != null) PanelIcons.Check else null, divider = turn == null) { state.settings.rotate3d = !state.settings.rotate3d; close() }
-                            if (turn != null) MenuRow(stringResource(R.string.transform_free_rotate), trailing = if (state.settings.rotateFree) PanelIcons.Check else null, divider = true) { state.settings.rotateFree = !state.settings.rotateFree; close() }
-                        }
                     }) { menuOpen = false }
                 }
             }
@@ -617,7 +613,7 @@ internal val TransformTargets = listOf(
     KeyTarget(PropRef.Pivot, "0.000000,0.000000,0.000000"),
 )
 
-internal fun transformTabs(basic: Boolean, desktop: Boolean = true) = if (basic || !desktop) listOf(0, ROTATE_TAB, SIZE_TAB, SKEW_TAB) else (0..PIVOT_TAB).toList()
+internal fun transformTabs(basic: Boolean, desktop: Boolean = true) = if (basic || !desktop) listOf(0, ROTATE_TAB, SIZE_TAB, SKEW_TAB) else (0..PIVOT_TAB).filter { it != TILT_TAB }
 
 internal fun app.absentmotion.model.Layer.hasTilt(): Boolean =
     tilt.any { kotlin.math.abs(it) > 1e-4f } || element(PropRef.Tilt)?.children?.any { it.name == "kf" } == true
