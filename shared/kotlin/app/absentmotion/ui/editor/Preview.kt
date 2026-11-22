@@ -95,6 +95,7 @@ import app.absentmotion.platform.Matrix
 import app.absentmotion.engine.PreviewView
 import app.absentmotion.model.withGradient
 import app.absentmotion.model.cameraGesture
+import app.absentmotion.model.camera3dGesture
 import app.absentmotion.model.gradient
 import app.absentmotion.model.PropRef
 import app.absentmotion.model.textAlign
@@ -106,6 +107,7 @@ import app.absentmotion.ui.editor.panels.SnapScene
 import app.absentmotion.ui.editor.panels.pivotFrame
 import app.absentmotion.ui.editor.panels.previewSnapAxes
 import app.absentmotion.ui.editor.panels.snapScene
+import app.absentmotion.ui.editor.panels.turnStep
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.presence
@@ -317,6 +319,14 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     Box(modifier.background(Am.PreviewBg).onSizeChanged { size = it }.onGloballyPositioned { origin = it.positionInRoot() }.then(wheelView).then(middlePan).then(touchWatch)) {
         app.absentmotion.platform.SceneSurface(state.engine, divisor, size, Modifier.fillMaxSize()) { state.previewSurface = it }
         CachedFrame(state, cacheUsable, live, dx, dy, scene.width * scale, scene.height * scale)
+        if (state.cameraMode && state.scene.depthOrder && state.settings.rotate3d && state.selected?.kind == "camera") {
+            Text(
+                stringResource(R.string.drag_here_to_rotate_in_3d),
+                Modifier.align(Alignment.TopCenter).padding(top = 8.dp).clip(RoundedCornerShape(20.dp))
+                    .background(Am.Panel.copy(alpha = 0.92f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                color = Am.OnDark, fontSize = 12.sp, maxLines = 1,
+            )
+        }
         if (state.countInRemaining > 0) Text(
             state.countInRemaining.toString(), Modifier.align(Alignment.Center), color = Color.White,
             fontSize = 96.sp, fontWeight = FontWeight.Bold, style = TextStyle(shadow = Shadow(Color.Black, Offset(2f, 2f), 8f)),
@@ -482,9 +492,18 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                             held = Offset.Zero
                         } else if (moved && startLayer?.kind == "camera" && !(canvasGesture && fingers > 1)) {
                             gesture = HIDDEN
-                            val move = (pan + held) / currentScale
+                            val travelled = pan + held
+                            val move = travelled / currentScale
                             held = Offset.Zero
-                            state.editSelected(key = "preview-gesture") { it.cameraGesture(move.x, move.y, zoom) }
+                            val threeD = state.cameraMode && state.scene.depthOrder && state.settings.rotate3d
+                            state.editSelected(key = "preview-gesture") { layer ->
+                                if (threeD && fingers > 1) {
+                                    val turn = turnStep(travelled.x / density, travelled.y / density, event.calculateRotation(), layer.rotation)
+                                    layer.camera3dGesture(0f, 0f, turn[0], turn[1], turn[2], zoom)
+                                } else if (threeD) {
+                                    layer.camera3dGesture(move.x, move.y, 0f, 0f, 0f, zoom)
+                                } else layer.cameraGesture(move.x, move.y, zoom)
+                            }
                         } else if (moved && turning != null && !(canvasGesture && fingers > 1)) {
                             gesture = HIDDEN
                             turning(if (fingers > 1) Offset.Zero else (pan + held) / density, if (fingers > 1) event.calculateRotation() else 0f)
