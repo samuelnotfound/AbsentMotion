@@ -375,9 +375,9 @@ JNIEXPORT jbyteArray JNICALL JNI_FN(nativeStill)(JNIEnv* env, jclass, jlong engi
 }
 
 JNIEXPORT jbyteArray JNICALL JNI_FN(nativePreviewStill)(JNIEnv* env, jclass, jlong engine, jdouble timeMs, jint width,
-                                                 jint height, jboolean accurateBlur) {
+                                                 jint height, jboolean accurateBlur, jboolean camera) {
     std::vector<uint8_t> rgba;
-    if (!engineOf(engine)->previewStill(timeMs, width, height, accurateBlur == JNI_TRUE, &rgba)) return nullptr;
+    if (!engineOf(engine)->previewStill(timeMs, width, height, accurateBlur == JNI_TRUE, camera == JNI_TRUE, &rgba)) return nullptr;
     jbyteArray out = env->NewByteArray((jsize)rgba.size());
     if (!out) {
         env->ExceptionClear();

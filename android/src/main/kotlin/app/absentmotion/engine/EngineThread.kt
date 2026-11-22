@@ -663,7 +663,7 @@ class EngineThread(private val background: Int, context: Context? = null, privat
         }
     }
 
-    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean,
+    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true,
                                     accept: () -> Boolean): ByteArray? {
         if (closed || playing || mediaJob?.isActive == true || fontJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
         try {
@@ -675,7 +675,7 @@ class EngineThread(private val background: Int, context: Context? = null, privat
                 try {
                     prepareTextTime(timeMs)
                     val started = System.nanoTime()
-                    engine().previewStill(timeMs.toDouble(), width, height, accurateBlur).also { lastStillMs = (System.nanoTime() - started) / 1e6 }
+                    engine().previewStill(timeMs.toDouble(), width, height, accurateBlur, camera).also { lastStillMs = (System.nanoTime() - started) / 1e6 }
                 } finally {
                     capturing = false
                     prepareTextTime(requestedView?.timeMs ?: 0)
@@ -785,8 +785,8 @@ class EngineThread(private val background: Int, context: Context? = null, privat
         suspend fun still(timeMs: Int, width: Int, height: Int): ByteArray? =
             atFrame(document, timeMs, smoothing, fps) { engine().still(timeMs.toDouble(), width, height) }
 
-        suspend fun previewStill(timeMs: Int, width: Int, height: Int, accurateBlur: Boolean): ByteArray? =
-            atFrame(document, timeMs, smoothing, fps) { engine().previewStill(timeMs.toDouble(), width, height, accurateBlur) }
+        suspend fun previewStill(timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true): ByteArray? =
+            atFrame(document, timeMs, smoothing, fps) { engine().previewStill(timeMs.toDouble(), width, height, accurateBlur, camera) }
 
         suspend fun attach(surface: Surface): Long = withContext(dispatcher) { engine().attach(surface, forEncoder = true) }
 

@@ -36,7 +36,7 @@ object DesktopNative {
     external fun layerQuad(handle: Long, id: Long, timeMs: Double): FloatArray?
     external fun renderPreview(handle: Long, timeMs: Double, width: Int, height: Int, address: Long, rowBytes: Long, scale: Float, dx: Float, dy: Float, background: Int,
         selectedId: Long, handles: Int, pixels: Boolean, pixelDivisor: Int, gridSpacing: Float, solo: Int, soloIds: LongArray?, guides: FloatArray, refPx: Float): Boolean
-    external fun still(handle: Long, timeMs: Double, width: Int, height: Int, accurate: Boolean): ByteArray?
+    external fun still(handle: Long, timeMs: Double, width: Int, height: Int, accurate: Boolean, camera: Boolean = true): ByteArray?
     external fun stillInto(handle: Long, timeMs: Double, width: Int, height: Int, out: ByteArray): Boolean
     external fun exportFrame(handle: Long, timeMs: Double, width: Int, height: Int, out: ByteArray): Int
     external fun exportFlush(handle: Long, out: ByteArray?): Int
