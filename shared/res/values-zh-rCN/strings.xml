@@ -2695,4 +2695,7 @@
     <string name="added_effect_remove_from_category">从“%1$s”中移除</string>
     <string name="added_effect_show_creator_category">显示为分类</string>
     <string name="added_effect_remove_creator_category">从分类中移除</string>
+    <string name="structure_group_space">组的维度</string>
+    <string name="structure_group_keep_3d">保留 3D</string>
+    <string name="structure_group_flatten_2d">展平为 2D</string>
 </resources>

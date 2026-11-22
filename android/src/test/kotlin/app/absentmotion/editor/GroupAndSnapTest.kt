@@ -58,6 +58,19 @@ class GroupAndSnapTest {
         assertEquals(listOf(100), out.bookmarks)
     }
 
+    @Test fun groupingLetsTheParentKeepDepthOrDrawAsAFlatLayer() {
+        val source = scene(layer(1, 0, 999, 1250f, extra = mapOf("threeD" to "true")), layer(2, 0, 999))
+        val spatial = source.grouped(setOf(1, 2), null, 9, "G", keep3D = true).group()
+        val flat = source.grouped(setOf(1, 2), null, 9, "G", keep3D = false).group()
+        assertTrue(spatial.uses3D)
+        assertFalse(flat.uses3D)
+        assertEquals(spatial.nested, flat.nested)
+        val inner = flat.nested!!
+        assertEquals("dynamicResolution", inner.precompose)
+        assertEquals(1250f, inner.layer(1)!!.location[0])
+        assertTrue(inner.layer(1)!!.uses3D)
+    }
+
     @Test fun groupingKeepsMasksClippingTheirLayerAndLeavesCamerasOutside() {
         val s = scene(layer(1, 0, 999), layer(2, 0, 999, extra = mapOf("clippingMask" to "true")), layer(3, 0, 999, extra = mapOf("clippingMask" to "true")),
             shapeNode("camera", id = 4, end = 999))

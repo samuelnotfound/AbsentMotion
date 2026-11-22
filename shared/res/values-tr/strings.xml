@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">%1$s içinden kaldır</string>
     <string name="added_effect_show_creator_category">Kategori olarak göster</string>
     <string name="added_effect_remove_creator_category">Kategorilerden kaldır</string>
+    <string name="structure_group_space">Grup boyutu</string>
+    <string name="structure_group_keep_3d">3B olarak koru</string>
+    <string name="structure_group_flatten_2d">2B olarak düzleştir</string>
 </resources>

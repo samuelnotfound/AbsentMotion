@@ -5223,8 +5223,11 @@
  "structure_empty_group": "Empty Group",
  "structure_group": "Group",
  "structure_group_exclude": "Group & Exclude",
+ "structure_group_flatten_2d": "Flatten to 2D",
+ "structure_group_keep_3d": "Keep 3D",
  "structure_group_mask": "Group & Mask",
  "structure_group_options": "Group options",
+ "structure_group_space": "Group dimension",
  "structure_import_svg": "Import SVG",
  "structure_layers_selected": {
   "one": "%1$s layer selected",

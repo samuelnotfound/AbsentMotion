@@ -2794,4 +2794,7 @@
     <string name="added_effect_remove_from_category">Прибрати з розділу «%1$s»</string>
     <string name="added_effect_show_creator_category">Показати як категорію</string>
     <string name="added_effect_remove_creator_category">Прибрати з категорій</string>
+    <string name="structure_group_space">Розмірність групи</string>
+    <string name="structure_group_keep_3d">Зберегти 3D</string>
+    <string name="structure_group_flatten_2d">Звести до 2D</string>
 </resources>

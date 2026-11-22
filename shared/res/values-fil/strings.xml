@@ -2728,4 +2728,7 @@
     <string name="added_effect_remove_from_category">Alisin sa %1$s</string>
     <string name="added_effect_show_creator_category">Ipakita bilang kategorya</string>
     <string name="added_effect_remove_creator_category">Alisin sa mga kategorya</string>
+    <string name="structure_group_space">Dimensiyon ng grupo</string>
+    <string name="structure_group_keep_3d">Panatilihin ang 3D</string>
+    <string name="structure_group_flatten_2d">Gawing patag na 2D</string>
 </resources>

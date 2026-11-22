@@ -161,6 +161,7 @@ class EditorState(
     val premuteGain = HashMap<Long, Float>()
 
     var ungroupAsk by mutableStateOf(false)
+    internal var groupAsk by mutableStateOf<((Boolean) -> Unit)?>(null)
 
     var pointsAsk by mutableStateOf<(() -> Unit)?>(null)
 
