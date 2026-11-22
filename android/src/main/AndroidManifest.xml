@@ -28,7 +28,7 @@
     </queries>
 
     <application
-        android:label="AbsentMotion"
+        android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
         android:hasCode="true"
         android:allowBackup="true"
