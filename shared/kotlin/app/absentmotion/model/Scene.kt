@@ -72,6 +72,15 @@ value class Scene(val node: XmlNode) {
     fun lastShownFrame(end: Int): Int = frameAt(end).let { if (frameTime(it) > end) it - 1 else it }
     fun showsAnyFrame(start: Int, end: Int): Boolean = firstShownFrame(start) <= lastShownFrame(end)
     val lastFrame: Int get() = frameAt(totalTime)
+    val workAreaStartFrame: Int get() = (node["workAreaStart"]?.toIntOrNull() ?: 0).coerceIn(0, lastFrame.coerceAtLeast(0))
+    val workAreaEndFrame: Int get() = (node["workAreaEnd"]?.toIntOrNull() ?: lastFrame.coerceAtLeast(0) + 1).coerceIn(workAreaStartFrame + 1, lastFrame.coerceAtLeast(0) + 1)
+
+    fun withWorkArea(startFrame: Int, endFrame: Int): Scene {
+        val last = lastFrame.coerceAtLeast(0)
+        val start = startFrame.coerceIn(0, last)
+        val end = endFrame.coerceIn(start + 1, last + 1)
+        return Scene(node.with("workAreaStart", "$start").with("workAreaEnd", "$end"))
+    }
 
     fun drawnFrames(start: Int, end: Int): Int = (frameAt(end) - frameAt(start - 1)).coerceAtLeast(0)
 

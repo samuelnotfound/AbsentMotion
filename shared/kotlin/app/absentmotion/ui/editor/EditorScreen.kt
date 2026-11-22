@@ -287,7 +287,9 @@ private fun Playback(state: EditorState) {
     }
     LaunchedEffect(state.playing, state.settings.playbackSpeed) {
         if (!state.playing) return@LaunchedEffect
-        if (state.frame >= state.scene.lastFrame) state.frame = 0
+        val workStart = state.scene.workAreaStartFrame
+        val workEnd = state.scene.workAreaEndFrame
+        if (state.frame !in (workStart until workEnd) || state.frame >= workEnd - 1) state.frame = workStart
         state.engine.timing()
         val audio = state.engine.audio
         audio?.quality = state.settings.audioResampling
@@ -302,7 +304,8 @@ private fun Playback(state: EditorState) {
                 val now = withFrameNanos { it }
                 if (audible && audio?.interrupted == true) { state.playing = false; break }
                 if (state.frame != shown) {
-                    startFrame = state.frame
+                    startFrame = state.frame.coerceIn(workStart, workEnd - 1)
+                    if (state.frame != startFrame) state.frame = startFrame
                     startMs = state.scene.frameStart(startFrame)
                     startNanos = now
                     audible = speed == 4 && audio?.play(startMs.toDouble()) == true
@@ -314,15 +317,15 @@ private fun Playback(state: EditorState) {
                 } else {
                     startFrame + previewFrameOffset(now - startNanos, fps, speed)
                 }
-                if (frame > state.scene.lastFrame) {
-                    if (state.settings.loopingPlay && state.scene.lastFrame > 0) {
-                        startFrame = 0
-                        startMs = state.scene.frameStart(0)
+                if (frame >= workEnd) {
+                    if (state.settings.loopingPlay && workEnd - workStart > 1) {
+                        startFrame = workStart
+                        startMs = state.scene.frameStart(workStart)
                         startNanos = now
                         audible = speed == 4 && audio?.play(startMs.toDouble()) == true
-                        state.frame = 0
+                        state.frame = workStart
                     } else {
-                        state.parkAtEnd()
+                        state.frame = workEnd - 1
                         state.playing = false
                     }
                 } else {
