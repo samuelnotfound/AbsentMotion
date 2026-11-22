@@ -164,6 +164,7 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
         ElementProperties(state, { properties = false }, modifier)
         return
     }
+    val kind = still?.kind
     Column(modifier.background(Am.Panel).deskVerticalScroll().padding(start = 62.px, top = 42.px, end = 62.px)) {
         Row(Modifier.fillMaxWidth().height(107.px)) {
             SmallTool(PanelIcons.Speed, stringResource(R.string.a11y_speed), Modifier.width(183.px), ToolShape, enabled = still?.mediaFill?.video == true || still?.kind == "audio") { state.panel = EditorPanel.Speed }
@@ -185,14 +186,13 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
                 }
             }
             Spacer(Modifier.width(17.px))
-            val sound = still?.let { it.kind == "audio" || it.mediaFill?.video == true } == true
-            val silent by remember(state) { derivedStateOf { (state.selected?.gain ?: 1f) <= 0f } }
-            val muted = !sound || silent
-            SmallTool(if (muted) PanelIcons.AudioMuted else AudioIcons.Speaker, stringResource(R.string.volume_volume), Modifier.width(183.px).tutorialTarget("tool_volume"), ToolShape,
-                enabled = sound, iconSize = if (muted) 24.dp else 32.dp) { state.volumeOpen = true }
+            val spatial = still?.node?.get("threeD") == "true"
+            SmallTool(ThreeDLayer.icon, stringResource(ThreeDLayer.label), Modifier.width(183.px).semantics { selected = spatial }, ToolShape,
+                enabled = kind in setOf("shape", "text", "drawing", "embedScene", "nullobj"), active = spatial) {
+                state.editSelected { it.copy(node = it.node.with("threeD", if (spatial) null else "true")) }
+            }
         }
         Spacer(Modifier.height(28.px))
-        val kind = still?.kind
         if (kind == "camera" && moving) state.selectedId?.let { CameraMovesSheet(state, it) { moving = false } }
         val presets = Tile(Presets) { openPresets(state) }
         val effects = Tile(Effects) { state.effectIndex = -1; state.panel = EditorPanel.Effects }
@@ -246,9 +246,7 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
         val more = listOfNotNull(
             if (kind == "shape" && still.isShapeTemplate == true) Tile(EditPoints) { state.requestPoints(enter = true) } else null,
             if (kind == "shape" && drawn && still.let(ShapeCatalog::paramsFor).orEmpty().isNotEmpty()) Tile(EditShape) { state.panel = EditorPanel.EditShape } else null,
-            if (state.scene.depthOrder && kind in setOf("shape", "text", "drawing", "embedScene")) Tile(ThreeDLayer, active = still?.node?.get("threeD") == "true") {
-                state.editSelected { it.copy(node = it.node.with("threeD", if (it.node["threeD"] == "true") null else "true")) }
-            } else null,
+            if (kind == "audio" || video) Tile(if ((state.selected?.gain ?: 1f) <= 0f) MutedVolumeTool else VolumeTool) { state.volumeOpen = true } else null,
             if (still?.canCrop == true) Tile(Crop) { state.openCrop() } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && still?.mediaFill != null) Tile(AiTools) { openEffectBrowser(state, "ai") } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && video) Tile(CaptionTools) { state.playing = false; captions = true } else null,
@@ -350,7 +348,15 @@ private fun TileRows(rows: List<List<Tile>>, columns: Int?) {
     rows.forEachIndexed { i, row ->
         if (i > 0) Spacer(Modifier.height(17.px))
         Row(Modifier.fillMaxWidth().height(if (deskLayout) 68.dp else 160.px), Arrangement.spacedBy(17.px)) {
-            for (tile in row) ToolButton(tile.tool, Modifier.weight(1f).tutorialTarget(if (tile.tool === MoveTransform) "tool_transform" else if (tile.tool === Effects) "tool_effects" else null), tile.enabled, tile.active, tile.onLongClick, tile.menu, tile.onClick)
+            for (tile in row) {
+                val target = when (tile.tool) {
+                    MoveTransform -> "tool_transform"
+                    Effects -> "tool_effects"
+                    VolumeTool, MutedVolumeTool -> "tool_volume"
+                    else -> null
+                }
+                ToolButton(tile.tool, Modifier.weight(1f).tutorialTarget(target), tile.enabled, tile.active, tile.onLongClick, tile.menu, tile.onClick)
+            }
             if (columns != null) repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
         }
     }
@@ -389,6 +395,8 @@ private val CameraMoves = Tool(R.string.camera_moves, PanelIcons.Animate, 19.4f)
 private val ModelOptions = Tool(R.string.layer_tool_model_options, PanelIcons.TabTilt, 19.4f)
 private val LightOptions = Tool(R.string.light_options, PanelIcons.Brightness, 19.4f)
 private val ThreeDLayer = Tool(R.string.three_d_layer, PanelIcons.TabTilt, 19.4f)
+private val VolumeTool = Tool(R.string.volume_volume, AudioIcons.Speaker, 19.4f)
+private val MutedVolumeTool = Tool(R.string.volume_volume, PanelIcons.AudioMuted, 19.4f)
 private val Presets = Tool(R.string.presets, PanelIcons.Star, 19.4f)
 private val Effects = Tool(R.string.layer_tool_effects, PanelIcons.Effects, 19.6f)
 private val Crop = Tool(R.string.layer_tool_crop, PanelIcons.Crop, 18.1f)
@@ -403,7 +411,7 @@ private val ReverseTool = Tool(R.string.speed_reverse, PanelIcons.Reverse, 19.4f
 private val ScreenshotTool = Tool(R.string.layer_tool_screenshot, PanelIcons.Screenshot, 19.4f)
 
 @Composable
-private fun SmallTool(icon: ImageVector, description: String, modifier: Modifier, shape: RoundedCornerShape, enabled: Boolean = true, iconSize: Dp = 24.dp, onClick: () -> Unit = {}) {
+private fun SmallTool(icon: ImageVector, description: String, modifier: Modifier, shape: RoundedCornerShape, enabled: Boolean = true, iconSize: Dp = 24.dp, active: Boolean = false, onClick: () -> Unit = {}) {
     val press = remember { MutableInteractionSource() }
     val hovered = if (deskLayout) press.collectIsHoveredAsState().value else false
     Box(
@@ -413,7 +421,7 @@ private fun SmallTool(icon: ImageVector, description: String, modifier: Modifier
             .then(if (enabled) Modifier.clickable(press, LocalIndication.current, onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        PanelIcon(icon, Am.OnDark, size = iconSize, description = description)
+        PanelIcon(icon, if (active) Am.Accent else Am.OnDark, size = iconSize, description = description)
         HoldName(description)
     }
 }
