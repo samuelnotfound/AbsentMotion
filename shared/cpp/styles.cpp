@@ -251,8 +251,13 @@ const Layer* PathSource(const std::vector<Layer>& siblings, const Layer& l) {
     return nullptr;
 }
 
-Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double timeMs, int depth, bool followPath = true) {
+Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double timeMs, int depth, bool followPath = true, bool flat = false) {
+    flat = flat || !l.spatial();
     Placement own = Own(l, timeMs);
+    if (flat) {
+        own.z = 0;
+        own.tilt = SkM44();
+    }
     if (depth >= kMaxParentDepth) return own;
     const Layer* parent = nullptr;
     if (l.parent != 0) {
@@ -262,7 +267,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     }
     Placement p{};
     if (parent) {
-        p = Effective(siblings, *parent, timeMs, depth + 1);
+        p = Effective(siblings, *parent, timeMs, depth + 1, true, flat);
         const SkV4 offset = Turn(p.rotation) * p.tilt * SkV4{own.location.fX * p.scale.fX, own.location.fY * p.scale.fY, own.z, 0};
         own.location = p.location + SkVector{offset.x, offset.y};
         SkPoint followScale;
@@ -281,7 +286,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     const float t = below.localTime(timeMs);
     const SkPath path = below.text ? TextGlyphPath(below, t, Fps()) : Cropped(below, t, ShapePath(below, t));
     const bool legacy = UsesLegacyPathCoordinates(l, timeMs);
-    const Placement guide = parent == &below && !legacy ? p : Effective(siblings, below, timeMs, depth + 1, !legacy);
+    const Placement guide = parent == &below && !legacy ? p : Effective(siblings, below, timeMs, depth + 1, !legacy, flat);
     FollowPath(l, timeMs, path.makeTransform(MatrixOf(guide, below, t)), &own);
     return own;
 }
@@ -2089,7 +2094,7 @@ static void FaceForward(std::vector<Layer>* seen) {
 }
 
 static const std::vector<Layer>& SeenProject(const Scene& scene, double timeMs, std::vector<Layer>* storage) {
-    if (!SeeLayers(scene.layers, scene.width, scene.height, true, scene.fps, timeMs, scene.depthOrder, storage, scene.depthOrder && scene.pieceOrder)) return scene.layers;
+    if (!SeeLayers(scene.layers, scene.width, scene.height, true, scene.fps, timeMs, scene.depthOrder, storage)) return scene.layers;
     FaceForward(storage);
     SplitSeen(storage, timeMs);
     return *storage;
@@ -2104,7 +2109,7 @@ int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const Me
     if (CameraViewOn()) return 0;
     for (auto it = scene.layers.rbegin(); it != scene.layers.rend(); ++it) {
         SkPoint frame[4];
-        if (it->kind == "camera" && it->activeAt(timeMs) && CameraFrame(scene.layers, *it, scene.width, scene.height, timeMs, frame, scene.depthOrder) &&
+        if (it->kind == "camera" && it->activeAt(timeMs) && CameraFrame(scene.layers, *it, scene.width, scene.height, timeMs, frame) &&
             SkPath::Polygon({frame, 4}, true).contains(x, y)) return it->id;
     }
     return 0;
@@ -2250,7 +2255,7 @@ void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int
     std::vector<Layer> inherited, storage;
     const std::vector<Layer>& source = InheritEffects(listed, &inherited) ? inherited : listed;
     const bool pieces = gScene && gScene->depthOrder && gScene->pieceOrder;
-    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage, pieces);
+    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage);
     if (seen) FaceForward(&storage);
     if (seen && !pieces) SplitSeen(&storage, timeMs);
     const std::vector<Layer>& layers = seen ? storage : source;
@@ -2318,7 +2323,7 @@ void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int
         const int run = layers[i].sight.run;
         for (size_t end; i < layers.size(); i = end) {
             const Layer& l = layers[i];
-            const bool idle = l.kind == "camera" || l.kind == "nullobj" || l.kind == "light";
+            const bool idle = l.kind == "camera" || l.kind == "nullobj" || l.kind == "light" || l.kind == "audio" || !l.activeAt(timeMs);
             if (!idle && l.sight.run != run) break;
             end = after(i);
             if (idle) continue;
