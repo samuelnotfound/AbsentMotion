@@ -271,6 +271,8 @@ private val TextBar get() = Am.TextBar
 private val TextStripe get() = Am.TextBarStripe
 private val CameraBar = Color(0xFFC32F5B)
 private val CameraStripe = Color(0xFFC83D66)
+private val GroupBar = Color(0xFFE88C3B)
+private val GroupStripe = Color(0xFFD9772E)
 private val BarShadow get() = Am.PreviewBg
 private val GripColor get() = Am.Inactive
 private val HandleColor get() = Am.Inactive
@@ -2152,7 +2154,7 @@ private fun DrawScope.drawRow(
     if (layer.kind == "camera" && layer.id == scene.defaultCameraId) drawRect(CameraBar.copy(alpha = 0.1f), Offset(0f, top), Size(size.width, RowHeight.toPx()))
     if (deskLayout && (selected || layer.id in MultiSelect.ids)) drawRect(Color.Black, Offset(headerWidth, top), Size(size.width - headerWidth, RowHeight.toPx()), alpha = SelectedRowShade)
     if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, barTop, barBottom, time.pxPerMs)
-    else drawBar(outline, left, right, barTop, barBottom, stripe, picture, layer.startTime, time.pxPerMs, layer.kind == "text", layer.kind == "camera")
+    else drawBar(outline, left, right, barTop, barBottom, stripe, picture, layer.startTime, time.pxPerMs, layer.kind == "text", layer.kind == "camera", layer.isPlainGroup)
     layer.labelColour?.let { drawTagCorner(outline, left, barTop, (barBottom - barTop) / 2, Color(it.start)) }
     val mediaLabel = deskLayout && picture != null
     val labelStyle = if (mediaLabel) styles.mediaLabel else if (layer.kind == "audio") styles.audioLabel else styles.label
@@ -2204,6 +2206,7 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     drawRoundRect(HeaderFill, pillTop, pill, radius)
     if (chosen) drawRoundRect(Am.Accent.copy(alpha = 0.28f), pillTop, pill, radius)
     else if (hovered) drawRoundRect(Am.Field, pillTop, pill, radius)
+    else if (layer.isPlainGroup) drawRoundRect(GroupBar.copy(alpha = 0.18f), pillTop, pill, radius)
     drawRoundRect(HeaderEdge, pillTop, pill, radius, style = Stroke(0.5.dp.toPx()))
     if (chosen) drawRect(Am.Accent, Offset(0f, pillTop.y), Size(3.dp.toPx(), pillHeight))
     layer.labelColour?.let { drawRect(Color(it.start), Offset(0f, pillTop.y), Size(3.dp.toPx(), pillHeight)) }
@@ -2217,7 +2220,7 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     drawText(text, topLeft = Offset(left, top + (height - text.size.height) / 2))
 }
 
-private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false) {
+private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false) {
     val radius = BarRadius.toPx()
     val from = max(left, -2 * radius)
     val to = min(right, size.width + 2 * radius)
@@ -2226,7 +2229,7 @@ private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Flo
     outline.rewind()
     outline.addRoundRect(RoundRect(from, top, to, bottom, CornerRadius(radius)))
     clipPath(outline) {
-        drawRect(if (camera) CameraBar else if (text) TextBar else Am.LayerBar, Offset(from, top), Size(to - from, bottom - top))
+        drawRect(if (camera) CameraBar else if (text) TextBar else if (group) GroupBar else Am.LayerBar, Offset(from, top), Size(to - from, bottom - top))
         if (picture != null) {
             val tileHeight = (bottom - top).roundToInt().coerceAtLeast(1)
             val tileWidth = (tileHeight.toFloat() * picture.size.width / picture.size.height).roundToInt().coerceAtLeast(1)
@@ -2243,7 +2246,7 @@ private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Flo
         } else {
             var x = left + stripe * (2 * floor((from - left) / (2 * stripe)) + 1)
             while (x < to) {
-                drawRect(if (camera) CameraStripe else if (text) TextStripe else BarStripe, Offset(x, top), Size(stripe, bottom - top))
+                drawRect(if (camera) CameraStripe else if (text) TextStripe else if (group) GroupStripe else BarStripe, Offset(x, top), Size(stripe, bottom - top))
                 x += 2 * stripe
             }
         }
