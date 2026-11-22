@@ -42,6 +42,21 @@ fun Layer.cameraGesture(dx: Float, dy: Float, zoom: Float): Layer {
     return if (zoom != 1f) moved.withCameraFrameScaled(zoom) else moved
 }
 
+fun Layer.camera3dGesture(dx: Float, dy: Float, turnX: Float, turnY: Float, turnZ: Float, zoom: Float): Layer {
+    val at = location
+    var moved = if (dx != 0f || dy != 0f) withTransform("location", at[0] + dx, at[1] + dy, at[2]) else this
+    if (turnX != 0f || turnY != 0f || turnZ != 0f) {
+        val tilt = moved.tilt
+        moved = moved.withTilt(tilt[0] + turnX, tilt[1] + turnY).withRotation(moved.rotation + turnZ)
+    }
+    if (zoom.isFinite() && zoom > 0f && zoom != 1f) {
+        val position = moved.location
+        val distance = (-position[2]).takeIf { it.isFinite() && it > 0f } ?: 1f
+        moved = moved.withTransform("location", position[0], position[1], -(distance / zoom).coerceIn(1f, 100_000f))
+    }
+    return moved
+}
+
 val Scene.defaultCameraId: Long? get() = layers.firstOrNull { it.kind == "camera" && !it.hidden }?.id
 
 enum class CameraMove(val id: String, @StringRes val label: Int) {

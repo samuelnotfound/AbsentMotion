@@ -125,6 +125,9 @@ internal fun CameraPanel(state: EditorState, layer: Layer, modifier: Modifier = 
                 when (tab) {
                     0 -> {
                         SwitchRow(stringResource(R.string.depth_order), state.scene.depthOrder) { on -> state.edit { it.withDepthOrder(on) } }
+                        if (!deskLayout && state.scene.depthOrder) {
+                            SwitchRow(stringResource(R.string.transform_3d_rotation), state.settings.rotate3d) { on -> state.settings.rotate3d = on }
+                        }
                         val desk = deskLayout
                         @Composable fun SortRow() {
                             if (state.scene.depthOrder) Row(Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
