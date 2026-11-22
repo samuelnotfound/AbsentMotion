@@ -6,6 +6,24 @@ All notable changes to AbsentMotion are listed here, newest first. The format fo
 Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stands for the feature set as it stood on
 2026-10-12.
 
+## [Unreleased]
+
+### Added
+
+- **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
+- **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Grouping leaves artwork beyond the group bounds visible.
+
+### Changed
+
+- **Move & Transform** shows 3D position and rotation controls in Z, X, Y order. Flat layers have X and Y position controls and the circular rotation dial.
+- **Layer tools** place the 3D toggle beside the trim controls. Volume and mute are in the tools grid.
+- **Group layers** use orange bars in the timeline.
+
+### Fixed
+
+- **2D compositing** follows timeline order and ignores saved depth, tilt, and 3D effects while the layer's 3D toggle is off. Active camera views hide flat layers.
+- **Pre-render** stays inside the work area and uses the editor's camera view. Resizing the work area keeps valid cached frames. The next pre-render fills the missing frames.
+
 ## [5.2.3] - 2026-11-21
 
 ### Added
