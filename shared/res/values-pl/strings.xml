@@ -2276,7 +2276,6 @@
     <string name="cutout_edge_photo">Krawędź jest ustawiana podczas tworzenia wycięcia. Aby ją zmienić, ponownie uruchom usuwanie tła: rozpocznie się od oryginalnego zdjęcia.</string>
     <string name="prerender">Renderuj wstępnie</string>
     <string name="prerender_progress">Renderowanie wstępne %1$d%%</string>
-    <string name="prerender_playing">Wyrenderowano wstępnie</string>
     <string name="prerender_outdated">Wstępne renderowanie jest nieaktualne.</string>
     <string name="prerender_again">Renderuj wstępnie ponownie</string>
     <string name="caption_outline_thickness">Grubość</string>

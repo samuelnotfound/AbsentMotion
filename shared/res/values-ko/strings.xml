@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">가장자리는 오려낼 때 설정됩니다. 변경하려면 배경 제거를 다시 실행하세요. 원본 사진에서 다시 시작합니다.</string>
     <string name="prerender">사전 렌더링</string>
     <string name="prerender_progress">사전 렌더링 중 %1$d%%</string>
-    <string name="prerender_playing">사전 렌더링됨</string>
     <string name="prerender_outdated">사전 렌더링이 오래되었습니다.</string>
     <string name="prerender_again">다시 사전 렌더링</string>
     <string name="caption_outline_thickness">두께</string>

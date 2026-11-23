@@ -2249,7 +2249,6 @@
     <string name="cutout_edge_photo">Il bordo viene impostato quando si crea il ritaglio. Per modificarlo, esegui di nuovo Rimuovi sfondo: ripartirà dalla foto originale.</string>
     <string name="prerender">Pre-rendering</string>
     <string name="prerender_progress">Pre-rendering %1$d%%</string>
-    <string name="prerender_playing">Pre-rendering completato</string>
     <string name="prerender_outdated">Il pre-rendering non è aggiornato.</string>
     <string name="prerender_again">Ripeti pre-rendering</string>
     <string name="caption_outline_thickness">Spessore</string>

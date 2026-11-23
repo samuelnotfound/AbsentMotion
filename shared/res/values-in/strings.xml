@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">Tepi ditetapkan saat potongan dibuat. Untuk mengubahnya, jalankan Hapus Latar belakang lagi: prosesnya dimulai ulang dari foto asli.</string>
     <string name="prerender">Pra-render</string>
     <string name="prerender_progress">Pra-render %1$d%%</string>
-    <string name="prerender_playing">Pra-render selesai</string>
     <string name="prerender_outdated">Hasil pra-render sudah usang.</string>
     <string name="prerender_again">Pra-render lagi</string>
     <string name="caption_outline_thickness">Ketebalan</string>

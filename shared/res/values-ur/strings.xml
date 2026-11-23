@@ -2222,7 +2222,6 @@
     <string name="cutout_edge_photo">ایج کٹ آؤٹ بناتے وقت سیٹ ہوتا ہے۔ اسے بدلنے کے لیے دوبارہ بیک گراؤنڈ ہٹائیں چلائیں؛ یہ اصل تصویر سے دوبارہ شروع ہوتا ہے۔</string>
     <string name="prerender">پری رینڈر</string>
     <string name="prerender_progress">پری رینڈر ہو رہا ہے %1$d%%</string>
-    <string name="prerender_playing">پری رینڈر شدہ</string>
     <string name="prerender_outdated">پری رینڈر پرانا ہو گیا ہے۔</string>
     <string name="prerender_again">دوبارہ پری رینڈر</string>
     <string name="caption_outline_thickness">موٹائی</string>

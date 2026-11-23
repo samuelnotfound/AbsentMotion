@@ -2249,7 +2249,6 @@
     <string name="cutout_edge_photo">Le bord est défini lors du détourage. Pour le modifier, relancez la suppression de l’arrière-plan : elle repart de la photo originale.</string>
     <string name="prerender">Précalculer le rendu</string>
     <string name="prerender_progress">Précalcul du rendu %1$d %%</string>
-    <string name="prerender_playing">Rendu précalculé</string>
     <string name="prerender_outdated">Le précalcul du rendu est obsolète.</string>
     <string name="prerender_again">Recalculer le rendu</string>
     <string name="caption_outline_thickness">Épaisseur</string>

@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">去背時會設定邊緣。若要變更，請再次執行「移除背景」：處理會從原始照片重新開始。</string>
     <string name="prerender">預先算圖</string>
     <string name="prerender_progress">正在預先算圖 %1$d%%</string>
-    <string name="prerender_playing">已預先算圖</string>
     <string name="prerender_outdated">預先算圖已過期。</string>
     <string name="prerender_again">重新預先算圖</string>
     <string name="caption_outline_thickness">粗細</string>

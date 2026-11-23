@@ -2249,7 +2249,6 @@
     <string name="cutout_edge_photo">A borda é definida quando o recorte é feito. Para alterá-la, use Remover fundo novamente: ele recomeça a partir da foto original.</string>
     <string name="prerender">Pré-renderizar</string>
     <string name="prerender_progress">Pré-renderizando %1$d%%</string>
-    <string name="prerender_playing">Pré-renderizado</string>
     <string name="prerender_outdated">A pré-renderização está desatualizada.</string>
     <string name="prerender_again">Pré-renderizar novamente</string>
     <string name="caption_outline_thickness">Espessura</string>

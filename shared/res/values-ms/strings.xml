@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">Sempadan ditetapkan semasa potongan dibuat. Untuk menukarnya, jalankan Buang Latar Belakang sekali lagi: ia bermula semula daripada foto asal.</string>
     <string name="prerender">Pra-render</string>
     <string name="prerender_progress">Pra-render %1$d%%</string>
-    <string name="prerender_playing">Telah dipra-render</string>
     <string name="prerender_outdated">Pra-render sudah lapuk.</string>
     <string name="prerender_again">Pra-render semula</string>
     <string name="caption_outline_thickness">Ketebalan</string>
