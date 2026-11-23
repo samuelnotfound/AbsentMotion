@@ -251,7 +251,7 @@ private fun AutomaticPreview(state: EditorState) {
                 snapshotFlow {
                     val frame = if (state.playing) null else state.frame
                     PreparationRequest(PreviewCache.keyOf(state), frame,
-                        !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
+                        PreviewCache.phase != PreviewCache.Phase.Rendering && !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
                             state.drawing == null && state.panel != EditorPanel.EditText, PreviewCache.fit, PreviewCache.checkerCell)
                 }.collectLatest { request ->
                     delay(100)

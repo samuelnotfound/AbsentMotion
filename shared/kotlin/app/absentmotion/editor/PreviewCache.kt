@@ -451,7 +451,7 @@ object PreviewCache {
         val previous = key
         val extendingManual = !automatic && phase == Phase.Ready && previous?.matchesFrames(next) == true &&
             storeSize == (width to height) && preparedCell == cell
-        if (extendingManual && (renderedArea == area || store?.countIn(area) == area.frameCount)) return
+        if (extendingManual && (paused || renderedArea == area || store?.countIn(area) == area.frameCount)) return
         if (!extendingManual && (!automatic || previous == null || previous.copy(scene = next.scene) != next || player?.width != width || player?.height != height || preparedCell != cell)) {
             val allocation = generation
             val manager = context.applicationContext.getSystemService(ActivityManager::class.java)
@@ -632,7 +632,7 @@ object PreviewCache {
                 val per = built.count.coerceAtLeast(1)
                 Log.i(TAG, "render %s frames=%d of %d size=%dx%d bytes=%d avg=%d budget=%d ms=%.0f perFrame=%.1f still=%.1f encode=%.1f".format(
                     outcome, built.countIn(range), range.frameCount, width, height, built.bytes, built.bytes / per, budget, ms, ms / per, stillNs / 1e6 / per, encodeNs / 1e6 / per))
-                finish(app, next.copy(resources = resources), built, width, height, outcome, range, scene.fps)
+                finish(app, next.copy(resources = resources), built, width, height, outcome, range, scene.fps, state.scene.workArea != range)
             } finally {
                 if (building === made) building = null
                 made?.let { if (store !== it) it.close() }
@@ -705,7 +705,10 @@ object PreviewCache {
         return runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory()) > needed + 24 * MIB
     }
 
-    private fun finish(context: Context, next: CacheKey, built: FrameStore, width: Int, height: Int, outcome: Outcome, area: IntRange, fps: Int) {
+    private fun finish(
+        context: Context, next: CacheKey, built: FrameStore, width: Int, height: Int,
+        outcome: Outcome, area: IntRange, fps: Int, areaChanged: Boolean,
+    ) {
         if (outcome == Outcome.NoMemory && built.count == 0) {
             clear()
             toast(context, context.getString(R.string.preview_cache_no_memory))
@@ -719,7 +722,7 @@ object PreviewCache {
         }
         store = built
         key = next
-        paused = outcome == Outcome.Stopped && !memoryStopped
+        paused = outcome == Outcome.Stopped && !memoryStopped && !areaChanged
         rendered = if (paused) null else next
         renderedArea = if (paused) null else area
         storeSize = width to height
