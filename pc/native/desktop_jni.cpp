@@ -57,6 +57,7 @@ struct Desktop {
     am::Trails trails;
     std::unique_ptr<DesktopGpu> gpu;
     bool cameraView = true;
+    am::EditorCamera editorCamera;
     bool accurateBlur = true;
     std::vector<uint8_t> frameBytes;
     std::shared_ptr<ExportRead> exportPending;
@@ -449,7 +450,7 @@ JNIEXPORT jboolean JNICALL JNI(renderPreview)(JNIEnv* e, jobject, jlong h, jdoub
     if (!surface) return false;
     const am::LayerEffects fx = d->effects();
     am::SetFastShutterBlur(!d->accurateBlur);
-    am::RenderPreview(surface->getCanvas(), w, height, d->scene, time, scale, dx, dy, (uint32_t)background, selectedId, handles, view, d->cameraView, d->media(), fx);
+    am::RenderPreview(surface->getCanvas(), w, height, d->scene, time, scale, dx, dy, (uint32_t)background, selectedId, handles, view, d->cameraView, d->editorCamera, d->media(), fx);
     am::SetFastShutterBlur(false);
     return surface->readPixels(info, reinterpret_cast<void*>(address), (size_t)rowBytes, 0, 0);
 }
@@ -564,6 +565,7 @@ JNIEXPORT jboolean JNICALL JNI(setModel)(JNIEnv* e, jobject, jstring uri, jfloat
 }
 JNIEXPORT void JNICALL JNI(dropPicture)(JNIEnv* e, jobject, jlong h, jstring uri) { ptr(h)->pictures.erase(str(e, uri)); }
 JNIEXPORT void JNICALL JNI(setCameraView)(JNIEnv*, jobject, jlong h, jboolean on) { ptr(h)->cameraView = on == JNI_TRUE; }
+JNIEXPORT void JNICALL JNI(setEditorCamera)(JNIEnv*, jobject, jlong h, jint mode, jfloat yaw, jfloat pitch) { ptr(h)->editorCamera = {mode, yaw, pitch}; }
 JNIEXPORT void JNICALL JNI(setAccurateBlur)(JNIEnv*, jobject, jlong h, jboolean on) { ptr(h)->accurateBlur = on == JNI_TRUE; }
 JNIEXPORT jfloatArray JNICALL JNI(propertyNumbers)(JNIEnv* e, jobject, jlong h, jlong id, jint effect, jstring name, jdouble t) {
     const am::SceneScope scope(ptr(h)->scene);
@@ -576,6 +578,7 @@ JNIEXPORT jfloatArray JNICALL JNI(layerMatrix)(JNIEnv* e, jobject, jlong h, jlon
     Desktop* d = ptr(h);
     const am::SceneScope scope(d->scene);
     am::SetCameraView(d->cameraView);
+    am::SetEditorCamera(d->editorCamera);
     const auto* layer = d->scene.layer(id);
     if (!layer) return nullptr;
     float m[18];
@@ -587,6 +590,7 @@ JNIEXPORT jfloatArray JNICALL JNI(layerBounds)(JNIEnv* e, jobject, jlong h, jlon
     Desktop* d = ptr(h);
     const am::SceneScope scope(d->scene);
     am::SetCameraView(d->cameraView);
+    am::SetEditorCamera(d->editorCamera);
     const auto* layer = d->scene.layer(id);
     if (!layer) return nullptr;
     const SkRect b = am::SelectionBounds(*layer, t, am::WorldMatrix(d->scene, *layer, t));
@@ -655,12 +659,14 @@ JNIEXPORT jlong JNICALL JNI(hitTest)(JNIEnv*, jobject, jlong h, jfloat x, jfloat
     Desktop* d = ptr(h);
     const am::SceneScope scope(d->scene);
     am::SetCameraView(d->cameraView);
+    am::SetEditorCamera(d->editorCamera);
     return am::TopLayerAt(d->scene, t, x, y, d->maskLookup());
 }
 JNIEXPORT jfloatArray JNICALL JNI(layerQuad)(JNIEnv* e, jobject, jlong h, jlong id, jdouble t) {
     Desktop* d = ptr(h);
     const am::SceneScope scope(d->scene);
     am::SetCameraView(d->cameraView);
+    am::SetEditorCamera(d->editorCamera);
     const auto* layer = d->scene.layer(id);
     if (!layer || !layer->activeAt(t)) return nullptr;
     SkPoint p[4];

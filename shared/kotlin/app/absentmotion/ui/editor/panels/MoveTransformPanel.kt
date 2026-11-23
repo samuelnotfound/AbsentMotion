@@ -629,7 +629,7 @@ internal fun pivotFrame(matrix: FloatArray, quad: FloatArray?): PivotFrame {
 @Composable
 private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
     val at = layer.pivot
-    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing) {
+    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode, state.editorCamera) {
         if (state.playing) return@produceState
         val m = state.engine.layerMatrix(layer.id, state.timeMs)
         value = m?.let { pivotFrame(it, state.engine.layerQuad(layer.id, state.timeMs)) }

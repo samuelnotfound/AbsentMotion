@@ -426,7 +426,7 @@ object PreviewCache {
         CacheKey(state.projectId, state.scene, state.settings.previewQuality.divisor, state.settings.androidEmoji, resources, state.settings.fullMotionBlur, state.groupPath, state.cameraMode)
 
     fun render(state: EditorState, context: Context, scope: CoroutineScope) {
-        if (phase == Phase.Rendering) return
+        if (phase == Phase.Rendering || state.editorCamera != null) return
         val app = context.applicationContext
         val scene = state.scene
         val divisor = state.settings.previewQuality.divisor

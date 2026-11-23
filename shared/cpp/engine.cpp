@@ -222,6 +222,7 @@ public:
     int renderScene(Target*, double timeMs, float scale, float dx, float dy, uint32_t background,
                     int64_t selectedId, int handles, const PreviewOptions& view) override;
     void setCameraView(bool on) override { fCameraView = on; }
+    void setEditorCamera(const EditorCamera& camera) override { fEditorCamera = camera; }
     void setAccurateBlur(bool on) override { fAccurateBlur = on; }
     int renderFrame(Target*, double timeMs, uint32_t background, int64_t presentTimeNs) override;
     int renderBuffer(AHardwareBuffer* buffer, double timeMs, uint32_t background) override;
@@ -276,6 +277,7 @@ private:
     bool fGpuFailed = false;
     bool fNoGrab = false;
     bool fCameraView = true;
+    EditorCamera fEditorCamera;
     bool fAccurateBlur = false;
     std::vector<VkSemaphore> fFailedSemaphores;
     std::vector<VkSemaphore> fSpareSemaphores;
@@ -1257,7 +1259,7 @@ int EngineImpl::renderScene(Target* target, double timeMs, float scale, float dx
         const LayerEffects fx = this->layerEffects();
         SetFastShutterBlur(!fAccurateBlur);
         RenderPreview(canvas, target->width, target->height, fScene, timeMs, scale, dx, dy, background,
-                      selectedId, handles, view, fCameraView, this->pictures(), fx);
+                      selectedId, handles, view, fCameraView, fEditorCamera, this->pictures(), fx);
         SetFastShutterBlur(false);
     });
 }
@@ -1402,6 +1404,7 @@ void EngineImpl::trim() {
 bool EngineImpl::layerQuad(int64_t layerId, double timeMs, float xy[8]) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
+    SetEditorCamera(fEditorCamera);
     const Layer* layer = fScene.layer(layerId);
     if (!layer || !layer->activeAt(timeMs)) return false;
     SkPoint corners[4];
@@ -1424,6 +1427,7 @@ bool EngineImpl::propertyNumbers(int64_t layerId, int effect, const std::string&
 bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[18]) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
+    SetEditorCamera(fEditorCamera);
     const Layer* layer = fScene.layer(layerId);
     if (!layer) return false;
     WorldMatrix(fScene, *layer, timeMs).get9(m);
@@ -1434,6 +1438,7 @@ bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[18]) {
 bool EngineImpl::layerBounds(int64_t layerId, double timeMs, float ltrb[4]) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
+    SetEditorCamera(fEditorCamera);
     const Layer* layer = fScene.layer(layerId);
     if (!layer) return false;
     const SkRect bounds = SelectionBounds(*layer, timeMs, WorldMatrix(fScene, *layer, timeMs));
@@ -1445,6 +1450,7 @@ bool EngineImpl::layerBounds(int64_t layerId, double timeMs, float ltrb[4]) {
 int64_t EngineImpl::hitTest(float x, float y, double timeMs) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
+    SetEditorCamera(fEditorCamera);
     return TopLayerAt(fScene, timeMs, x, y, this->masks());
 }
 

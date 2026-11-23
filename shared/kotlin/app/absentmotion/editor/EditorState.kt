@@ -78,6 +78,17 @@ class LayerPoints(
     val move: (Int, app.absentmotion.model.Pt) -> Unit,
 )
 
+internal enum class Viewpoint(val camera: app.absentmotion.engine.EditorCamera?, val custom: Boolean = false) {
+    Scene(null),
+    Active(null),
+    Front(app.absentmotion.engine.EditorCamera(0f, 0f, true)),
+    Right(app.absentmotion.engine.EditorCamera(-90f, 0f, true)),
+    Top(app.absentmotion.engine.EditorCamera(0f, 90f, true)),
+    Custom1(app.absentmotion.engine.EditorCamera(-30f, 25f, false), true),
+    Custom2(app.absentmotion.engine.EditorCamera(30f, 25f, false), true),
+    Custom3(app.absentmotion.engine.EditorCamera(135f, -25f, false), true),
+}
+
 class EditorState(
     val projectId: String,
     initial: Scene,
@@ -289,21 +300,36 @@ class EditorState(
 
     var soloMode by mutableIntStateOf(0)
 
-    private var cameraView by mutableStateOf(false)
+    internal var viewpoint by mutableStateOf(Viewpoint.Scene)
+        private set
+    private val savedViews = androidx.compose.runtime.mutableStateMapOf<Viewpoint, app.absentmotion.engine.EditorCamera>()
+    internal val editorCamera get() = savedViews[viewpoint] ?: viewpoint.camera
+    internal var orbiting by mutableStateOf(false)
     private var viewBeforeCamera: Pair<Float, Offset>? = null
 
     var cameraMode: Boolean
-        get() = cameraView
-        set(on) {
-            if (on == cameraView) return
-            if (on) {
-                viewBeforeCamera = canvasZoom to canvasPan
-                canvasZoom = 1f
-                canvasPan = Offset.Zero
-            } else viewBeforeCamera?.let { (zoom, pan) -> canvasZoom = zoom; canvasPan = pan }
-            cameraTip = false
-            cameraView = on
+        get() = viewpoint == Viewpoint.Active
+        set(on) { selectViewpoint(if (on) Viewpoint.Active else Viewpoint.Scene) }
+
+    internal fun selectViewpoint(next: Viewpoint) {
+        if (next == viewpoint) return
+        if (viewpoint == Viewpoint.Scene) viewBeforeCamera = canvasZoom to canvasPan
+        if (next == Viewpoint.Scene) {
+            viewBeforeCamera?.let { (zoom, pan) -> canvasZoom = zoom; canvasPan = pan }
+        } else {
+            canvasZoom = 1f
+            canvasPan = Offset.Zero
         }
+        orbiting = false
+        cameraTip = false
+        viewpoint = next
+    }
+
+    internal fun orbit(yaw: Float, pitch: Float) {
+        if (!viewpoint.custom) return
+        val camera = editorCamera ?: return
+        savedViews[viewpoint] = camera.copy(yaw = (camera.yaw + yaw) % 360f, pitch = (camera.pitch + pitch).coerceIn(-89f, 89f))
+    }
 
     var cameraTip by mutableStateOf(false)
 

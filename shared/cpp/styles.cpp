@@ -2113,7 +2113,9 @@ int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const Me
     if (CameraViewOn()) return 0;
     for (auto it = scene.layers.rbegin(); it != scene.layers.rend(); ++it) {
         SkPoint frame[4];
-        if (it->kind == "camera" && it->activeAt(timeMs) && CameraFrame(scene.layers, *it, scene.width, scene.height, timeMs, frame) &&
+        if (it->kind != "camera" || !it->activeAt(timeMs)) continue;
+        if (EditorCameraOn() && (CameraEye(scene.layers, *it, scene.width, scene.height, timeMs) - SkPoint{x, y}).length() < 20) return it->id;
+        if (CameraFrame(scene.layers, *it, scene.width, scene.height, timeMs, frame) &&
             SkPath::Polygon({frame, 4}, true).contains(x, y)) return it->id;
     }
     return 0;

@@ -44,6 +44,7 @@ object DesktopNative {
     external fun setModel(uri: String, positions: FloatArray?, normals: FloatArray?, uvs: FloatArray?, colors: IntArray?, triangles: IntArray?, slots: IntArray?, twoSided: Boolean): Boolean
     external fun dropPicture(handle: Long, uri: String)
     external fun setCameraView(handle: Long, on: Boolean)
+    external fun setEditorCamera(handle: Long, mode: Int, yaw: Float, pitch: Float)
     external fun setAccurateBlur(handle: Long, on: Boolean)
     external fun propertyNumbers(handle: Long, layerId: Long, effect: Int, name: String, timeMs: Double): FloatArray?
     external fun layerMatrix(handle: Long, id: Long, timeMs: Double): FloatArray?

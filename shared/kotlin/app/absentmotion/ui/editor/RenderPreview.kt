@@ -78,7 +78,7 @@ internal fun cacheMatches(state: EditorState, resources: Long): Boolean {
     val selectionCanUseCache = !hasSelection || state.playing && state.selected?.kind != "camera" && state.panel != EditorPanel.Crop
     return PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused &&
         PreviewCache.key?.matchesFrames(PreviewCache.keyOf(state, resources)) == true && state.soloMode == 0 && !state.pixelMode &&
-        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && selectionCanUseCache && state.drawing == null && state.panel != EditorPanel.EditText
+        state.editorCamera == null && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && selectionCanUseCache && state.drawing == null && state.panel != EditorPanel.EditText
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -89,6 +89,7 @@ internal fun PreRenderCell(state: EditorState, modifier: Modifier) {
     val resources by state.engine.mediaRevision.collectAsState()
     val status by remember(state, resources) { derivedStateOf { PreviewCache.preRender(state, resources) } }
     val label = stringResource(if (status == PreviewCache.PreRender.Rendering) R.string.preview_cache_cancel_render else R.string.prerender)
+    val enabled = state.editorCamera == null || status == PreviewCache.PreRender.Rendering
     val described = when (status) {
         PreviewCache.PreRender.Ready -> stringResource(R.string.preview_cache_state_ready)
         PreviewCache.PreRender.Outdated -> stringResource(R.string.preview_cache_state_outdated)
@@ -101,8 +102,8 @@ internal fun PreRenderCell(state: EditorState, modifier: Modifier) {
         }
     }
     Box(
-        modifier.fillMaxWidth().testTag(RENDER_PREVIEW_TAG).semantics { contentDescription = label; if (described != null) stateDescription = described }.rightClick(removeCopy).combinedClickable(
-            onLongClick = removeCopy,
+        modifier.fillMaxWidth().testTag(RENDER_PREVIEW_TAG).semantics { contentDescription = label; if (described != null) stateDescription = described }.then(if (enabled) Modifier.rightClick(removeCopy) else Modifier).combinedClickable(
+            enabled = enabled, onLongClick = removeCopy,
             onClick = {
                 when (status) {
                     PreviewCache.PreRender.Rendering -> PreviewCache.cancel()
@@ -116,7 +117,7 @@ internal fun PreRenderCell(state: EditorState, modifier: Modifier) {
     ) {
         Text(
             if (status == PreviewCache.PreRender.Rendering) "${(PreviewCache.progress * 100).roundToInt()}%" else stringResource(R.string.prerender),
-            color = when (status) {
+            color = if (!enabled) Am.OnDarkDim else when (status) {
                 PreviewCache.PreRender.Rendering, PreviewCache.PreRender.Ready -> Am.Accent
                 PreviewCache.PreRender.Outdated -> Am.Warning
                 PreviewCache.PreRender.None -> Color.White

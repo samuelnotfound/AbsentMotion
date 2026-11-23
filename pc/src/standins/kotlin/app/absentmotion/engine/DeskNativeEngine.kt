@@ -51,6 +51,8 @@ class NativeEngine(backend: Backend = Backend.GANESH) : AutoCloseable {
     fun showVideoLayer(uri: String, layer: Long, source: app.absentmotion.pc.engine.NativeVideoSource, timeUs: Long, exact: Boolean, waitMs: Int = if (exact) 15000 else 30): Int = source.showLayer(handle, uri, layer, timeUs, exact, waitMs)
 
     fun setCameraView(on: Boolean) = DesktopNative.setCameraView(handle, on)
+    fun setEditorCamera(camera: EditorCamera?) =
+        DesktopNative.setEditorCamera(handle, if (camera == null) 0 else if (camera.orthographic) 2 else 1, camera?.yaw ?: 0f, camera?.pitch ?: 0f)
     fun setAccurateBlur(on: Boolean) = DesktopNative.setAccurateBlur(handle, on)
     fun trim() {}
     fun releaseBuffers() {}
