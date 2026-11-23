@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,30 +87,18 @@ import app.absentmotion.ui.HoldName
 
 @Composable
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
-    val spatialPosition = tab == 0 && layer.uses3D
-    val rulers = state.settings.spatialRulers
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = spatialPosition && rulers)
+            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers(layer.uses3D))
             1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)
             else -> PivotTab(state, layer, onFlip)
         }
-        if (spatialPosition) {
-            val label = stringResource(if (rulers) R.string.transform_basic_controls else R.string.transform_advanced_controls)
-            Box(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 4.px).height(28.dp).clip(PanelShape)
-                    .background(Am.Field).clickable(role = Role.Button, onClick = state.settings::switchSpatialControls).padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, color = Am.OnDark, fontSize = 11.sp, maxLines = 1)
-            }
-        }
     }
 }
 
-private val transformAxisOrder = listOf(2, 0, 1)
+private val transformAxisOrder = listOf(0, 1, 2)
 
 @Composable
 private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?, rulers: Boolean) {
@@ -125,7 +114,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
         val fields = axes.map { KeypadField("XYZ"[it].toString(), at[it]) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
             state.editSelected {
-                if (spatial) it.withTransform("location", v[1], v[2], v[0])
+                if (spatial) it.withTransform("location", v[0], v[1], v[2])
                 else it.withTransform("location", v[0], v[1], it.location[2])
             }
         }
@@ -151,12 +140,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             var origin = now.location
             var travel = Offset.Zero
             var shown = Offset.Zero
+            var straight = TrackpadAlignment()
             var scale = 1f
             fun done() { state.snapGuides = emptyList(); state.endGesture(); rulerTip(context) }
             detectDragGestures(
                 onDragStart = {
                     scale = if (timing.heldBeforeMoving(android.os.SystemClock.uptimeMillis(), viewConfiguration.longPressTimeoutMillis)) FINE_FACTOR else 1f
-                    axes = if (state.playing) SnapAxis(emptyList()) to SnapAxis(emptyList()) else start(); origin = now.location; travel = Offset.Zero; shown = Offset.Zero
+                    axes = if (state.playing) SnapAxis(emptyList()) to SnapAxis(emptyList()) else start()
+                    origin = now.location; travel = Offset.Zero; shown = Offset.Zero; straight = TrackpadAlignment()
                     state.snapGuides = if (deep || state.playing) emptyList() else axes.first.guidesAt(0f) + axes.second.guidesAt(0f)
                 },
                 onDragEnd = ::done, onDragCancel = ::done,
@@ -168,11 +159,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                     return@detectDragGestures
                 }
                 travel += drag / density * scale
-                val snapped = if (state.playing) travel else Offset(axes.first.map(travel.x), axes.second.map(travel.y))
+                val aligned = if (state.playing) travel else straight.constrain(travel)
+                val snapped = if (state.playing) aligned else Offset(
+                    if (aligned.x == 0f) 0f else axes.first.map(aligned.x),
+                    if (aligned.y == 0f) 0f else axes.second.map(aligned.y),
+                )
                 val step = snapped - shown
                 shown = snapped
-                val guides = if (state.playing) emptyList() else (if (step.x == 0f) axes.first.guidesAt(snapped.x) else emptyList()) +
-                    (if (step.y == 0f) axes.second.guidesAt(snapped.y) else emptyList())
+                val guides = if (state.playing) emptyList() else axes.first.guidesAt(snapped.x) + axes.second.guidesAt(snapped.y)
                 if (guides.any { it !in state.snapGuides }) tick(HapticFeedbackType.SegmentTick)
                 state.snapGuides = if (state.playing) emptyList() else guides
                 if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.withTransform("location", origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
@@ -181,7 +175,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     ) {
         if (rulers) {
             TransformRulers(
-                state, ::colour, onSelect = { activeAxis = it },
+                state, ::colour, onSelect = { activeAxis = it }, depthEnabled = spatial,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
@@ -206,7 +200,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             }
         }
         TransformAxisHeader(state, layer, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
-            Modifier.align(Alignment.TopCenter).padding(top = 17.px))
+            Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
     }
 }
 
@@ -234,10 +228,10 @@ private fun LayerDimensionButton(state: EditorState, layer: Layer, modifier: Mod
 @Composable
 private fun TransformAxisHeader(
     state: EditorState, layer: Layer, value: (Int) -> String, colour: (Int) -> Color,
-    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier,
+    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier, depthVisible: Boolean = layer.uses3D,
 ) {
     Row(modifier, verticalAlignment = Alignment.Top) {
-        AxisFields(layer.uses3D, value, colour, onSelect, onType)
+        AxisFields(layer.uses3D, value, colour, onSelect, onType, depthVisible = depthVisible)
         if (layer.canToggle3D) {
             Spacer(Modifier.width(20.px))
             LayerDimensionButton(state, layer)
@@ -246,26 +240,31 @@ private fun TransformAxisHeader(
 }
 
 @Composable
-private fun AxisFields(spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier = Modifier) {
+private fun AxisFields(
+    spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit,
+    modifier: Modifier = Modifier, depthVisible: Boolean = spatial,
+) {
     val width = 153.px
     Column(modifier) {
         Row {
-            if (spatial) {
-                NumberBox(value(2), colour(2), Modifier.width(width).height(70.px), fontSize = 10.5f, onSelect = { onSelect(2) }) { onType(2) }
-                Spacer(Modifier.width(20.px))
-            }
             Row(Modifier.width(width * 2).height(70.px).clip(PanelShape).background(Am.Field)) {
                 ValueCell(value(0), colour(0), Modifier.weight(1f), "X", { onSelect(0) }) { onType(0) }
                 ValueCell(value(1), colour(1), Modifier.weight(1f), "Y", { onSelect(1) }) { onType(1) }
             }
+            if (depthVisible) {
+                Spacer(Modifier.width(20.px))
+                NumberBox(value(2), if (spatial) colour(2) else Am.OnDarkDim,
+                    Modifier.width(width).height(70.px).alpha(if (spatial) 1f else 0.55f),
+                    fontSize = 10.5f, onSelect = { onSelect(2) }, onType = if (spatial) { { onType(2) } } else null)
+            }
         }
         Row(Modifier.height(23.px)) {
-            if (spatial) {
-                Caption("Z", Modifier.width(width).fillMaxHeight())
-                Spacer(Modifier.width(20.px))
-            }
             Caption("X", Modifier.width(width).fillMaxHeight())
             Caption("Y", Modifier.width(width).fillMaxHeight())
+            if (depthVisible) {
+                Spacer(Modifier.width(20.px))
+                Caption("Z", Modifier.width(width).fillMaxHeight().alpha(if (spatial) 1f else 0.55f))
+            }
         }
     }
 }
@@ -286,7 +285,7 @@ internal fun Scene.snapAxesFor(layer: Layer, timeMs: Int, mine: FloatArray?, oth
     val parent = chain(layer).getOrNull(1)?.let { place(it, timeMs) }
     val tilted = layer.uses3D && chain(layer).drop(1).takeWhile { it.uses3D }.any { up -> up.at(timeMs, fps).tilt.any { it % 360f != 0f } }
     if (parent != null && (parent.rot % 360f != 0f || tilted)) return SnapAxis(emptyList()) to SnapAxis(emptyList())
-    return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), mine, others, parent?.sx ?: 1f, parent?.sy ?: 1f)
+    return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), mine, others, parent?.sx ?: 1f, parent?.sy ?: 1f, canvasEdges = true)
 }
 
 internal class SnapScene(val id: Long, val mine: FloatArray?, val others: List<SnapOther>)
@@ -305,9 +304,20 @@ internal fun Scene.previewSnapAxes(layer: Layer, timeMs: Int, from: SnapScene, t
     return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), from.mine, from.others, 1f, 1f, threshold)
 }
 
-internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatArray?, others: List<SnapOther>, sx: Float, sy: Float, threshold: Float = 25f): Pair<SnapAxis, SnapAxis> {
+internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatArray?, others: List<SnapOther>, sx: Float, sy: Float, threshold: Float = 25f, canvasEdges: Boolean = false): Pair<SnapAxis, SnapAxis> {
     val xs = arrayListOf(Snap((width / 2 - at[0]) / sx, SnapGuide(true, width / 2, true)))
     val ys = arrayListOf(Snap((height / 2 - at[1]) / sy, SnapGuide(false, height / 2, true)))
+    if (canvasEdges && mine != null) {
+        for ((axis, extent) in listOf(width, height).withIndex()) {
+            val from = mine[axis]
+            val to = mine[axis + 2]
+            val unit = if (axis == 0) sx else sy
+            val stops = if (axis == 0) xs else ys
+            stops += Snap(-from / unit, SnapGuide(axis == 0, 0f, true))
+            stops += Snap((extent - to) / unit, SnapGuide(axis == 0, extent, true))
+            stops += Snap((extent - from - to) / (2f * unit), SnapGuide(axis == 0, extent / 2, true))
+        }
+    }
     for (o in others) {
         xs += Snap((o.x - at[0]) / sx, SnapGuide(true, o.x, false))
         ys += Snap((o.y - at[1]) / sy, SnapGuide(false, o.y, false))
@@ -318,6 +328,28 @@ internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatAr
         }
     }
     return SnapAxis(xs, threshold) to SnapAxis(ys, threshold)
+}
+
+internal class TrackpadAlignment {
+    private var direction = 0
+
+    fun constrain(point: Offset): Offset {
+        val x = abs(point.x)
+        val y = abs(point.y)
+        if (direction == 0 && maxOf(x, y) >= 6f) {
+            direction = when {
+                y <= x * 0.20f -> 1
+                x <= y * 0.20f -> 2
+                else -> -1
+            }
+        }
+        if (direction == 1 && y > maxOf(10f, x * 0.25f) || direction == 2 && x > maxOf(10f, y * 0.25f)) direction = -1
+        return when (direction) {
+            1 -> Offset(point.x, 0f)
+            2 -> Offset(0f, point.y)
+            else -> point
+        }
+    }
 }
 
 internal class SnapAxis(snaps: List<Snap>, private val threshold: Float = 25f) {
@@ -667,10 +699,10 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
         onDispose { state.pivotEditing = false }
     }
     fun openKeypad(active: Int) {
-        val axes = if (spatial) listOf(2, 0, 1) else listOf(0, 1)
+        val axes = if (spatial) transformAxisOrder else listOf(0, 1)
         val fields = axes.map { axis -> KeypadField("XYZ"[axis].toString(), at[axis], min = -PIVOT_LIMIT, max = PIVOT_LIMIT) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
-            if (spatial) state.setPivot(v[1], v[2], z = v[0]) else state.setPivot(v[0], v[1])
+            if (spatial) state.setPivot(v[0], v[1], z = v[2]) else state.setPivot(v[0], v[1])
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -755,7 +787,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         axis = which
         val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
         state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
-            state.editSelected { turn.withValues(it, floatArrayOf(v[1], v[2], v[0])) }
+            state.editSelected { turn.withValues(it, v.toFloatArray()) }
         }
     }
     fun colour(which: Int) = if (turn.linked(which, axis)) Am.Accent else Am.OnDark
@@ -770,7 +802,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
     }
     Box(Modifier.fillMaxSize()) {
-        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset, bottom = 12.px)
+        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
         TransformAxisHeader(state, layer, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
             Modifier.align(Alignment.TopCenter).padding(top = 17.px))
     }
@@ -779,18 +811,19 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
 @Composable
 private fun TransformRulers(
     state: EditorState, colour: (Int) -> Color, onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit,
-    bottom: androidx.compose.ui.unit.Dp = 86.px,
+    depthEnabled: Boolean = true,
 ) {
-    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = bottom)) {
+    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = 12.px)) {
         for (which in transformAxisOrder) {
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            val enabled = which != 2 || depthEnabled
+            Box(Modifier.fillMaxWidth().weight(1f).alpha(if (enabled) 1f else 0.38f)) {
                 RulerSpinner(
-                    colour(which),
+                    if (enabled) colour(which) else Am.OnDarkDim,
                     onDrag = { dx -> onDrag(which, dx) },
                     onEnd = { state.endGesture() },
                     modifier = Modifier.fillMaxSize(),
                     onStart = { onSelect(which) },
-                    onReset = { onReset(which) },
+                    onReset = { onReset(which) }, enabled = enabled,
                 )
                 Text("XYZ"[which].toString(), Modifier.align(Alignment.CenterStart).padding(start = 22.px), color = colour(which), fontSize = 13.sp)
             }

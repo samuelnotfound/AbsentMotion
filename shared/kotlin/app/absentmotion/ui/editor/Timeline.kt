@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -327,6 +328,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
     }
 
     LoadWaveforms(state.scene)
+    LaunchedEffect(view, state.groupPath) { view.clearInlinePositions() }
     LaunchedEffect(view, state.selectedId, state.revealCount) { if (deskLayout) view.revealRow() else view.revealSelected() }
     if (deskLayout) LaunchedEffect(view, view.layers.isEmpty()) { view.refit() }
     val appear = remember(state.selectedId) { Animatable(if (state.selectedId == null) 1f else 0f) }
@@ -376,6 +378,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
             }
             .drawBehind { drawTimeline(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, proxies, appear.value) },
     ) {
+        InlineRows(view)
         HeaderPictures(view) { drawLifted(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, appear.value) }
         RowSemantics(view)
         LockMenu(view)
@@ -486,6 +489,7 @@ private fun RowSemantics(view: TimelineView) {
     val unlock = stringResource(R.string.layer_unlock)
     val locked = stringResource(R.string.a11y_layer_locked)
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
+    val transform = stringResource(R.string.layer_tool_transform)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -499,8 +503,28 @@ private fun RowSemantics(view: TimelineView) {
                     customActions = if (app.absentmotion.ui.tutorial.Tutorial.running || view.state.lookOnly) emptyList() else listOf(
                         CustomAccessibilityAction(if (layer.hidden) show else hide) { view.state.toggleHidden(layer.id); true },
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true },
-                    )
+                    ) + listOfNotNull(CustomAccessibilityAction(transform) { view.toggleInlinePosition(layer.id); true }.takeIf { layer.kind != "audio" })
                 })
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineRows(view: TimelineView) {
+    if (!view.hasInlinePositions) return
+    val rows by remember(view) { derivedStateOf { view.visibleRows() } }
+    Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
+        for (row in rows) {
+            val layer = view.layerAt(row) ?: continue
+            val open = view.inlinePosition(layer) ?: continue
+            if (view.liftId == layer.id) continue
+            val top = view.shownTop(row, layer.id) + view.rowH
+            if (top >= view.rowsEnd) continue
+            key(layer.id) {
+                InlinePositionDetails(view.state, layer, open,
+                    Modifier.offset { IntOffset(0, (top - view.rulerH).roundToInt()) }.fillMaxWidth(),
+                    onChange = { view.setInlinePosition(layer.id, it) }, xOf = view::inlineKeyX, frameAt = view::inlineFrameAt)
             }
         }
     }
@@ -540,6 +564,17 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                             .size(ThumbSize)
                             .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f)
                     LayerThumbnail(layer, view.state.engine, thumb)
+                    if (layer.kind != "audio") {
+                        val left = view.inlineDisclosureLeft
+                        val width = (view.headerWidth - left).coerceAtLeast(0f)
+                        Box(Modifier.offset { IntOffset(left.roundToInt(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
+                            .size(with(LocalDensity.current) { width.toDp() }, RowHeight), contentAlignment = Alignment.Center) {
+                            val open = view.inlinePosition(layer) != null
+                            app.absentmotion.ui.editor.panels.PanelIcon(
+                                if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
+                                if (open) Am.Accent else Am.OnDarkDim, size = if (deskLayout) 12.dp else 9.dp)
+                        }
+                    }
                 }
             }
         }
@@ -655,6 +690,7 @@ private sealed interface Hit {
 
     data object Readout : Hit
     data class WorkAreaEdge(val start: Boolean) : Hit
+    data class Inline(val id: Long) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
@@ -685,6 +721,22 @@ private class TimelineView(val state: EditorState, density: Density, private val
     var coordinates: LayoutCoordinates? = null
     var headerDp by mutableFloatStateOf(DeskTimelineControls.headerDp)
     val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
+    val inlineDisclosureLeft: Float get() = if (deskLayout) headerWidth - 22.dp.px else (ThumbLeft + ThumbSize).px
+    private var inlinePositions by mutableStateOf<Map<Long, InlinePositionOpen>>(emptyMap())
+    val hasInlinePositions: Boolean get() = inlinePositions.isNotEmpty()
+
+    fun inlinePosition(layer: Layer): InlinePositionOpen? = inlinePositions[layer.id]?.let {
+        if (!layer.uses3D && it.axis == 2) it.copy(axis = null) else it
+    }
+
+    fun setInlinePosition(id: Long, open: InlinePositionOpen) { inlinePositions = inlinePositions + (id to open) }
+    fun toggleInlinePosition(id: Long) {
+        if (id in inlinePositions) inlinePositions = inlinePositions - id else setInlinePosition(id, InlinePositionOpen())
+    }
+    fun clearInlinePositions() { inlinePositions = emptyMap() }
+    fun inlineKeyX(frame: Int): Float = timeScale().x(state.scene.frameStart(frame).toFloat())
+    fun inlineFrameAt(x: Float): Int = TimelineMath.nearestFrame(timeScale().time(x), fps)
+
     private var viewStartMs by mutableFloatStateOf(0f)
     var desktopCancel by mutableStateOf(false)
     var rubber by mutableStateOf<Rect?>(null)
@@ -817,7 +869,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     private var followFit = true
 
     val rowsEnd: Float get() = rowsBottom
-    val maxScroll: Float get() = TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom)
+    val maxScroll: Float get() = if (hasInlinePositions) max(0f, inlineOffsets.last() - (rowsBottom - rulerH)) else TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom)
     private val panMax: Float get() = (endMs - visibleMs / 2f).coerceAtLeast(0f)
     val panSpan: Float get() = (visibleMs / (panMax + visibleMs).coerceAtLeast(1f)).coerceIn(0f, 1f)
     val panFraction: Float get() = if (panMax > 0f) viewStartMs / panMax else 0f
@@ -879,7 +931,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Inline || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
         hoveredKey = (hit as? Hit.Key)?.let { it.id to it.frame }
     }
 
@@ -1009,15 +1061,35 @@ private class TimelineView(val state: EditorState, density: Density, private val
         get() = TimelineMath.rowsBottom(size.height.toFloat(), if (covered) panelTop else null, multiBar)
 
     val scroll: Float
-        get() = scrollPx.coerceIn(0f, TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom))
+        get() = scrollPx.coerceIn(0f, maxScroll)
 
     fun layerAt(row: Int): Layer? = layers.getOrNull(layers.lastIndex - row)
 
-    fun rowTop(row: Int): Float = rulerH + row * rowH - scroll
+    private val inlineOffsets by derivedStateOf {
+        var offset = 0f
+        buildList {
+            for (layer in layers.asReversed()) {
+                add(offset)
+                offset += rowH + (inlinePosition(layer)?.height?.px ?: 0f)
+            }
+            add(offset)
+        }
+    }
 
-    private fun rowAt(y: Float): Int = floor((y - rulerH + scroll) / rowH).toInt()
+    private fun rowOffset(row: Int): Float = if (hasInlinePositions) inlineOffsets[row] else row * rowH
 
-    fun visibleRows(): IntRange = TimelineMath.visibleRows(layers.size, rowH, rulerH, rowsBottom, scroll)
+    fun rowTop(row: Int): Float = rulerH + rowOffset(row) - scroll
+
+    private fun rowAt(y: Float): Int {
+        val offset = y - rulerH + scroll
+        if (!hasInlinePositions) return floor(offset / rowH).toInt()
+        val index = inlineOffsets.binarySearch(offset)
+        return if (index >= 0) index else -index - 2
+    }
+
+    fun visibleRows(): IntRange =
+        if (hasInlinePositions) max(0, rowAt(rulerH))..min(layers.lastIndex, rowAt(rowsBottom))
+        else TimelineMath.visibleRows(layers.size, rowH, rulerH, rowsBottom, scroll)
 
     fun clipRows(media: Boolean): List<Rect> {
         val time = timeScale()
@@ -1100,7 +1172,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val index = layers.indexOfFirst { it.id == id }
         if (index < 0) return
         if (scrollBeforeSelect == null) scrollBeforeSelect = scrollPx
-        scrollPx = TimelineMath.centredScroll(layers.lastIndex - index, rowH, rulerH, rowsBottom)
+        scrollPx = rowOffset(layers.lastIndex - index) + (rowH - (rowsBottom - rulerH)) / 2
     }
 
     fun isCovered(at: Offset): Boolean = (covered && at.y >= panelTop) || (multiBar > 0f && at.y >= size.height - multiBar)
@@ -1130,7 +1202,9 @@ private class TimelineView(val state: EditorState, density: Density, private val
             val centre = (origin + PlayheadWidth.px / 2).let { if (deskLayout) maxOf(it, headerWidth + PillInset.px + PillWidth.px / 2) else it }
             return if (at.y >= ReadoutTop.px && abs(at.x - centre) <= ReadoutHalfWidth.px) Hit.Readout else Hit.Ruler
         }
-        val layer = layerAt(rowAt(at.y)) ?: return Hit.Empty
+        val row = rowAt(at.y)
+        val layer = layerAt(row) ?: return Hit.Empty
+        if (at.y >= rowTop(row) + rowH) return Hit.Corner
         val time = timeScale()
         val left = time.x(layer.startTime.toFloat())
         val right = time.x(layer.endTime + 1f)
@@ -1144,6 +1218,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         return when {
             at.x < EyeZone.px -> Hit.Eye(layer.id)
             lockReveal > 0f && at.x < ThumbLeft.px -> Hit.Lock(layer.id)
+            at.x >= inlineDisclosureLeft && at.x < headerWidth && layer.kind != "audio" -> Hit.Inline(layer.id)
             at.x < headerWidth -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..startReach -> Hit.Grip(layer.id, start = true)
             deskLayout && right - at.x in -zone..endReach -> Hit.Grip(layer.id, start = false)
@@ -1169,6 +1244,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun tap(hit: Hit) {
         if (state.lookOnly) return
         when (hit) {
+            is Hit.Inline -> if (MultiSelect.active) select(hit.id) else toggleInlinePosition(hit.id)
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
@@ -1275,7 +1351,11 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     private fun selectUpdate() {
         val anchor = rowOf(selectAnchor ?: return) ?: return
-        val finger = if (selectArmed) RowDrag.fingerRow(selectFinger, rowH, rulerH, rowsBottom, scroll, layers.size) else anchor
+        val finger = when {
+            !selectArmed -> anchor
+            hasInlinePositions -> rowAt(selectFinger.coerceIn(rulerH, rowsBottom)).coerceIn(0, layers.lastIndex)
+            else -> RowDrag.fingerRow(selectFinger, rowH, rulerH, rowsBottom, scroll, layers.size)
+        }
         val rows = abs(finger - anchor) + 1
         if (rows > selectRows) onTick()
         selectRows = rows
@@ -1609,9 +1689,11 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val layers = layers
         val index = layers.indexOfFirst { it.id == id }
         if (index < 0) return
-        liftTop = RowDrag.clampTop(liftFinger - liftGrab, rowH, rulerH, rowsBottom, scroll, layers.size)
+        liftTop = if (hasInlinePositions) (liftFinger - liftGrab).coerceIn(rowTop(0), rowTop(layers.lastIndex))
+            else RowDrag.clampTop(liftFinger - liftGrab, rowH, rulerH, rowsBottom, scroll, layers.size)
         val from = layers.lastIndex - index
-        val to = RowDrag.slot(liftTop, rowH, rulerH, scroll, layers.size)
+        val to = if (hasInlinePositions) rowAt(liftTop + rowH / 2).coerceIn(0, layers.lastIndex)
+            else RowDrag.slot(liftTop, rowH, rulerH, scroll, layers.size)
         if (to == from) return
         val now = SystemClock.uptimeMillis()
         for ((i, layer) in layers.withIndex()) {
@@ -1830,7 +1912,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    Hit.Readout -> view.tap(h)
+                    is Hit.Inline, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
@@ -2271,7 +2353,7 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     translate(EyeCentre.toPx() - icon.width / 2, top + (height - icon.height) / 2) { with(eye) { draw(icon) } }
     drawPadlock(lock, layer.locked || layer.timingLocked, top, height)
     val left = (ThumbLeft + ThumbSize + 4.dp).toPx()
-    val room = (width - trim - left - pillHeight / 2 - 4.dp.toPx()).toInt()
+    val room = (width - trim - left - pillHeight / 2 - (if (layer.kind == "audio") 4.dp else 20.dp).toPx()).toInt()
     if (room < 1) return
     val text = measurer.measure(layer.shownName(), if (layer.hidden) styles.hiddenHeader else styles.header, TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = room))
     drawText(text, topLeft = Offset(left, top + (height - text.size.height) / 2))

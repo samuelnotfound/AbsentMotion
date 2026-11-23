@@ -37,12 +37,14 @@ class AppSettings(private val context: Context) {
     private var xmlUploadState by mutableStateOf(prefs.getBoolean("xmlUpload", false))
     private var vibrationState by mutableStateOf(prefs.getBoolean("trimLimitVibration", true))
     private var basicTransformState by mutableStateOf(prefs.getBoolean("basicTransform", true))
-    var spatialRulers by mutableStateOf(prefs.getBoolean("spatialRulers", true))
-        private set
+    private var savedPositionRulers by mutableStateOf(prefs.getBoolean("spatialRulers", false).takeIf { prefs.contains("spatialRulers") })
 
-    fun switchSpatialControls() {
-        spatialRulers = !spatialRulers
-        prefs.edit().putBoolean("spatialRulers", spatialRulers).apply()
+    fun positionRulers(spatial: Boolean): Boolean = savedPositionRulers ?: spatial
+
+    fun switchSpatialControls(spatial: Boolean) {
+        val rulers = !positionRulers(spatial)
+        savedPositionRulers = rulers
+        prefs.edit().putBoolean("spatialRulers", rulers).apply()
     }
     private var rotate3dState by mutableStateOf(prefs.getBoolean("rotate3d", false))
     private var rotateFreeState by mutableStateOf(prefs.getBoolean("rotateFree", false))

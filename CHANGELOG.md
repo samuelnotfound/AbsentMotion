@@ -11,13 +11,14 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 ### Added
 
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
+- **Inline Position controls**. Open a layer's chevron to see its Transform rows. Expand an axis to show its ruler, keyframe and easing controls.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
 - **Viewer angles**. Pick a Front, Right, or Top view from the preview controls, or orbit in one of three custom views. Custom angles stay in the editor and leave the project camera and export unchanged.
 - **3D pivots**. Edit Z, X, and Y in Pivot, or drag the anchor and its axes in the viewer. The pivot snaps to layer edges, the center, and zero depth.
 
 ### Changed
 
-- **Move & Transform** uses the same Z, X, Y field layout for 3D Position and Rotation. Position and Rotation both have a compact 3D button. Position remembers its ruler or move-pad setting, and 3D Rotation uses rulers. The transform tabs use icons. Double-tap Move or Pivot to switch between them.
+- **Move & Transform** orders the fields X, Y, Z. Tap the selected Move tab to switch between the rulers and the move pad. Both work on flat layers, with Z visible and disabled. Double-tap Move or Pivot to switch between them. Position and Rotation keep the compact 3D button.
 - **Layer tools** show Trim or Extend depending on where the playhead is. Extend and Move to Playhead have distinct icons. Volume and mute are beside the trim tools.
 - **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses ruler handles in the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk. The layer sidebar uses the original eye, lock and thumbnail layout.
 - **Selection** outlines trace shapes and stay visible during playback. Transform handles still use the projected bounds.
@@ -31,6 +32,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
 - **3D selection** draws the anchor and pivot in the projected plane of the layer as it rotates.
+- **Move pad** holds nearly straight drags on one axis and snaps layer edges to the canvas guides.
 - **Pre-render** starts from the Pre-render button and stays inside the work area. Resizing the area keeps valid cached frames for the next pre-render.
 
 ## [5.2.3] - 2026-11-21
