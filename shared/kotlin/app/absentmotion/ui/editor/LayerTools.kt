@@ -476,7 +476,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     var pivotMode by remember(selected.kind) { mutableStateOf(false) }
     val basic = state.settings.basicTransform
     if (tab !in transformTabs(basic, desk)) SideEffect { tab = 0 }
-    val canPivot = !desk && selected.kind != "camera"
+    val canPivot = selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
     val turn = if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null
@@ -557,7 +557,10 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
             }
             val press = remember { MutableInteractionSource() }
             Box(cell) { DeskTip(tip, Modifier.fillMaxSize()) { Box(
-                Modifier.fillMaxSize().then(if (usable) Modifier.clickable(press, null, role = androidx.compose.ui.semantics.Role.Tab) { tab = i } else Modifier.dimmed())
+                Modifier.fillMaxSize().then(if (usable) Modifier.combinedClickable(
+                    press, null, role = androidx.compose.ui.semantics.Role.Tab,
+                    onLongClick = if (i == 0 && canPivot) { { tab = 0; pivotMode = true } } else null,
+                ) { tab = i; if (i == 0) pivotMode = false } else Modifier.dimmed())
                     .semantics(mergeDescendants = true) { this.selected = tab == i }.padding(start = 10.px, end = 11.px, top = 5.px, bottom = 5.px),
             ) {
                 Column(
