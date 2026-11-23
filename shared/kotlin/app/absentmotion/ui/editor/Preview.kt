@@ -155,6 +155,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var gesture by remember { mutableIntStateOf(IDLE) }
     var tapGeneration by remember { mutableIntStateOf(0) }
     val handles = when {
+        state.playing -> HIDDEN
         state.drawing != null -> state.drawing!!.handlesCode
         state.livePanel == EditorPanel.Crop -> HIDDEN
         gesture != IDLE -> gesture
@@ -225,7 +226,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     }
 
     var multiBox by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
-    var multiMoving by remember { mutableStateOf(false) }
     val multiIds = MultiSelect.ids
     LaunchedEffect(multiIds, scene, mediaRevision) {
         if (multiIds.isEmpty()) { multiBox = null; return@LaunchedEffect }
@@ -409,7 +409,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                         if (moved && startLayer != null && state.selectedId != startLayer.id) {
                             held = Offset.Zero
                         } else if (moved && multi != null && multiFrom != null) {
-                            multiMoving = true
                             val ms = state.sampleMs
                             if (multiCorner >= 0 && multiQuad != null) {
                                 val centre = (multiQuad[0] + multiQuad[2]) / 2f
@@ -544,7 +543,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     } while (event.changes.any { it.pressed })
                     if (snapAxes != null) state.snapGuides = emptyList()
                     gesture = IDLE
-                    multiMoving = false
                     val farFromDots = gradientMode && gradientHandleDistance(startLayer, startQuad, down.position) > 24.dp.toPx()
                     if (canvasGesture && fingers == 2 && !drifted) {
                         if (down.uptimeMillis - lastTwoFingerTap < viewConfiguration.doubleTapTimeoutMillis) {
@@ -587,9 +585,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                 }
             },
         )
-        if (multiIds.isNotEmpty() && state.selectedId == null && !multiMoving && !state.playing && state.drawing == null) multiBox?.let { b ->
-            MultiSelectionBox(b, scale, Offset(dx, dy), if (refPx > 0f) refPx else size.width / 1080f)
-        }
         Presence(hint) { SwipeHint(hintLabel, Modifier.align(Alignment.Center).presence()) }
         if (!fixedView) CanvasZoomHud(state, Modifier.align(Alignment.TopStart))
         if (state.drawing == null && !editingText) {
@@ -715,20 +710,6 @@ internal fun centreKept(corners: List<Offset>, pivot: Offset, start: FloatArray,
 internal fun grownScale(scale: Float, zoom: Float) = if (scale == 0f && zoom > 1f) 0.01f * zoom else scale * zoom
 
 internal const val MULTI_KEY = "preview-multi"
-
-@Composable
-private fun MultiSelectionBox(box: FloatArray, scale: Float, offset: Offset, px: Float) {
-    Canvas(Modifier.fillMaxSize().clipToBounds()) {
-        val corners = listOf(Offset(box[0], box[1]), Offset(box[2], box[1]), Offset(box[2], box[3]), Offset(box[0], box[3])).map { it * scale + offset }
-        val outline = Path().apply { moveTo(corners[0].x, corners[0].y); corners.drop(1).forEach { lineTo(it.x, it.y) }; close() }
-        drawPath(outline, Color.Black, style = Stroke(7.3f * px))
-        drawPath(outline, Color.White, style = Stroke(5.3f * px))
-        for (corner in corners) {
-            drawCircle(Color.Black, 15.5f * px, corner)
-            drawCircle(Color.White, 12.5f * px, corner)
-        }
-    }
-}
 
 internal const val WHEEL_KEY = "preview-wheel"
 internal const val WHEEL_IDLE_MS = 500L
