@@ -448,7 +448,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     state.edit(MULTI_KEY) { multiFrom.movedTogether(multi, ms, 0f, 0f, multiZoom, multiShift.x, multiShift.y) }
                                 }
                             }
-                        } else if (moved && pivotGrab != null && pivotDrag != null) {
+                        } else if (moved && pivotGrab != null) {
                             if (fingers == 1) {
                                 pivotDrag.move(pivotGrab, position - down.position)?.let { (value, snaps) ->
                                     if (snaps.any { it !in pivotSnaps }) tick(HapticFeedbackType.SegmentTick)
