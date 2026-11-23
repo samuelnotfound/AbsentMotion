@@ -12,7 +12,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
-- **Timeline layer details**. Open the chevron beside a layer to find animated properties and edit their keys. Expand groups in the same menu to edit child visibility, basic transforms, and keyframes.
+- **Timeline groups**. Open the chevron beside a group to edit child visibility and basic transforms from the timeline.
 
 ### Changed
 
