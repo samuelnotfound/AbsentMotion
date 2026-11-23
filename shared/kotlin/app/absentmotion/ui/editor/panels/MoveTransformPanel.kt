@@ -89,7 +89,7 @@ import app.absentmotion.ui.HoldName
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers(layer.uses3D))
+            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers())
             1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)

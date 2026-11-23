@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -57,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
@@ -66,6 +68,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -130,6 +133,10 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import app.absentmotion.effects.EffectCatalog
+import app.absentmotion.editor.InlineSection
+import app.absentmotion.editor.inlineTrackSections
+import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.renameLayer
 import app.absentmotion.editor.copySelected
 import app.absentmotion.editor.deleteChosen
@@ -209,14 +216,16 @@ private val BookmarkPeakHalf = 2.5.dp
 private val PillOutline = 1.1.dp
 
 private var lockReveal by mutableFloatStateOf(0f)
-internal val HeaderWidth: Dp get() = 62.dp + LockZone * lockReveal
+internal val HeaderWidth: Dp get() = 74.dp + (LockZone + ThreeDZone) * lockReveal
 private val HeaderInset = 1.dp
 private val TagStripWidth = 2.1.dp
 private val EyeZone = 36.dp
 private val EyeCentre = 17.dp
 private val LockZone = 22.dp
+private val ThreeDZone = 20.dp
 private val LockCentre = 45.dp
-private val ThumbLeft: Dp get() = EyeZone + LockZone * lockReveal
+private val CubeLeft: Dp get() = EyeZone + LockZone * lockReveal
+private val ThumbLeft: Dp get() = CubeLeft + ThreeDZone * lockReveal
 private val ThumbSize = 16.dp
 private val ClipTrim = 8.dp
 private val DeskClipTrim = 12.dp
@@ -275,6 +284,8 @@ private val CameraBar = Color(0xFFC32F5B)
 private val CameraStripe = Color(0xFFC83D66)
 private val GroupBar = Color(0xFFE88C3B)
 private val GroupStripe = Color(0xFFD9772E)
+private val NullBar get() = Am.Inactive
+private val NullStripe get() = Am.Inactive.copy(alpha = 0.85f).compositeOver(Am.Line)
 private val BarShadow get() = Am.PreviewBg
 private val GripColor get() = Am.Inactive
 private val HandleColor get() = Am.Inactive
@@ -328,7 +339,14 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
     }
 
     LoadWaveforms(state.scene)
+    val effectCatalog by state.engine.effects.collectAsState()
+    SideEffect { view.catalog = effectCatalog }
     LaunchedEffect(view, state.groupPath) { view.clearInlinePositions() }
+    DisposableEffect(view) {
+        val visibleKeys: () -> List<Int> = view::inlineKeyframes
+        state.inlineKeyframes = visibleKeys
+        onDispose { if (state.inlineKeyframes === visibleKeys) state.inlineKeyframes = null }
+    }
     LaunchedEffect(view, state.selectedId, state.revealCount) { if (deskLayout) view.revealRow() else view.revealSelected() }
     if (deskLayout) LaunchedEffect(view, view.layers.isEmpty()) { view.refit() }
     val appear = remember(state.selectedId) { Animatable(if (state.selectedId == null) 1f else 0f) }
@@ -376,7 +394,17 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
                 if (deskLayout) desktopTimelineGestures(view, focus)
                 else timelineGestures(view) { if (state.settings.vibration) haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
             }
-            .drawBehind { drawTimeline(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, proxies, appear.value) },
+            .drawBehind { drawTimeline(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, proxies, appear.value) }
+            .drawWithContent {
+                drawContent()
+                val time = view.timeScale()
+                val left = if (deskLayout) view.headerWidth else 0f
+                if (time.originX in left..size.width) {
+                    val onBookmark = state.scene.bookmarks.any { state.scene.frameAt(it) == state.frame }
+                    drawPlayhead(time.originX, TimelineMath.timecode(state.playheadFrame, view.fps), measurer, styles, outline,
+                        onBookmark, if (deskLayout) left + PillInset.toPx() else Float.NEGATIVE_INFINITY)
+                }
+            },
     ) {
         InlineRows(view)
         HeaderPictures(view) { drawLifted(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, appear.value) }
@@ -489,7 +517,8 @@ private fun RowSemantics(view: TimelineView) {
     val unlock = stringResource(R.string.layer_unlock)
     val locked = stringResource(R.string.a11y_layer_locked)
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
-    val transform = stringResource(R.string.layer_tool_transform)
+    val transform = stringResource(R.string.inline_keyframes)
+    val threeD = stringResource(R.string.three_d_layer)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -503,7 +532,10 @@ private fun RowSemantics(view: TimelineView) {
                     customActions = if (app.absentmotion.ui.tutorial.Tutorial.running || view.state.lookOnly) emptyList() else listOf(
                         CustomAccessibilityAction(if (layer.hidden) show else hide) { view.state.toggleHidden(layer.id); true },
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true },
-                    ) + listOfNotNull(CustomAccessibilityAction(transform) { view.toggleInlinePosition(layer.id); true }.takeIf { layer.kind != "audio" })
+                    ) + listOfNotNull(
+                        CustomAccessibilityAction(transform) { view.toggleInlinePosition(layer.id); true },
+                        CustomAccessibilityAction(threeD) { view.state.toggleLayer3D(layer.id); true }.takeIf { view.showsCube(layer) },
+                    )
                 })
             }
         }
@@ -522,7 +554,7 @@ private fun InlineRows(view: TimelineView) {
             val top = view.shownTop(row, layer.id) + view.rowH
             if (top >= view.rowsEnd) continue
             key(layer.id) {
-                InlinePositionDetails(view.state, layer, open,
+                InlinePositionDetails(view.state, layer, open, view.inlineSections(layer),
                     Modifier.offset { IntOffset(0, (top - view.rulerH).roundToInt()) }.fillMaxWidth(),
                     onChange = { view.setInlinePosition(layer.id, it) }, xOf = view::inlineKeyX, frameAt = view::inlineFrameAt)
             }
@@ -564,7 +596,14 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                             .size(ThumbSize)
                             .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f)
                     LayerThumbnail(layer, view.state.engine, thumb)
-                    if (layer.kind != "audio") {
+                    if (view.showsCube(layer)) {
+                        Box(Modifier.offset { IntOffset(view.inlineCubeLeft.roundToInt(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
+                            .size(ThreeDZone, RowHeight), contentAlignment = Alignment.Center) {
+                            app.absentmotion.ui.editor.panels.PanelIcon(
+                                ChromeIcons.ObjectTab, if (layer.uses3D) Am.Accent else Am.OnDark, size = 16.dp)
+                        }
+                    }
+                    run {
                         val left = view.inlineDisclosureLeft
                         val width = (view.headerWidth - left).coerceAtLeast(0f)
                         Box(Modifier.offset { IntOffset(left.roundToInt(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
@@ -572,7 +611,7 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                             val open = view.inlinePosition(layer) != null
                             app.absentmotion.ui.editor.panels.PanelIcon(
                                 if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
-                                if (open) Am.Accent else Am.OnDarkDim, size = if (deskLayout) 12.dp else 9.dp)
+                                if (open) Am.Accent else Am.OnDarkDim, size = 16.dp)
                         }
                     }
                 }
@@ -686,11 +725,13 @@ private class TimeScale(val nowMs: Float, val originX: Float, val pxPerMs: Float
 private sealed interface Hit {
     data object Ruler : Hit
     data object Corner : Hit
+    data object InlineBody : Hit
     data object Empty : Hit
 
     data object Readout : Hit
     data class WorkAreaEdge(val start: Boolean) : Hit
     data class Inline(val id: Long) : Hit
+    data class Cube(val id: Long) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
@@ -721,19 +762,48 @@ private class TimelineView(val state: EditorState, density: Density, private val
     var coordinates: LayoutCoordinates? = null
     var headerDp by mutableFloatStateOf(DeskTimelineControls.headerDp)
     val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
-    val inlineDisclosureLeft: Float get() = if (deskLayout) headerWidth - 22.dp.px else (ThumbLeft + ThumbSize).px
+    val inlineCubeLeft: Float get() = if (deskLayout) inlineDisclosureLeft - ThreeDZone.px else CubeLeft.px
+    val inlineDisclosureLeft: Float get() = if (deskLayout) headerWidth - 25.dp.px else (ThumbLeft + ThumbSize).px
     private var inlinePositions by mutableStateOf<Map<Long, InlinePositionOpen>>(emptyMap())
     val hasInlinePositions: Boolean get() = inlinePositions.isNotEmpty()
 
-    fun inlinePosition(layer: Layer): InlinePositionOpen? = inlinePositions[layer.id]?.let {
-        if (!layer.uses3D && it.axis == 2) it.copy(axis = null) else it
+    var catalog by mutableStateOf(EffectCatalog())
+    private val sections by derivedStateOf {
+        layers.filter { it.id in inlinePositions }.associate { it.id to inlineTrackSections(it, catalog) }
     }
 
+    fun inlinePosition(layer: Layer): InlinePositionOpen? = inlinePositions[layer.id]
+
+    fun inlineSections(layer: Layer): List<InlineSection> = sections[layer.id].orEmpty()
+
+    fun showsCube(layer: Layer) = layer.canToggle3D && layer.id == state.selectedId && (deskLayout || lockReveal > 0.8f)
+
     fun setInlinePosition(id: Long, open: InlinePositionOpen) { inlinePositions = inlinePositions + (id to open) }
+
     fun toggleInlinePosition(id: Long) {
-        if (id in inlinePositions) inlinePositions = inlinePositions - id else setInlinePosition(id, InlinePositionOpen())
+        if (id in inlinePositions) {
+            inlinePositions = inlinePositions - id
+        } else setInlinePosition(id, InlinePositionOpen())
+        state.endGesture()
+        val layer = state.scene.layer(id) ?: return
+        if (!layer.locked) {
+            state.selectedId = id
+            state.panel = EditorPanel.Tools
+        }
+        state.easingOpen = false
+        state.volumeOpen = false
+        state.keyTarget = null
+        state.inlinePanelHidden = true
     }
+
     fun clearInlinePositions() { inlinePositions = emptyMap() }
+
+    private fun inlineFrames(layer: Layer): List<Int> =
+        inlinePosition(layer)?.tracks(inlineSections(layer))?.flatMap { it.frames(state.scene, layer) }.orEmpty()
+
+    fun inlineKeyframes(): List<Int> = layers.filter { it.id in inlinePositions }.flatMap(::inlineFrames)
+        .filter { it in 0..state.scene.lastFrame }.distinct().sorted()
+
     fun inlineKeyX(frame: Int): Float = timeScale().x(state.scene.frameStart(frame).toFloat())
     fun inlineFrameAt(x: Float): Int = TimelineMath.nearestFrame(timeScale().time(x), fps)
 
@@ -1051,7 +1121,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun resizeHeader(x: Float) { headerDp = (x / scale).coerceIn(120f, 320f); DeskTimelineControls.headerDp = headerDp; refit() }
     fun nearHeaderEdge(x: Float) = x <= headerWidth && x >= headerWidth - 5.dp.px
 
-    private val covered: Boolean get() = !wide && !deskLayout && state.selectedId != null
+    private val covered: Boolean get() = !wide && !deskLayout && state.showsLayerInspector
 
     private val multiBar: Float get() = if (MultiSelect.active && !deskLayout && !rail) MultiBarHeight.px else 0f
 
@@ -1070,7 +1140,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         buildList {
             for (layer in layers.asReversed()) {
                 add(offset)
-                offset += rowH + (inlinePosition(layer)?.height?.px ?: 0f)
+                offset += rowH + (inlinePosition(layer)?.height(inlineSections(layer))?.px ?: 0f)
             }
             add(offset)
         }
@@ -1115,18 +1185,22 @@ private class TimelineView(val state: EditorState, density: Density, private val
     private val keyFrames = HashMap<Pair<Long, KeyScope?>, List<Int>>()
     private val keyFrameNodes = HashMap<Pair<Long, KeyScope?>, app.absentmotion.model.XmlNode>()
 
-    private fun scopeOf(layer: Layer): KeyScope? = if (layer.id == state.selectedId) state.keyScope else null
+    private fun scopeOf(layer: Layer): KeyScope? =
+        if (layer.id == state.selectedId && state.showsLayerInspector &&
+            (state.panel != EditorPanel.Tools || state.volumeOpen || state.inlineGraphOpen)) state.keyScope else null
 
     private var keyFramesFps = 0
 
     fun keyFrames(layer: Layer): List<Int> {
+        if (layer.id != state.selectedId) return emptyList()
+        if (inlinePosition(layer) != null) return inlineFrames(layer).distinct()
+        val scope = scopeOf(layer) ?: return emptyList()
         val fps = state.scene.fps
         if (keyFramesFps != fps || keyFrames.size > layers.size * 4 + 16) {
             keyFrames.clear()
             keyFrameNodes.clear()
             keyFramesFps = fps
         }
-        val scope = scopeOf(layer)
         val key = layer.id to scope
         val cached = keyFrames[key]
         if (cached != null && keyFrameNodes[key] === layer.node) return cached
@@ -1204,25 +1278,21 @@ private class TimelineView(val state: EditorState, density: Density, private val
         }
         val row = rowAt(at.y)
         val layer = layerAt(row) ?: return Hit.Empty
-        if (at.y >= rowTop(row) + rowH) return Hit.Corner
+        if (at.y >= rowTop(row) + rowH) return Hit.InlineBody
         val time = timeScale()
         val left = time.x(layer.startTime.toFloat())
         val right = time.x(layer.endTime + 1f)
         val selected = layer.id == state.selectedId
         val gripped = selected || !deskLayout && layer.id in MultiSelect.ids
-        val key = if ((selected || deskLayout) && at.x in left..right) keyNear(layer, at.x, time) else null
         val zone = edgeZone(left, right)
-        val keyX = if (deskLayout && key != null) time.x(state.scene.frameStart(key).toFloat()) else null
-        val startReach = if (keyX != null && abs(keyX - left) <= zone) min(zone, GripStub.px) else zone
-        val endReach = if (keyX != null && abs(keyX - right) <= zone) min(zone, GripStub.px) else zone
         return when {
             at.x < EyeZone.px -> Hit.Eye(layer.id)
-            lockReveal > 0f && at.x < ThumbLeft.px -> Hit.Lock(layer.id)
-            at.x >= inlineDisclosureLeft && at.x < headerWidth && layer.kind != "audio" -> Hit.Inline(layer.id)
+            lockReveal > 0f && at.x < CubeLeft.px -> Hit.Lock(layer.id)
+            showsCube(layer) && at.x >= inlineCubeLeft && at.x < inlineCubeLeft + ThreeDZone.px -> Hit.Cube(layer.id)
+            at.x >= inlineDisclosureLeft && at.x < headerWidth -> Hit.Inline(layer.id)
             at.x < headerWidth -> Hit.Header(layer.id)
-            deskLayout && at.x - left in -zone..startReach -> Hit.Grip(layer.id, start = true)
-            deskLayout && right - at.x in -zone..endReach -> Hit.Grip(layer.id, start = false)
-            key != null -> Hit.Key(layer.id, key)
+            deskLayout && at.x - left in -zone..zone -> Hit.Grip(layer.id, start = true)
+            deskLayout && right - at.x in -zone..zone -> Hit.Grip(layer.id, start = false)
             !deskLayout && gripped && at.x in left - GripZone.px..left -> Hit.Grip(layer.id, start = true)
             !deskLayout && gripped && at.x in right..right + GripZone.px -> Hit.Grip(layer.id, start = false)
             !deskLayout && !gripped && at.x >= size.width - HandleZone.px -> Hit.Handle(layer.id)
@@ -1245,6 +1315,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         if (state.lookOnly) return
         when (hit) {
             is Hit.Inline -> if (MultiSelect.active) select(hit.id) else toggleInlinePosition(hit.id)
+            is Hit.Cube -> if (MultiSelect.active) select(hit.id) else state.toggleLayer3D(hit.id)
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
@@ -1253,22 +1324,16 @@ private class TimelineView(val state: EditorState, density: Density, private val
             is Hit.Key -> select(hit.id)
             Hit.Readout -> state.toggleBookmark()
             Hit.Empty, Hit.Ruler, is Hit.Row -> state.clearSelection()
-            Hit.Corner, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
+            Hit.Corner, Hit.InlineBody, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
         }
     }
 
     private fun select(id: Long, toggle: Boolean = false) {
         if (state.scene.layer(id)?.locked == true) return state.hint(R.string.layer_locked_hint)
-        if (MultiSelect.active) MultiSelect.toggle(id) else if (toggle && state.selectedId == id) state.clearSelection() else {
+        if (MultiSelect.active) MultiSelect.toggle(id) else if (toggle && state.selectedId == id && !state.inlinePanelHidden) state.clearSelection() else {
             state.selectedId = id
             state.panel = EditorPanel.Tools
         }
-    }
-
-    private fun keyNear(layer: Layer, x: Float, time: TimeScale): Int? {
-        val scene = state.scene
-        fun distance(frame: Int) = abs(time.x(scene.frameStart(frame).toFloat()) - x)
-        return keyFrames(layer).minByOrNull(::distance)?.takeIf { distance(it) <= KeyGrab.px }
     }
 
     fun grabKey(hit: Hit.Key, scope: KeyScope? = if (hit.id == state.selectedId) state.keyScope else null) {
@@ -1745,9 +1810,6 @@ private class TimelineView(val state: EditorState, density: Density, private val
 }
 
 private val KeyFaint = DpSize(6.4.dp, 9.6.dp)
-private val KeyOther = DpSize(9.25.dp, 14.6.dp)
-private val KeyHere = DpSize(12.1.dp, 18.5.dp)
-private val KeyGrab = 14.dp
 private val GripStub = 2.5.dp
 
 private val MacOs = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
@@ -1775,7 +1837,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
             val plain = !command && !modifiers.isShiftPressed
             when (event.type) {
                 PointerEventType.Scroll -> {
-                    if (drag == null) view.wheel(change.scrollDelta, at, modifiers.isCtrlPressed || modifiers.isMetaPressed, modifiers.isShiftPressed)
+                    if (drag == null && !change.isConsumed) view.wheel(change.scrollDelta, at, modifiers.isCtrlPressed || modifiers.isMetaPressed, modifiers.isShiftPressed)
                     if (rubbering) view.rubberRefresh()
                     if (down == null) view.hover(at)
                     change.consume()
@@ -1823,7 +1885,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                 if (held) view.openLockMenu(lock.id) else view.state.toggleLock(lock.id)
                 continue
             }
-            if (event.type == PointerEventType.Press && primary && down == null && !view.isCovered(at)) {
+            if (event.type == PointerEventType.Press && primary && down == null && !change.isConsumed && !view.isCovered(at)) {
                 view.stopMotion()
                 down = at
                 previous = at
@@ -1835,7 +1897,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                 view.desktopCancel = false
                 view.desktopDragging = true
                 val pressedId = (hit as? Hit.Bar)?.id ?: (hit as? Hit.Header)?.id
-                wasSelected = plain && !MultiSelect.active && pressedId != null && pressedId == view.state.selectedId
+                wasSelected = plain && !MultiSelect.active && !view.state.inlinePanelHidden && pressedId != null && pressedId == view.state.selectedId
                 if (!resizing) when (val h = hit) {
                     is Hit.Eye -> view.state.toggleHidden(h.id)
                     is Hit.Locked -> view.state.hint(R.string.layer_locked_hint)
@@ -1860,7 +1922,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     else -> Unit
                 }
                 view.cancelAction = { view.endDrag(drag, Velocity.Zero, false); view.rubberEnd(); drag = null }
-                change.consume()
+                if (hit != Hit.InlineBody) change.consume()
                 continue
             }
             val start = down ?: continue
@@ -1876,6 +1938,10 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     resizing -> view.resizeHeader(at.x)
                     drag == Drag.Lift -> view.liftDrag(at, true)
                     drag != null -> drag?.let { view.dragBy(it, at - previous, at) }
+                    moved && hit == Hit.InlineBody -> {
+                        val delta = at - previous
+                        if (abs(at.x - start.x) > abs(at.y - start.y)) view.pan(-delta.x) else view.grabScroll(delta.y)
+                    }
                     hit == Hit.Ruler || hit == Hit.Readout && moved -> view.seek(at.x)
                     moved && (hit == Hit.Empty || hit is Hit.Row) -> {
                         rubbering = true
@@ -1883,7 +1949,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     }
                 }
                 previous = at
-                change.consume()
+                if (hit != Hit.InlineBody || moved) change.consume()
             } else {
                 if (!moved && !resizing && !rubbering) when (val h = hit) {
                     is Hit.Bar -> {
@@ -1912,7 +1978,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    is Hit.Inline, Hit.Readout -> view.tap(h)
+                    is Hit.Inline, is Hit.Cube, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
@@ -2043,7 +2109,7 @@ private fun DrawScope.drawTimeline(view: TimelineView, measurer: TextMeasurer, s
     val stripe = TimelineMath.frameTimeMs(2 * step, fps) * time.pxPerMs
     fun paint(row: Int, layer: Layer) {
         val rowTime = view.timeFor(layer.id, time)
-        drawRow(layer, layer.id == state.selectedId, view.shownTop(row, layer.id), rowTime, stripe, measurer, styles, if (layer.hidden) eyeOff else eye, locks.of(layer), outline, state.scene, state.frame, pictures[layer.id], view.keyFrames(layer), appear, view.keyFrame.takeIf { layer.id == view.keyId }, view.limits[layer.id], view.headerWidth, layer.id == view.hoveredId, view.hoveredKey?.takeIf { it.first == layer.id }?.second)
+        drawRow(layer, layer.id == state.selectedId, view.shownTop(row, layer.id), rowTime, stripe, measurer, styles, if (layer.hidden) eyeOff else eye, locks.of(layer), outline, state.scene, pictures[layer.id], view.keyFrames(layer), appear, view.limits[layer.id], view.headerWidth, layer.id == view.hoveredId)
         layer.mediaFill?.takeIf { it.video }?.let { proxies[it.uri] }?.let { done ->
             drawProxyProgress(rowTime.x(layer.startTime.toFloat()), rowTime.x(layer.endTime + 1f), view.shownTop(row, layer.id), done)
         }
@@ -2077,14 +2143,8 @@ private fun DrawScope.drawTimeline(view: TimelineView, measurer: TextMeasurer, s
         }
     }
     val marks = state.scene.bookmarks
-    val onBookmark = marks.any { state.scene.frameAt(it) == state.frame }
-    if (desktop) {
-        clipRect(left = view.headerWidth) { for (ms in marks) drawBookmark(time.x(ms.toFloat()), outline) }
-        if (time.originX in view.headerWidth..size.width) drawPlayhead(time.originX, TimelineMath.timecode(state.playheadFrame, fps), measurer, styles, outline, onBookmark, view.headerWidth + PillInset.toPx())
-    } else {
-        for (ms in marks) drawBookmark(time.x(ms.toFloat()), outline)
-        drawPlayhead(time.originX, TimelineMath.timecode(state.playheadFrame, fps), measurer, styles, outline, onBookmark)
-    }
+    if (desktop) clipRect(left = view.headerWidth) { for (ms in marks) drawBookmark(time.x(ms.toFloat()), outline) }
+    else for (ms in marks) drawBookmark(time.x(ms.toFloat()), outline)
 }
 
 private fun DrawScope.drawLiftShadow(top: Float, rowH: Float) {
@@ -2165,7 +2225,7 @@ private fun DrawScope.drawLifted(view: TimelineView, measurer: TextMeasurer, sty
             val step = LiftShadowStep.toPx()
             for (i in 1..4) drawRect(Color.Black, Offset(-i * step, top - i * step + step), Size(size.width + 2 * i * step, rowH + 2 * i * step), alpha = LIFT_SHADOW_ALPHA * amount)
             drawRect(Am.TimelineBg, Offset(0f, top), Size(size.width, rowH), alpha = amount)
-            drawRow(layer, id == state.selectedId, top, view.timeFor(id, time), stripe, measurer, styles, if (layer.hidden) eyeOff else eye, locks.of(layer), outline, state.scene, state.frame, pictures[id], view.keyFrames(layer), appear, headerWidth = view.headerWidth, hovered = id == view.hoveredId)
+            drawRow(layer, id == state.selectedId, top, view.timeFor(id, time), stripe, measurer, styles, if (layer.hidden) eyeOff else eye, locks.of(layer), outline, state.scene, pictures[id], view.keyFrames(layer), appear, headerWidth = view.headerWidth, hovered = id == view.hoveredId)
         }
     }
 }
@@ -2282,7 +2342,7 @@ private fun DrawScope.drawRetimeMarks(scene: Scene, time: TimeScale) {
 
 private fun DrawScope.drawRow(
     layer: Layer, selected: Boolean, top: Float, time: TimeScale, stripe: Float,
-    measurer: TextMeasurer, styles: TimelineStyles, eye: Painter, lock: Painter, outline: Path, scene: Scene, frame: Int, picture: StripPicture?, keyFrames: List<Int>, appear: Float = 1f, held: Int? = null, limit: Boolean? = null, headerWidth: Float = 0f, hovered: Boolean = false, hoverKey: Int? = null,
+    measurer: TextMeasurer, styles: TimelineStyles, eye: Painter, lock: Painter, outline: Path, scene: Scene, picture: StripPicture?, keyFrames: List<Int>, appear: Float = 1f, limit: Boolean? = null, headerWidth: Float = 0f, hovered: Boolean = false,
 ) {
     val barTop = top + BarInset.toPx()
     val barBottom = top + (RowHeight - BarInset).toPx()
@@ -2293,12 +2353,12 @@ private fun DrawScope.drawRow(
     if (layer.kind == "camera" && layer.id == scene.defaultCameraId) drawRect(CameraBar.copy(alpha = 0.1f), Offset(0f, top), Size(size.width, RowHeight.toPx()))
     if (deskLayout && (selected || layer.id in MultiSelect.ids)) drawRect(Color.Black, Offset(headerWidth, top), Size(size.width - headerWidth, RowHeight.toPx()), alpha = SelectedRowShade)
     if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, barTop, barBottom, time.pxPerMs)
-    else drawBar(outline, left, right, barTop, barBottom, stripe, picture, layer.startTime, time.pxPerMs, layer.kind == "text", layer.kind == "camera", layer.isPlainGroup)
+    else drawBar(outline, left, right, barTop, barBottom, stripe, picture, layer.startTime, time.pxPerMs, layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj")
     layer.labelColour?.let { drawTagCorner(outline, left, barTop, (barBottom - barTop) / 2, Color(it.start)) }
     val mediaLabel = deskLayout && picture != null
     val labelStyle = if (mediaLabel) styles.mediaLabel else if (layer.kind == "audio") styles.audioLabel else styles.label
     drawLabel(layer.shownName(), measurer, if (deskLayout) max(left, headerWidth) else left, right, barTop, barBottom, labelStyle, mediaLabel)
-    drawKeyframes(keyFrames, scene, selected, frame, time, left, right, centre, outline, appear, held, hoverKey)
+    drawKeyframes(keyFrames, scene, time, left, right, centre, outline)
     if (deskLayout) {
         val chosen = selected || layer.id in MultiSelect.ids
         drawDeskClipFrame(left, right, barTop, barBottom, headerWidth, chosen, hovered, limit)
@@ -2353,13 +2413,13 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     translate(EyeCentre.toPx() - icon.width / 2, top + (height - icon.height) / 2) { with(eye) { draw(icon) } }
     drawPadlock(lock, layer.locked || layer.timingLocked, top, height)
     val left = (ThumbLeft + ThumbSize + 4.dp).toPx()
-    val room = (width - trim - left - pillHeight / 2 - (if (layer.kind == "audio") 4.dp else 20.dp).toPx()).toInt()
+    val room = (width - trim - left - pillHeight / 2 - (if (chosen && layer.canToggle3D) 45.dp else 25.dp).toPx()).toInt()
     if (room < 1) return
     val text = measurer.measure(layer.shownName(), if (layer.hidden) styles.hiddenHeader else styles.header, TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = room))
     drawText(text, topLeft = Offset(left, top + (height - text.size.height) / 2))
 }
 
-private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false) {
+private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false, nullLayer: Boolean = false) {
     val radius = BarRadius.toPx()
     val from = max(left, -2 * radius)
     val to = min(right, size.width + 2 * radius)
@@ -2368,7 +2428,7 @@ private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Flo
     outline.rewind()
     outline.addRoundRect(RoundRect(from, top, to, bottom, CornerRadius(radius)))
     clipPath(outline) {
-        drawRect(if (camera) CameraBar else if (text) TextBar else if (group) GroupBar else Am.LayerBar, Offset(from, top), Size(to - from, bottom - top))
+        drawRect(if (camera) CameraBar else if (text) TextBar else if (group) GroupBar else if (nullLayer) NullBar else Am.LayerBar, Offset(from, top), Size(to - from, bottom - top))
         if (picture != null) {
             val tileHeight = (bottom - top).roundToInt().coerceAtLeast(1)
             val tileWidth = (tileHeight.toFloat() * picture.size.width / picture.size.height).roundToInt().coerceAtLeast(1)
@@ -2385,36 +2445,27 @@ private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Flo
         } else {
             var x = left + stripe * (2 * floor((from - left) / (2 * stripe)) + 1)
             while (x < to) {
-                drawRect(if (camera) CameraStripe else if (text) TextStripe else if (group) GroupStripe else BarStripe, Offset(x, top), Size(stripe, bottom - top))
+                drawRect(if (camera) CameraStripe else if (text) TextStripe else if (group) GroupStripe else if (nullLayer) NullStripe else BarStripe, Offset(x, top), Size(stripe, bottom - top))
                 x += 2 * stripe
             }
         }
     }
 }
 
-private fun DrawScope.drawKeyframes(frames: List<Int>, scene: Scene, selected: Boolean, frame: Int, time: TimeScale, left: Float, right: Float, centre: Float, outline: Path, appear: Float = 1f, held: Int? = null, hoverKey: Int? = null) {
+private fun DrawScope.drawKeyframes(frames: List<Int>, scene: Scene, time: TimeScale, left: Float, right: Float, centre: Float, outline: Path) {
     if (frames.isEmpty()) return
-    val grabbed = held?.let { h -> frames.minByOrNull { abs(it - h) } }
+    val half = KeyFaint.width.toPx() / 2
     clipRect(left = max(left, 0f), right = min(right, size.width)) {
-        for (keyFrame in frames) {
-            val x = time.x(scene.frameStart(keyFrame).toFloat())
-            if (x < -KeyHere.width.toPx() || x > size.width + KeyHere.width.toPx()) continue
-            val here = selected && (keyFrame == frame || keyFrame == grabbed)
-            val grow = (if (selected) 0.7f + 0.3f * appear else 1f) * if (deskLayout && keyFrame == hoverKey) 1.25f else 1f
-            val half = (if (here) KeyHere else if (selected) KeyOther else KeyFaint).let { Offset(it.width.toPx() / 2 * grow, it.height.toPx() / 2 * grow) }
+        for (frame in frames) {
+            val x = time.x(scene.frameStart(frame).toFloat())
+            if (x !in -half..size.width + half) continue
             outline.rewind()
-            outline.moveTo(x, centre - half.y)
-            outline.lineTo(x + half.x, centre)
-            outline.lineTo(x, centre + half.y)
-            outline.lineTo(x - half.x, centre)
+            outline.moveTo(x, centre - half)
+            outline.lineTo(x + half, centre)
+            outline.lineTo(x, centre + half)
+            outline.lineTo(x - half, centre)
             outline.close()
-            if (!selected) {
-                drawPath(outline, Color.White.copy(alpha = 0.7f))
-                continue
-            }
-            if (here) drawPath(outline, Am.Accent, style = Stroke(3.55.dp.toPx()))
-            drawPath(outline, Color.Black, style = Stroke(1.4.dp.toPx()))
-            drawPath(outline, if (keyFrame == grabbed) Am.Accent else Color.White)
+            drawPath(outline, Color.White.copy(alpha = 0.32f))
         }
     }
 }

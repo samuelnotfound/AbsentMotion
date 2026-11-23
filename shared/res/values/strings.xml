@@ -2765,4 +2765,7 @@
     <string name="structure_group_space">Group dimension</string>
     <string name="structure_group_keep_3d">Keep 3D</string>
     <string name="structure_group_flatten_2d">Flatten to 2D</string>
+    <string name="inline_properties">Properties</string>
+    <string name="inline_no_keyframes">No keyframes</string>
+    <string name="inline_keyframes">Layer keyframes</string>
 </resources>

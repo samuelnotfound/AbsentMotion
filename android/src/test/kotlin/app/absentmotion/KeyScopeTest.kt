@@ -39,6 +39,23 @@ class KeyScopeTest {
     private fun Layer.frames(scope: KeyScope? = null) = keyframeTimes(scope).map { scene.frameAt(it) }
     private fun Layer.keys(ref: PropRef) = keyframes(ref).map { scene.frameAt(timeOf(it.t)) }
 
+    @Test fun movingAndTogglingOnePositionAxisPreservesTheOther() {
+        val location = XmlNode("location", children = listOf(kf(10, "20,60,0"), kf(45, "45,80,0")))
+        val original = layer().copy(node = layer().node.withChild("transform", XmlNode("transform", children = listOf(location))))
+        val x = PropRef.Location.copy(component = 0)
+        val y = PropRef.Location.copy(component = 1)
+        val moved = original.withKeyframesMoved(10, 15, scene, KeyScope(x))
+        assertEquals(listOf(15, 45), moved.keys(x))
+        assertEquals(listOf(10, 45), moved.keys(y))
+
+        val at = moved.at(scene.frameTime(45), scene.fps)
+        val removed = at.withKeyframeToggled(x, "45")
+        assertEquals(listOf(15), removed.keys(x))
+        assertEquals(listOf(10, 45), removed.keys(y))
+        assertEquals(20f, removed.location[0], 0.0001f)
+        assertEquals(80f, removed.location[1], 0.0001f)
+    }
+
     @Test fun noScopeKeepsEveryKeyframeOfTheLayer() {
         assertEquals(listOf(10, 20, 30, 45, 50), layer().frames())
     }

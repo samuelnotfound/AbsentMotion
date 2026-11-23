@@ -194,6 +194,11 @@ class EditorState(
             if (value != null && value != selection && scene.layer(value)?.locked == true) return hint(R.string.layer_locked_hint)
             if (value != selection) { Glide.interrupt(); if (liveRecording != null) endGesture() }
             selection = value
+            if (inlinePanelHidden) {
+                inlinePanelHidden = false
+                easingOpen = false
+                keyTarget = null
+            }
         }
 
     private var frameState by mutableIntStateOf(0)
@@ -373,10 +378,15 @@ class EditorState(
 
     val sampleMs: Int get() = scene.frameTime(frame)
 
+    var inlinePanelHidden by mutableStateOf(false)
+    val inlineGraphOpen get() = inlinePanelHidden && easingOpen
+    val showsLayerInspector get() = selectedId != null && (!inlinePanelHidden || inlineGraphOpen)
+    internal var inlineKeyframes: (() -> List<Int>)? = null
+
     var keyTarget by mutableStateOf<KeyTarget?>(null)
 
     val keyScope: KeyScope?
-        get() = keyTarget?.let { KeyScope(it.ref) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
+        get() = if (inlinePanelHidden && !inlineGraphOpen) null else keyTarget?.let { KeyScope(it.ref) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
 
     var snapGuides by mutableStateOf<List<SnapGuide>>(emptyList())
 

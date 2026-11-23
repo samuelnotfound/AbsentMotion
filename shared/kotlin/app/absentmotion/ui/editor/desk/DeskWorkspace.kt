@@ -366,7 +366,7 @@ private fun DeskInspector(state: EditorState, library: AddLibrary, modifier: Mod
         }
         when {
             MultiSelect.active -> DeskMulti(state, Modifier.weight(1f).fillMaxWidth())
-            state.selectedId == null -> DeskProjectPanel(state, Modifier.weight(1f).fillMaxWidth())
+            !state.showsLayerInspector -> DeskProjectPanel(state, Modifier.weight(1f).fillMaxWidth())
             state.panel == EditorPanel.EditText && state.selected?.kind == "text" -> TextEditor(state, textUi, embedded = true)
             else -> DeskLayerArea(state, Modifier.weight(1f).fillMaxWidth())
         }
@@ -382,6 +382,7 @@ private fun DeskLayerArea(state: EditorState, modifier: Modifier) {
         Swap(
             when {
                 state.drawing is PointMode -> "points"
+                state.inlineGraphOpen -> "inlineGraph"
                 state.volumeOpen && state.panel == EditorPanel.Tools -> "volume" to state.easingOpen
                 state.panel == EditorPanel.Tools -> "tools"
                 else -> state.panel to state.easingOpen
@@ -395,6 +396,7 @@ private fun DeskLayerArea(state: EditorState, modifier: Modifier) {
                         Box(Modifier.fillMaxWidth().weight(1f)) { PointPanel(state, mode) }
                     }
                 }
+                state.inlineGraphOpen -> app.absentmotion.ui.editor.panels.EasingPanel(state, Modifier.fillMaxSize())
                 state.volumeOpen && state.panel == EditorPanel.Tools -> key(state.selectedId) { VolumePanel(state, Modifier.fillMaxSize()) }
                 state.panel == EditorPanel.Tools -> LayerTools(state, Modifier.fillMaxWidth().align(Alignment.TopCenter), side = true)
                 else -> LayerPanel(state, Modifier.fillMaxSize())

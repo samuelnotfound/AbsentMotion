@@ -559,7 +559,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
                     press, null, role = androidx.compose.ui.semantics.Role.Tab,
                     onDoubleClick = if (i == 0 && canPivot) { { pivotMode = shown != PIVOT_TAB; tab = 0 } } else null,
                 ) {
-                    if (i == 0 && shown == 0) state.settings.switchSpatialControls(selected.uses3D)
+                    if (i == 0 && shown == 0) state.settings.switchSpatialControls()
                     tab = i
                     if (i == 0) pivotMode = false
                 } else Modifier.dimmed())

@@ -163,6 +163,7 @@ internal fun RulerSpinner(
     onReset: (() -> Unit)? = null,
     atLimit: ((Float) -> Boolean)? = null,
     enabled: Boolean = true,
+    reserveGesture: Boolean = false,
 ) {
     val wheelDensity = androidx.compose.ui.platform.LocalDensity.current.density
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -193,6 +194,7 @@ internal fun RulerSpinner(
             val decay = splineBasedDecay<Float>(this)
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
+                if (reserveGesture) down.consume()
                 Glide.stop()
                 if (wheelEnd[0]?.isActive == true) { wheelEnd[0]?.cancel(); running[0] = false; ended() }
                 val undo = reset
