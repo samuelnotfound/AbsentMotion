@@ -808,7 +808,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     fun toggleGroupRow(path: List<Long>) {
         val absolute = state.groupPath + path
-        inlinePositions = if (absolute in inlinePositions) inlinePositions - absolute else inlinePositions + absolute
+        inlinePositions = if (absolute in inlinePositions) inlinePositions - setOf(absolute) else inlinePositions + setOf(absolute)
     }
 
     private fun enterGroups(groups: List<Long>): Boolean {

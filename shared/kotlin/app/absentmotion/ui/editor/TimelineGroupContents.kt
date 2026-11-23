@@ -36,13 +36,13 @@ import app.absentmotion.editor.inlineTrackSections
 import app.absentmotion.editor.isPlainGroup
 import app.absentmotion.effects.EffectCatalog
 import app.absentmotion.model.Layer
+import app.absentmotion.model.LayerTrack
 import app.absentmotion.model.SpeedRef
 import app.absentmotion.model.effects
 import app.absentmotion.model.formatFloats
 import app.absentmotion.model.PropRef
 import app.absentmotion.model.Scene
 import app.absentmotion.model.nestedHostTime
-import app.absentmotion.model.nestedTime
 import app.absentmotion.model.shownName
 import app.absentmotion.ui.editor.panels.PanelIcon
 import app.absentmotion.ui.theme.Am
@@ -61,9 +61,9 @@ internal class TimelineGroupRow(
     val parentsUnlocked get() = clocks.none { it.first.locked }
     val editable get() = !layer.locked && parentsUnlocked
 
-    fun localTime(hostMs: Int): Int = clocks.fold(hostMs.toDouble()) { ms, (group, fps) ->
-        group.nestedTime(ms, fps, quantize = false).ms
-    }.roundToInt()
+    private val track = LayerTrack(layer, owner, clocks)
+
+    fun localTime(hostMs: Int): Int = track.timeAt(hostMs.toDouble(), activeOnly = false, quantize = false)?.ms?.roundToInt() ?: hostMs
 
     fun visibleRange(): IntRange {
         var start = layer.startTime.toDouble()
@@ -183,7 +183,7 @@ internal fun TimelineGroupContents(
 }
 
 private fun EditorState.editGroupMember(row: TimelineGroupRow, change: (Layer) -> Layer) {
-    val local = row.localTime(sampleMs)
+    val local = row.localTime(sampleMs).coerceIn(row.layer.startTime, row.layer.endTime)
     edit { project ->
         val owner = project.focused(row.groups) ?: return@edit project
         val next = owner.update(row.layer.id, local, change)
