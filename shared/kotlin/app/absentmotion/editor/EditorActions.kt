@@ -188,19 +188,20 @@ internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List
     return ((times + bookmarks).map { frameAt(it).coerceIn(0, editEnd) } + workAreaStops).distinct().sorted()
 }
 
+internal fun Scene.inlineNavigationStops(keys: List<Int>): List<Int> =
+    (keys.filter { it in 0..lastFrame } + listOf(0, workAreaStartFrame, workAreaEndFrame, lastFrame.coerceAtLeast(0) + 1))
+        .distinct().sorted()
+
 private fun EditorState.stops(): List<Int> = scene.navigationStops(selected, keyScope)
 
 fun EditorState.skipBack() {
-    inlineKeyframes?.invoke()?.takeIf { it.isNotEmpty() }?.let { keys ->
-        keys.lastOrNull { it < frame }?.let { frame = it }
-        return
-    }
-    frame = stops().lastOrNull { it < frame } ?: 0
+    val stops = if (timelineDetailsOpen) scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty()) else stops()
+    stepTo(stops.lastOrNull { it < playheadFrame } ?: 0)
 }
 
 fun EditorState.skipForward() {
-    inlineKeyframes?.invoke()?.takeIf { it.isNotEmpty() }?.let { keys ->
-        keys.firstOrNull { it > frame }?.let { frame = it }
+    if (timelineDetailsOpen) {
+        scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty()).firstOrNull { it > playheadFrame }?.let(::stepTo)
         return
     }
     val next = stops().firstOrNull { it > frame }
