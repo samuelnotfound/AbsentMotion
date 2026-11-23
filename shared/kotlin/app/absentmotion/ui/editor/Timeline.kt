@@ -264,8 +264,6 @@ private val TickColor get() = Am.Line
 private val CacheBarColor = Color(0xFF45C46A)
 private val CacheBarHeight = 3.dp
 private val WorkAreaHitZone = 14.dp
-private val WorkAreaHeight = 12.dp
-private val WorkAreaInset = CacheBarHeight + 3.dp
 private val RulerMajor get() = Am.Inactive
 private val RulerMinor get() = Am.Inactive.copy(alpha = 0.7f)
 private val RetimeMarkColor get() = Am.Gold.copy(alpha = 0.67f)
@@ -1145,7 +1143,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun hitAt(at: Offset): Hit {
         if (at.y < rulerH) {
             if (deskLayout && at.x < headerWidth) return Hit.Corner
-            if (!state.lookOnly && layers.isNotEmpty() && at.y >= rulerH - WorkAreaInset.px - WorkAreaHeight.px - 3.dp.px) {
+            if (!state.lookOnly && layers.isNotEmpty()) {
                 val time = timeScale()
                 val startX = time.x(TimelineMath.frameTimeMs(state.scene.workAreaStartFrame, fps))
                 val endX = time.x(TimelineMath.frameTimeMs(state.scene.workAreaEndFrame, fps))
@@ -2164,19 +2162,23 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
     val startX = time.x(TimelineMath.frameTimeMs(scene.workAreaStartFrame, fps))
     val endX = time.x(TimelineMath.frameTimeMs(scene.workAreaEndFrame, fps))
     val clipLeft = left.coerceIn(0f, size.width)
-    val height = WorkAreaHeight.toPx()
-    val top = rulerH - WorkAreaInset.toPx() - height
-    val gripWidth = 5.dp.toPx()
-    val corners = CornerRadius(2.dp.toPx())
-    clipRect(left = clipLeft, right = size.width, bottom = rulerH) {
+    clipRect(left = clipLeft, right = size.width, bottom = size.height) {
         val from = max(startX, clipLeft)
         val to = min(endX, size.width)
         if (to > from) {
-            drawRoundRect(color.copy(alpha = 0.25f), Offset(from, top), Size(to - from, height), corners)
+            drawRect(color.copy(alpha = 0.08f), Offset(from, 0f), Size(to - from, rulerH))
+            val stripTop = rulerH - CacheBarHeight.toPx() - 3.dp.toPx()
+            drawRect(color.copy(alpha = 0.72f), Offset(from, stripTop), Size(to - from, 2.dp.toPx()))
         }
-        for (edge in listOf(startX, endX)) {
-            drawRoundRect(color, Offset(edge - gripWidth / 2, top), Size(gripWidth, height), corners)
+        val stemTop = 2.dp.toPx()
+        val stemBottom = (rulerH - CacheBarHeight.toPx() - 4.dp.toPx()).coerceAtLeast(stemTop + 1.dp.toPx())
+        val stemWidth = 3.dp.toPx()
+        fun marker(x: Float) {
+            drawRoundRect(color, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
+            drawCircle(color, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
         }
+        marker(startX)
+        marker(endX)
     }
 }
 
