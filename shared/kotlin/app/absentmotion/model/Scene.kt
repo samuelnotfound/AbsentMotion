@@ -369,7 +369,10 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun keyframes(ref: PropRef): List<Keyframe> = element(ref)?.keyframes ?: emptyList()
 
-    fun onKeyframe(ref: PropRef): Boolean = (element(ref)?.keyframeAt(snap) ?: -1) >= 0
+    fun onKeyframe(ref: PropRef): Boolean {
+        val tracked = element(ref) ?: return false
+        return tracked.keyframeAt(snap) >= 0 || tracked.children.any { it.name == "axis" && it.keyframeAt(snap) >= 0 }
+    }
 
     fun withKeyframeToggled(ref: PropRef, fallback: String): Layer {
         val element = element(ref) ?: XmlNode(ref.name, mapOf("value" to fallback))

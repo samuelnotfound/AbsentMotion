@@ -157,6 +157,18 @@ fun XmlNode.withValueAt(t: Float, value: String, snap: ClosedFloatingPointRange<
 fun XmlNode.keyframeAt(snap: ClosedFloatingPointRange<Float>): Int = keyframes.indexOfFirst { it.t in snap }
 
 fun XmlNode.withKeyframeToggled(t: Float, snap: ClosedFloatingPointRange<Float>): XmlNode {
+    if (children.any { it.name == "axis" }) {
+        val values = valueAt(t) ?: return this
+        val tracks = values.split(',').indices.map { axisTrack(it, values) }
+        val remove = tracks.any { it.keyframeAt(snap) >= 0 }
+        var result = this
+        for ((i, track) in tracks.withIndex()) {
+            if ((track.keyframeAt(snap) >= 0) == remove && i !in linkedComponents) {
+                result = result.withAxis(i, track.withKeyframeToggled(t, snap))
+            }
+        }
+        return result
+    }
     if (fullyLinked((valueAt(t) ?: this["value"])?.split(",")?.size ?: 1)) return this
     val keys = keyframes
     val here = keyframeAt(snap)
