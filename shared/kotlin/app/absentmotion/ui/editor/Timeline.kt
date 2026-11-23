@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.splineBasedDecay
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
@@ -53,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
