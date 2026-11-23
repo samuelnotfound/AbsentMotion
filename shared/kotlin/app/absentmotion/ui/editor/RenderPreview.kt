@@ -29,9 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +59,6 @@ import app.absentmotion.ui.theme.Presence
 import app.absentmotion.ui.theme.presence
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 
 const val RENDER_PREVIEW_TAG = "render_preview"
 
@@ -149,7 +145,6 @@ internal fun CachedFrame(state: EditorState, usable: Boolean, live: LiveHandoff,
 
 @Composable
 internal fun RenderPreviewNotes(state: EditorState, cachedPlaying: State<Boolean>, modifier: Modifier) {
-    AutomaticPreview(state)
     LaunchedEffect(state.playing) {
         if (!state.playing) return@LaunchedEffect
         val startNs = System.nanoTime()
@@ -213,60 +208,6 @@ internal fun RenderPreviewNotes(state: EditorState, cachedPlaying: State<Boolean
 }
 
 private const val STALE_NOTE_MS = 5_000L
-
-private data class PreparationRequest(val key: app.absentmotion.editor.CacheKey, val frame: Int?, val eligible: Boolean, val fit: Float, val cell: Float)
-
-private fun app.absentmotion.model.Scene.hasPreviewVideo(): Boolean =
-    layers.any { it.mediaFill?.video == true || it.nested?.hasPreviewVideo() == true }
-
-@Composable
-private fun AutomaticPreview(state: EditorState) {
-    val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val resources by state.engine.mediaRevision.collectAsState()
-    val thermal = remember(context) { app.absentmotion.export.ThermalMonitor.of(context) }
-    val heat by thermal.state.collectAsState()
-    val hot = heat.level >= app.absentmotion.export.ThermalLevel.Hot
-    val enabled = state.settings.backgroundPreview
-    LaunchedEffect(enabled) { if (!enabled && PreviewCache.automatic) PreviewCache.clear() }
-    LaunchedEffect(state, lifecycle, resources, enabled, hot) {
-        if (!enabled) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            thermal.start()
-            try {
-                snapshotFlow {
-                    val frame = if (state.playing) null else state.frame
-                    PreparationRequest(PreviewCache.keyOf(state), frame,
-                        PreviewCache.phase != PreviewCache.Phase.Rendering && !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
-                            state.drawing == null && state.panel != EditorPanel.EditText, PreviewCache.fit, PreviewCache.checkerCell)
-                }.collectLatest { request ->
-                    delay(100)
-                    PreviewCache.follow(request.key)
-                    if (!request.eligible || hot) return@collectLatest
-                    val duringPlayback = request.frame == null
-                    if (duringPlayback && request.key.scene.hasPreviewVideo()) return@collectLatest
-                    if (!duringPlayback) delay(PreviewCache.idleMs - 100)
-                    fun eligible() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !thermal.hot &&
-                        state.playing == duringPlayback && !state.exportOpen && state.scene == request.key.scene &&
-                        state.settings.fullMotionBlur == request.key.accurateBlur && state.settings.androidEmoji == request.key.androidEmoji &&
-                        state.settings.previewQuality.divisor == request.key.divisor && state.cameraMode == request.key.camera &&
-                        state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && state.drawing == null && state.panel != EditorPanel.EditText
-                    fun current() = eligible() && if (duringPlayback) PreviewCache.canBufferPlayback(state)
-                        else PreviewCache.idle() && !PreviewCache.coolingDown() && state.frame == request.frame
-                    if (duringPlayback) {
-                        while (eligible()) {
-                            if (current()) PreviewCache.prepare(state, context, duringPlayback = true, accept = ::current)
-                            delay(150)
-                        }
-                    } else {
-                        while (!PreviewCache.idle() || PreviewCache.coolingDown()) delay(100)
-                        if (current()) PreviewCache.prepare(state, context, duringPlayback = false, accept = ::current)
-                    }
-                }
-            } finally { thermal.stop() }
-        }
-    }
-}
 
 @Composable
 private fun Note(modifier: Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
