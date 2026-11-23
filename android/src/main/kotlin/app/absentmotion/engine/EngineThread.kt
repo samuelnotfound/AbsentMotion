@@ -664,11 +664,11 @@ class EngineThread(private val background: Int, context: Context? = null, privat
     }
 
     suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true,
-                                    accept: () -> Boolean): ByteArray? {
-        if (closed || playing || mediaJob?.isActive == true || fontJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
+                                    allowPlaying: Boolean = false, accept: () -> Boolean): ByteArray? {
+        if (closed || (playing && !allowPlaying) || mediaJob?.isActive == true || fontJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
         try {
             return withContext(dispatcher) {
-                if (closed || capturing || playing || target == 0L || mediaScene != document || !accept()) return@withContext null
+                if (closed || capturing || (playing && !allowPlaying) || target == 0L || mediaScene != document || !accept()) return@withContext null
                 applyPending()
                 if (videos?.previewReady(document, timeMs, false) == false) return@withContext null
                 capturing = true

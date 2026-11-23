@@ -456,11 +456,12 @@ class EngineThread(private val background: Int, private val context: Context? = 
         }
     }
 
-    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true, accept: () -> Boolean): ByteArray? {
-        if (closed || playing || mediaJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
+    suspend fun capturePreviewFrame(document: Scene, timeMs: Int, width: Int, height: Int, accurateBlur: Boolean, camera: Boolean = true,
+                                    allowPlaying: Boolean = false, accept: () -> Boolean): ByteArray? {
+        if (closed || (playing && !allowPlaying) || mediaJob?.isActive == true || effectJob?.isActive == true || !accept() || !captureLock.tryLock()) return null
         try {
             return withContext(dispatcher) {
-                if (closed || mediaScene != document || !accept()) return@withContext null
+                if (closed || (playing && !allowPlaying) || mediaScene != document || !accept()) return@withContext null
                 applyPending(timeMs)
                 syncVideo(document, timeMs)
                 val started = System.nanoTime()
