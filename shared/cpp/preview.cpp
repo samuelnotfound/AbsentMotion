@@ -10,7 +10,7 @@ namespace am {
 static bool PreviewQuad(const Scene& scene, int64_t id, double time, float xy[8], const LayerEffects* effects) {
     const SceneScope scope(scene);
     const Layer* layer=scene.layer(id);
-    if(!layer || !layer->activeAt(time))return false;
+    if (!layer || layer->kind == "camera" || !layer->activeAt(time)) return false;
     SkPoint q[4];
     if(!SelectionQuad(scene,*layer,time,q,effects))return false;
     for(int i=0;i<4;i++){xy[2*i]=q[i].fX;xy[2*i+1]=q[i].fY;}
@@ -37,13 +37,13 @@ static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, 
         canvas->drawCircle(at, radius * px, paint);
     };
     auto handle = [&](int i) { return i < 4 ? q[i] : (q[i - 4] + q[(i - 3) % 4]) * 0.5f; };
+    DrawLayerEdges(canvas, q, px);
     if (handles >= 0 && handles < 8) {
         const SkColor accent = SkColorSetRGB(0xff, 0x8f, 0x66);
         dot(handle(handles), SkColorSetA(accent, 0x40), 42.5f);
         dot(handle(handles), SK_ColorBLACK, 18.5f);
         dot(handle(handles), accent, 15.5f);
     } else {
-        DrawLayerEdges(canvas, q, px);
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setStrokeWidth(1.1f * px);
         if (std::isfinite(anchor.fX) && std::isfinite(anchor.fY)) dot(anchor, SkColorSetRGB(0x80, 0x80, 0x80), 3.4f);
