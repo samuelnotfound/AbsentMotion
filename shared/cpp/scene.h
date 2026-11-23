@@ -51,8 +51,9 @@ struct Anim {
     std::shared_ptr<const LinkContext> linkContext;
     int linkStart = 0, linkEnd = 0, linkRole = 0;
     int64_t linkOwner = 0;
+    std::vector<Anim> axes;
 
-    bool empty() const { return value.empty() && keys.empty() && links.empty(); }
+    bool empty() const { return value.empty() && keys.empty() && links.empty() && axes.empty(); }
     float get(int i, float t, float fallback) const;
     bool steady(float from, float to) const;
 };
@@ -160,7 +161,7 @@ struct Layer {
     std::string label, shape, fillType, outlineShape;
     std::string mediaUri, mediaFillMode;
     int startTime = 0, endTime = 0;
-    bool hidden = false, video = false, force3d = false, mixPieces = true;
+    bool hidden = false, video = false, force3d = false, mixPieces = true, layerMotionBlur = false;
     Anim location, pivot, scale, rotation, skew, opacity, fillColor, tilt;
     std::vector<Property> props;
     std::vector<LayerEffect> effects;
@@ -250,19 +251,22 @@ struct Echo {
     bool atop = false;
 };
 
+struct Scene;
+
 struct ShutterBlur {
-    float angle = 0;
+    float angle = 0, phase = 0;
     int samples = 0;
     bool fast = false;
     bool adaptive = false;
-    bool trailing = false;
+    bool trailing = false, layerSetting = false;
     bool position = true, scale = true, rotation = true;
 };
 
 bool MotionEffect(const std::string& id);
 bool TextEffect(const std::string& id);
 bool DrawingEffect(const std::string& id);
-bool ShutterBlurOf(const Layer& layer, double timeMs, ShutterBlur* blur);
+bool ShutterBlurOf(const Layer& layer, double timeMs, ShutterBlur* blur, const Scene* scene = nullptr);
+void SetLayerShutterPreview(bool preview);
 void SetFastShutterBlur(bool fast);
 sk_sp<SkImageFilter> SmearFilter(SkVector moved);
 void ApplyMotion(const Layer& layer, double timeMs, Placement* placement);
@@ -300,6 +304,7 @@ void RepeatCopies(const Layer& layer, double timeMs, const RepeatSpace& space, s
 struct Scene {
     int width = 0, height = 0, fps = 30, totalTime = 0;
     bool depthOrder = false, pieceOrder = false;
+    int layerShutterAngle = 180, layerShutterPhase = -90, layerShutterPreview = 8, layerShutterExport = 24;
     uint32_t bgColor = 0;
     std::vector<Layer> layers;
     std::map<std::string, int> mediaOrientation;
@@ -332,7 +337,8 @@ void SplitSeen(std::vector<Layer>* seen, double timeMs);
 float DepthPerPixel(const Layer& layer, double timeMs);
 SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs);
 SkM44 LayerPivotMatrix(const Scene& scene, const Layer& layer, double timeMs);
-void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]);
+SkM44 LayerLocationMatrix(const Scene& scene, const Layer& layer, double timeMs);
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[42]);
 int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks);
 SkRect SelectionBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);
 SkRect DrawnBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);

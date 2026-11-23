@@ -460,6 +460,7 @@ JNIEXPORT jbyteArray JNICALL JNI(still)(JNIEnv* e, jobject, jlong h, jdouble tim
     std::vector<uint8_t> rgba;
     const bool previousCamera = am::CameraViewOn();
     am::SetCameraView(camera == JNI_TRUE);
+    am::SetLayerShutterPreview(true);
     const am::LayerEffects fx = d->effects();
     const bool ok = d->offscreen(w, height, false, [&](SkCanvas* c) {
         c->scale((float)w / d->scene.width, (float)height / d->scene.height);
@@ -467,6 +468,7 @@ JNIEXPORT jbyteArray JNICALL JNI(still)(JNIEnv* e, jobject, jlong h, jdouble tim
         am::DrawScene(c, d->scene, time, d->media(), &fx);
         am::SetFastShutterBlur(false);
     }, &rgba);
+    am::SetLayerShutterPreview(false);
     am::SetCameraView(previousCamera);
     return ok ? bytes(e, rgba) : nullptr;
 }
@@ -581,9 +583,9 @@ JNIEXPORT jfloatArray JNICALL JNI(layerMatrix)(JNIEnv* e, jobject, jlong h, jlon
     am::SetEditorCamera(d->editorCamera);
     const auto* layer = d->scene.layer(id);
     if (!layer) return nullptr;
-    float m[30];
+    float m[42];
     am::LayerMatrices(d->scene, *layer, t, m);
-    return floats(e, m, 30);
+    return floats(e, m, 42);
 }
 JNIEXPORT jfloatArray JNICALL JNI(layerBounds)(JNIEnv* e, jobject, jlong h, jlong id, jdouble t) {
     Desktop* d = ptr(h);

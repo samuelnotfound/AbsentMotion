@@ -37,6 +37,13 @@ class AppSettings(private val context: Context) {
     private var xmlUploadState by mutableStateOf(prefs.getBoolean("xmlUpload", false))
     private var vibrationState by mutableStateOf(prefs.getBoolean("trimLimitVibration", true))
     private var basicTransformState by mutableStateOf(prefs.getBoolean("basicTransform", true))
+    internal fun expandedTimelineRows(scene: String): Set<Long> =
+        prefs.getStringSet("timelineRows:$scene", emptySet()).orEmpty().mapNotNull(String::toLongOrNull).toSet()
+
+    internal fun rememberTimelineRows(scene: String, rows: Set<Long>) {
+        prefs.edit().putStringSet("timelineRows:$scene", rows.map(Long::toString).toSet()).apply()
+    }
+
     var spatialRulers by mutableStateOf(prefs.getBoolean("spatialRulers", true))
         private set
 
