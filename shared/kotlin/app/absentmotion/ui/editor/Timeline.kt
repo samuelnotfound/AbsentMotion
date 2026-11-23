@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -145,6 +146,7 @@ import app.absentmotion.editor.MultiSelect
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.PreviewCache
 import app.absentmotion.editor.toggleBookmark
+import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.toggleHidden
 import app.absentmotion.editor.toggleLock
 import app.absentmotion.editor.setLock
@@ -487,6 +489,7 @@ private fun RowSemantics(view: TimelineView) {
     val unlock = stringResource(R.string.layer_unlock)
     val locked = stringResource(R.string.a11y_layer_locked)
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
+    val threeD = stringResource(R.string.three_d_layer)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -500,6 +503,8 @@ private fun RowSemantics(view: TimelineView) {
                     customActions = if (app.absentmotion.ui.tutorial.Tutorial.running || view.state.lookOnly) emptyList() else listOf(
                         CustomAccessibilityAction(if (layer.hidden) show else hide) { view.state.toggleHidden(layer.id); true },
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true },
+                    ) + listOfNotNull(
+                        CustomAccessibilityAction(threeD) { view.state.toggleLayer3D(layer.id); true }.takeIf { layer.canToggle3D && !layer.locked },
                     )
                 })
             }
@@ -526,9 +531,7 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                             app.absentmotion.platform.Hint(lockLabel) { Box(Modifier.size(LockZone, 28.dp).pointerHoverIcon(PointerIcon.Hand)) }
                         }
                     }
-                    LayerThumbnail(
-                        layer, view.state.engine,
-                        Modifier
+                    val thumb = Modifier
                             .zIndex(if (lifted) 2f else 0f)
                             .offset {
                                 val top = view.shownTop(row, layer.id) - view.rulerH + (RowHeight - ThumbSize).toPx() / 2
@@ -541,8 +544,14 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                                 transformOrigin = TransformOrigin((view.size.width / 2f - ThumbLeft.toPx()) / ThumbSize.toPx(), 0.5f)
                             } else Modifier)
                             .size(ThumbSize)
-                            .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f),
-                    )
+                            .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f)
+                    if (layer.canToggle3D && layer.uses3D) {
+                        Box(thumb, contentAlignment = Alignment.Center) {
+                            app.absentmotion.ui.editor.panels.PanelIcon(ChromeIcons.ObjectTab, Am.Accent, size = ThumbSize)
+                            app.absentmotion.ui.editor.panels.PanelIcon(PanelIcons.Check, Am.OnDark,
+                                Modifier.align(Alignment.BottomEnd).background(Am.Panel, RoundedCornerShape(2.dp)), size = 8.dp)
+                        }
+                    } else LayerThumbnail(layer, view.state.engine, thumb)
                 }
             }
         }
@@ -659,6 +668,7 @@ private sealed interface Hit {
     data object Readout : Hit
     data class WorkAreaEdge(val start: Boolean) : Hit
     data class Eye(val id: Long) : Hit
+    data class Depth(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
 
@@ -882,7 +892,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Depth || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
         hoveredKey = (hit as? Hit.Key)?.let { it.id to it.frame }
     }
 
@@ -1147,6 +1157,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
         return when {
             at.x < EyeZone.px -> Hit.Eye(layer.id)
             lockReveal > 0f && at.x < ThumbLeft.px -> Hit.Lock(layer.id)
+            at.x < headerWidth && at.x in ThumbLeft.px..(ThumbLeft + ThumbSize).px && layer.canToggle3D && !MultiSelect.active ->
+                if (layer.locked) Hit.Locked(layer.id) else Hit.Depth(layer.id)
             at.x < headerWidth -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..startReach -> Hit.Grip(layer.id, start = true)
             deskLayout && right - at.x in -zone..endReach -> Hit.Grip(layer.id, start = false)
@@ -1174,6 +1186,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         when (hit) {
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
+            is Hit.Depth -> state.toggleLayer3D(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
             is Hit.Header -> select(hit.id, toggle = true)
             is Hit.Bar -> select(hit.id, toggle = true)
@@ -1749,6 +1762,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                 down = at
                 previous = at
                 hit = view.hitAt(at).takeIf { !view.state.lookOnly || it == Hit.Ruler }
+                if (!plain) (hit as? Hit.Depth)?.let { hit = Hit.Header(it.id) }
                 moved = false
                 resizing = hit !is Hit.WorkAreaEdge && view.nearHeaderEdge(at.x)
                 view.resizingHeader = resizing
@@ -1833,7 +1847,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    Hit.Readout -> view.tap(h)
+                    is Hit.Depth, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
