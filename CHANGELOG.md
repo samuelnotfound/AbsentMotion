@@ -14,6 +14,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Inline keyframes**. Open a layer's chevron to see keyed properties from Transform, effects, and other controls. Several rulers can stay open together, with keyframe and easing buttons on the left. Position axes can be keyed and moved independently.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
 - **Viewer angles**. Pick a Front, Right, or Top view from the preview controls, or orbit in one of three custom views. Custom angles stay in the editor and leave the project camera and export unchanged.
+- **3D viewer controls**. Drag colored axes on Move or Size, and use the rotation orb to turn a layer directly in the viewer.
 - **3D pivots**. Edit Z, X, and Y in Pivot, or drag the anchor and its axes in the viewer. The pivot snaps to layer edges, the center, and zero depth.
 
 ### Changed

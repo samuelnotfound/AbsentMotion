@@ -123,7 +123,12 @@ import androidx.compose.ui.res.stringResource
 import app.absentmotion.R
 import app.absentmotion.ui.HoldName
 
-internal val EditorState.livePanel get() = if (selectedId == null) EditorPanel.Tools else panel
+internal val EditorState.livePanel get() = if (selectedId == null || inlinePanelHidden) EditorPanel.Tools else panel
+
+private val EditorState.gizmoProperty: PropRef?
+    get() = keyTarget?.ref?.takeIf {
+        livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen
+    }
 
 internal fun previewFrame(width: Float, height: Float, reserve: Float, sceneW: Float, sceneH: Float, zoom: Float, pan: Offset): Triple<Float, Float, Float> {
     val free = width - reserve.coerceAtMost(width / 2f)
@@ -209,6 +214,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var plane by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var world by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var pivotProjection by remember { mutableStateOf<PivotProjection?>(null) }
+    var locationProjection by remember { mutableStateOf<PivotProjection?>(null) }
     var pivotSnaps by remember { mutableStateOf(emptySet<Int>()) }
     var quadFor by remember { mutableStateOf<Any?>(null) }
     val cropping = state.livePanel == EditorPanel.Crop
@@ -220,6 +226,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             plane = null
             world = null
             pivotProjection = null
+            locationProjection = null
         }
         if (cropping && shownChange == null) return@LaunchedEffect
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
@@ -228,7 +235,8 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             val matrices = state.selectedId?.let { state.engine.layerMatrix(it, timeMs) }
             plane = matrices?.copyOfRange(9, 18)
             world = matrices?.copyOfRange(0, 9)
-            pivotProjection = if (quad == null) null else matrices?.let { PivotProjection.from(it) }
+            pivotProjection = if (quad == null) null else matrices?.let(PivotProjection::from)
+            locationProjection = if (quad == null) null else matrices?.let(PivotProjection::location)
         }
     }
 
@@ -387,6 +395,28 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                         }
                     } else null
                     val pivotGrab = pivotDrag?.hit(down.position)
+                    val gizmoLayer = startLayer?.takeIf { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
+                    val gizmoProperty = state.gizmoProperty
+                    val resizing = gizmoProperty == PropRef.Scale
+                    val positionAxes = when (gizmoProperty) {
+                        PropRef.Location -> gizmoLayer?.let { layer ->
+                            locationProjection?.let { PivotDrag(it, layer.location, null, currentScale, currentOffset, true, density) }
+                        }
+                        PropRef.Scale -> gizmoLayer?.let { layer ->
+                            pivotProjection?.let { PivotDrag(it, layer.pivot, null, currentScale, currentOffset, true, density) }
+                        }
+                        else -> null
+                    }
+                    val axisControl = gizmoLayer?.let { layer ->
+                        positionAxes?.let { axes ->
+                            axes.hit(down.position)?.takeIf { it >= 0 && (!resizing || it < 2) }?.let { Triple(layer, axes, it) }
+                        }
+                    }
+                    val orbCentre = if (gizmoProperty != null && turning != null) gizmoLayer?.let { layer ->
+                        pivotProjection?.project(layer.pivot)?.let { it * currentScale + currentOffset }
+                    } else null
+                    val orbRadius = (orbCentre?.let { (down.position - it).getDistance() } ?: 0f) / density
+                    val onOrbRim = orbRadius in (ORBIT_RADIUS_DP - 6f)..(ORBIT_RADIUS_DP + 10f)
                     val pointGrab = if (gradientMode) -1 else points?.points?.indices?.mapNotNull { i -> onScreen(points.points[i])?.let { i to (it - down.position).getDistance() } }
                         ?.filter { it.second < 24.dp.toPx() }?.minByOrNull { it.second }?.first ?: -1
                     val grabOffset = if (pointGrab >= 0) (onScreen(points!!.points[pointGrab]) ?: down.position) - down.position else Offset.Zero
@@ -448,6 +478,29 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     state.edit(MULTI_KEY) { multiFrom.movedTogether(multi, ms, 0f, 0f, multiZoom, multiShift.x, multiShift.y) }
                                 }
                             }
+                        } else if (moved && axisControl != null) {
+                            val (gizmo, axes, axisGrab) = axisControl
+                            if (fingers == 1) {
+                                val travel = position - down.position
+                                if (resizing) {
+                                    val axis = axes.axisDirection(axisGrab) ?: continue
+                                    val distance = travel.x * axis.x + travel.y * axis.y
+                                    val factor = (1f + distance / 36.dp.toPx()).coerceIn(0.01f, 100f)
+                                    val before = gizmo.scale
+                                    val x = if (gizmo.scaleLinked || axisGrab == 0) grownScale(before[0], factor) else before[0]
+                                    val y = if (gizmo.scaleLinked || axisGrab == 1) grownScale(before[1], factor) else before[1]
+                                    state.editSelected(TRANSFORM_GIZMO) { it.withTransform("scale", x, y) }
+                                } else {
+                                    axes.move(axisGrab, travel)?.let { (value, _) ->
+                                        state.editSelected(TRANSFORM_GIZMO) { layer ->
+                                            val next = layer.location.copyOf()
+                                            next[axisGrab] = value[axisGrab]
+                                            layer.withTransform("location", *next)
+                                        }
+                                    }
+                                }
+                            }
+                            event.changes.forEach { it.consume() }
                         } else if (moved && pivotGrab != null) {
                             if (fingers == 1) {
                                 pivotDrag.move(pivotGrab, position - down.position)?.let { (value, snaps) ->
@@ -535,7 +588,11 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                             }
                         } else if (moved && turning != null && !(canvasGesture && fingers > 1)) {
                             gesture = HIDDEN
-                            turning(if (fingers > 1) Offset.Zero else (pan + held) / density, if (fingers > 1) event.calculateRotation() else 0f)
+                            if (fingers == 1 && onOrbRim && orbCentre != null) {
+                                turning(Offset.Zero, -handleTurn(position - pan - held - orbCentre, position - orbCentre))
+                            } else {
+                                turning(if (fingers > 1) Offset.Zero else (pan + held) / density, if (fingers > 1) event.calculateRotation() else 0f)
+                            }
                             held = Offset.Zero
                         } else if (moved && state.selectedId != null && !(canvasGesture && fingers > 1)) {
                             gesture = HIDDEN
@@ -588,12 +645,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     if (pivotGrab != null) pivotSnaps = emptySet()
                     if (cancelled) {
                         if (moved) {
-                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", PIVOT_DRAG, MULTI_KEY).forEach { state.cancelGesture(it) }
+                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", PIVOT_DRAG, TRANSFORM_GIZMO, MULTI_KEY).forEach { state.cancelGesture(it) }
                         }
                         state.endGesture()
                     } else if (moved) {
                         state.endGesture()
-                    } else if (pointGrab >= 0 || pivotGrab != null) {
+                    } else if (pointGrab >= 0 || pivotGrab != null || axisControl != null || orbRadius in 1f..(ORBIT_RADIUS_DP + 10f)) {
                         state.endGesture()
                     } else if (tapped != null) {
                         points?.tap?.invoke(tapped)
@@ -643,6 +700,18 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             state.selected?.takeIf { !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }?.let { layer ->
                 val at = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
                 pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.uses3D, pivotSnaps) }
+            }
+        }
+        state.gizmoProperty?.let { property ->
+            val layer = state.selected?.takeIf { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
+            if (layer != null) {
+                val offset = Offset(dx, dy)
+                when {
+                    state.turner != null -> pivotProjection?.let { LayerRotationOrb(it, layer.pivot, scale, offset) }
+                    property == PropRef.Location -> locationProjection?.let { TransformAxes(it, layer.location, scale, offset, resize = false) }
+                    property == PropRef.Scale -> pivotProjection?.let { TransformAxes(it, layer.pivot, scale, offset, resize = true) }
+                    else -> Unit
+                }
             }
         }
         if (editingText) Canvas(Modifier.fillMaxSize()) {
