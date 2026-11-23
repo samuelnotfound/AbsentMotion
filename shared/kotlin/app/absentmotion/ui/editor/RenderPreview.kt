@@ -267,12 +267,12 @@ private fun AutomaticPreview(state: EditorState) {
                         else PreviewCache.idle() && !PreviewCache.coolingDown() && state.frame == request.frame
                     if (duringPlayback) {
                         while (eligible()) {
-                            if (current()) PreviewCache.prepare(state, context, duringPlayback = true, ::current)
+                            if (current()) PreviewCache.prepare(state, context, duringPlayback = true, accept = ::current)
                             delay(150)
                         }
                     } else {
                         while (!PreviewCache.idle() || PreviewCache.coolingDown()) delay(100)
-                        if (current()) PreviewCache.prepare(state, context, duringPlayback = false, ::current)
+                        if (current()) PreviewCache.prepare(state, context, duringPlayback = false, accept = ::current)
                     }
                 }
             } finally { thermal.stop() }
