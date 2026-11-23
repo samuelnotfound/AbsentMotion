@@ -84,8 +84,6 @@ import app.absentmotion.editor.withWorldLocation
 import app.absentmotion.editor.movedTogether
 import app.absentmotion.editor.setCrop
 import app.absentmotion.editor.setPivot
-import app.absentmotion.editor.editTimelineTrack
-import app.absentmotion.editor.locationTimelineTrack
 import app.absentmotion.model.cropBox
 import app.absentmotion.model.cropIndex
 import app.absentmotion.model.cropRatio
@@ -127,11 +125,6 @@ import app.absentmotion.ui.HoldName
 
 internal val EditorState.livePanel get() = if (selectedId == null) EditorPanel.Tools else panel
 
-private fun EditorState.showsLocationAxes(): Boolean =
-    !playing && !pivotEditing && !panZoomMode && !orbiting && !lookOnly && drawing == null &&
-        (livePanel == EditorPanel.Tools || livePanel == EditorPanel.MoveTransform && keyTarget?.ref == PropRef.Location) &&
-        selected?.let { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(sampleMs) } == true
-
 internal fun previewFrame(width: Float, height: Float, reserve: Float, sceneW: Float, sceneH: Float, zoom: Float, pan: Offset): Triple<Float, Float, Float> {
     val free = width - reserve.coerceAtMost(width / 2f)
     val fit = if (width == 0f) 1f else min(free / sceneW, height / sceneH)
@@ -155,7 +148,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     val viewZoom = if (fixedView) 1f else state.canvasZoom
     val viewPan = if (fixedView) Offset.Zero else state.canvasPan
     val (scale, dx, dy) = previewFrame(size.width.toFloat(), size.height.toFloat(), with(LocalDensity.current) { reserveEnd.toPx() }, scene.width.toFloat(), scene.height.toFloat(), viewZoom, viewPan)
-    val divisor = maxOf(state.settings.previewQuality.divisor, if (state.fastTrackPreview) 2 else 1)
+    val divisor = state.settings.previewQuality.divisor
     val quality = 1f / divisor
     val selection = if (MultiSelect.ids.isNotEmpty()) MultiSelect.ids.toList() else listOfNotNull(state.selectedId)
     val refPx = if (LocalWide.current) LocalDensity.current.density * PhoneWidth.value / 1080f else 0f
@@ -215,8 +208,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var quad by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var plane by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var world by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
-    var locationProjection by remember { mutableStateOf<PivotProjection?>(null) }
-    var moveAxis by remember { mutableStateOf<Int?>(null) }
     var pivotProjection by remember { mutableStateOf<PivotProjection?>(null) }
     var pivotSnaps by remember { mutableStateOf(emptySet<Int>()) }
     var quadFor by remember { mutableStateOf<Any?>(null) }
@@ -229,7 +220,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             plane = null
             world = null
             pivotProjection = null
-            locationProjection = null
         }
         if (cropping && shownChange == null) return@LaunchedEffect
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
@@ -239,7 +229,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             plane = matrices?.copyOfRange(9, 18)
             world = matrices?.copyOfRange(0, 9)
             pivotProjection = if (quad == null) null else matrices?.let { PivotProjection.from(it) }
-            locationProjection = if (quad == null) null else matrices?.let { PivotProjection.location(it) }
         }
     }
 
@@ -398,17 +387,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                         }
                     } else null
                     val pivotGrab = pivotDrag?.hit(down.position)
-                    val axisControl = startLayer?.takeIf { state.showsLocationAxes() }?.let { layer ->
-                        locationProjection?.let { projection ->
-                            val axes = PivotDrag(projection, layer.location, null, currentScale, currentOffset, true, density)
-                            (0..2).mapNotNull { axis -> axes.handle(axis)?.let { axis to (it - down.position).getDistance() } }
-                                .minByOrNull { it.second }?.takeIf { it.second <= 22.dp.toPx() }
-                                ?.let { Triple(layer.id, axes, it.first) }
-                        }
-                    }
-                    val moveTime = state.sampleMs
-                    var axisTravel = Offset.Zero
-                    var axisClock = down.uptimeMillis
                     val pointGrab = if (gradientMode) -1 else points?.points?.indices?.mapNotNull { i -> onScreen(points.points[i])?.let { i to (it - down.position).getDistance() } }
                         ?.filter { it.second < 24.dp.toPx() }?.minByOrNull { it.second }?.first ?: -1
                     val grabOffset = if (pointGrab >= 0) (onScreen(points!!.points[pointGrab]) ?: down.position) - down.position else Offset.Zero
@@ -470,24 +448,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     state.edit(MULTI_KEY) { multiFrom.movedTogether(multi, ms, 0f, 0f, multiZoom, multiShift.x, multiShift.y) }
                                 }
                             }
-                        } else if (moved && axisControl != null) {
-                            val (id, movement, axisGrab) = axisControl
-                            val track = locationTimelineTrack(axisGrab)
-                            moveAxis = axisGrab
-                            state.fastTrackPreview = true
-                            if (fingers == 1) {
-                                val change = event.changes.first()
-                                val step = pan + held
-                                held = Offset.Zero
-                                val elapsed = (change.uptimeMillis - axisClock).coerceAtLeast(8)
-                                axisClock = change.uptimeMillis
-                                val gain = 1 + 3 * (step.getDistance() / (elapsed * density)).coerceIn(0f, 1f)
-                                axisTravel += step * gain
-                                movement.move(axisGrab, axisTravel)?.let { (values, _) ->
-                                    state.editTimelineTrack(id, moveTime, AXIS_GESTURE) { track.change(it, values[axisGrab]) }
-                                }
-                            }
-                            event.changes.forEach { it.consume() }
                         } else if (moved && pivotGrab != null) {
                             if (fingers == 1) {
                                 pivotDrag.move(pivotGrab, position - down.position)?.let { (value, snaps) ->
@@ -625,16 +585,15 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val tapped = if (!moved && pointGrab < 0 && fingers == 1 && points?.tap != null && startQuad != null) {
                         inLayer(down.position)?.takeIf { v -> points.source(v).let(::onScreen)?.let { inside(startQuad, it) } == true }
                     } else null
-                    if (axisControl != null) { moveAxis = null; state.fastTrackPreview = false }
                     if (pivotGrab != null) pivotSnaps = emptySet()
                     if (cancelled) {
                         if (moved) {
-                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", PIVOT_DRAG, AXIS_GESTURE, MULTI_KEY).forEach { state.cancelGesture(it) }
+                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", PIVOT_DRAG, MULTI_KEY).forEach { state.cancelGesture(it) }
                         }
                         state.endGesture()
                     } else if (moved) {
                         state.endGesture()
-                    } else if (pointGrab >= 0 || pivotGrab != null || axisControl != null) {
+                    } else if (pointGrab >= 0 || pivotGrab != null) {
                         state.endGesture()
                     } else if (tapped != null) {
                         points?.tap?.invoke(tapped)
@@ -685,11 +644,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                 val at = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
                 pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.uses3D, pivotSnaps) }
             }
-        }
-        if (state.showsLocationAxes()) {
-            val layer = state.selected
-            val projection = locationProjection
-            if (layer != null && projection != null) MoveAxisGizmo(projection, layer.location, scale, Offset(dx, dy), moveAxis)
         }
         if (editingText) Canvas(Modifier.fillMaxSize()) {
             val q = frame ?: return@Canvas
@@ -886,4 +840,4 @@ private fun LayerPointsOverlay(points: LayerPoints, world: FloatArray, scale: Fl
 }
 
 private fun app.absentmotion.model.XmlNode.hasEffect(ids: Set<String>): Boolean =
-    this["layerMotionBlur"] == "true" || (name == "effect" && this["id"] in ids && this["hidden"] != "true") || children.any { it.hasEffect(ids) }
+    (name == "effect" && this["id"] in ids && this["hidden"] != "true") || children.any { it.hasEffect(ids) }

@@ -2765,18 +2765,4 @@
     <string name="structure_group_space">Group dimension</string>
     <string name="structure_group_keep_3d">Keep 3D</string>
     <string name="structure_group_flatten_2d">Flatten to 2D</string>
-    <string name="timeline_tracks_expand">Expand layer properties</string>
-    <string name="timeline_tracks_collapse">Collapse layer properties</string>
-    <string name="timeline_tracks_expand_all">Expand all</string>
-    <string name="timeline_tracks_collapse_all">Collapse all</string>
-    <string name="timeline_tracks_animated">Animated only</string>
-    <string name="timeline_tracks_animate">Animate property</string>
-    <string name="timeline_tracks_remove_keys">Remove all keys from this property?</string>
-    <string name="timeline_tracks_increase">Increase value</string>
-    <string name="timeline_tracks_decrease">Decrease value</string>
-    <string name="timeline_tracks_shutter">Shutter</string>
-    <string name="timeline_tracks_shutter_angle">Angle</string>
-    <string name="timeline_tracks_shutter_phase">Phase</string>
-    <string name="timeline_tracks_shutter_preview">Preview samples</string>
-    <string name="timeline_tracks_shutter_export">Export samples</string>
 </resources>

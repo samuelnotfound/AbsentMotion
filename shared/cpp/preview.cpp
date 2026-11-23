@@ -232,7 +232,6 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
     const PreviewOptions& view, bool camera, EditorCamera editor, const MediaPictures& pictures, const LayerEffects& effects) {
     SetCameraView(camera);
     SetEditorCamera(editor);
-    SetLayerShutterPreview(true);
     Scene soloed;
     const Scene* shown = &scene;
     if (view.solo != 0 && !view.ids.empty()) {
@@ -347,6 +346,5 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
             if (handles != -3 && (handles < 0 || handles >= 8)) drawAnchor(*selected);
         }
         DrawSnapGuides(canvas, canvas->getBaseLayerSize(), view.guides, scale, dx, dy, px);
-    SetLayerShutterPreview(false);
 }
 }

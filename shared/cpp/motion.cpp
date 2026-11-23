@@ -611,19 +611,7 @@ bool EchoOf(const Layer& l, double timeMs, Echo* echo) {
     return false;
 }
 
-static thread_local bool gLayerShutterPreview = false;
-
-void SetLayerShutterPreview(bool preview) { gLayerShutterPreview = preview; }
-
-bool ShutterBlurOf(const Layer& l, double timeMs, ShutterBlur* blur, const Scene* scene) {
-    if (l.layerMotionBlur) {
-        blur->layerSetting = true;
-        blur->angle = scene ? scene->layerShutterAngle : 180;
-        blur->phase = scene ? scene->layerShutterPhase : -90;
-        blur->samples = gLayerShutterPreview ? (scene ? scene->layerShutterPreview : 8) : (scene ? scene->layerShutterExport : 24);
-        if (gLayerShutterPreview && gFastShutter) blur->samples = std::min(blur->samples, 4);
-        return blur->angle > 0;
-    }
+bool ShutterBlurOf(const Layer& l, double timeMs, ShutterBlur* blur) {
     for (const LayerEffect& e : l.effects) {
         if (e.hidden || (e.id != "absent.shutterblur" && e.id != "absent.motionblur")) continue;
         const float t = l.localTime(timeMs);
