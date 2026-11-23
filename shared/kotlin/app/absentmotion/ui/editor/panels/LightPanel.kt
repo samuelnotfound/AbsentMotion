@@ -38,7 +38,8 @@ private val ColorRef = PropRef.shape("color")
 
 @Composable
 internal fun LightPanel(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
-    var active by remember { mutableStateOf("intensity") }
+    val requested = state.inlineProperty?.takeIf { it.kind == PropRef.Kind.Property }?.name
+    var active by remember(requested) { mutableStateOf(requested ?: "intensity") }
     val type = layer.node["type"] ?: "directional"
     val colour = parseColor(layer.propText("color")) ?: 0xffffffff.toInt()
     SideEffect {

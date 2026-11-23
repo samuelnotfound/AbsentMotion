@@ -93,12 +93,15 @@ private fun Layer.withBlock(name: String, on: Boolean): Layer =
 
 @Composable
 internal fun CameraPanel(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
-    var tab by remember { mutableIntStateOf(0) }
-    var active by remember { mutableIntStateOf(0) }
+    val requested = state.inlineProperty
+    val tabs = listOf(listOf(Angle, Zoom), listOf(FocusDistance, DepthOfField, BlurStrength), listOf(FogNear, FogFar))
+    val initialTab = tabs.indexOfFirst { rows -> rows.any { it.ref == requested } }.coerceAtLeast(0)
+    var tab by remember(requested) { mutableIntStateOf(initialTab) }
+    var active by remember(requested) { mutableIntStateOf(tabs[initialTab].indexOfFirst { it.ref == requested }.coerceAtLeast(0)) }
     val size = max(state.scene.width, state.scene.height)
     val perspective = layer.node["type"] != "orthographic"
 
-    val rows = when (tab) { 0 -> listOf(Angle, Zoom); 1 -> listOf(FocusDistance, DepthOfField, BlurStrength); else -> listOf(FogNear, FogFar) }
+    val rows = tabs[tab]
     val target = rows.getOrNull(active.coerceAtMost(rows.lastIndex))
     SideEffect { state.keyTarget = target?.let { KeyTarget(it.ref, formatNumber(it.default)) } }
 

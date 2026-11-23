@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.audio.GainRef
+import app.absentmotion.editor.stepBack
 import app.absentmotion.audio.MAX_GAIN
 import app.absentmotion.audio.audioEffects
 import app.absentmotion.audio.gain
@@ -87,7 +88,8 @@ internal fun VolumePanel(state: EditorState, modifier: Modifier = Modifier) {
 @Composable
 private fun VolumeMain(state: EditorState, layer: Layer, modifier: Modifier, openEffects: () -> Unit) {
     SideEffect { state.keyTarget = KeyTarget(GainRef, "1.000000") }
-    BackHandler { if (state.easingOpen) state.easingOpen = false else state.volumeOpen = false }
+    val close: () -> Unit = { if (state.inlineProperty != null) state.stepBack() else state.volumeOpen = false }
+    BackHandler { if (state.easingOpen) state.easingOpen = false else close() }
     if (state.easingOpen) {
         EasingPanel(state, modifier)
         return
@@ -100,7 +102,7 @@ private fun VolumeMain(state: EditorState, layer: Layer, modifier: Modifier, ope
             Box(Modifier.weight(1f).fillMaxHeight().clickable(onClick = openEffects).padding(start = 14.dp), Alignment.CenterStart) {
                 Text(if (count == 0) stringResource(R.string.volume_audio_effects) else stringResource(R.string.volume_audio_effects_count, count.toString()), color = Am.OnDark, fontSize = 14.sp, maxLines = 1)
             }
-            Box(Modifier.width(183.px).fillMaxHeight().clickable { state.volumeOpen = false }, Alignment.Center) {
+            Box(Modifier.width(183.px).fillMaxHeight().clickable(onClick = close), Alignment.Center) {
                 DeskTip(volumeLabel) { Icon(AudioIcons.Speaker, volumeLabel, Modifier.size(32.dp), tint = VolumeGreen) }
                 HoldName(volumeLabel)
                 Canvas(Modifier.align(Alignment.BottomStart).padding(start = 14.px, bottom = 14.px).size(4.dp)) {

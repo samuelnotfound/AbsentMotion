@@ -73,9 +73,13 @@ fun EditorState.stepBack(): Boolean {
         drawing is PointMode -> leaveDrawing()
         MultiSelect.active -> MultiSelect.clear()
         selectedId == null -> if (inGroup) exitGroup() else return false
-        easingOpen -> {
-            easingOpen = false
-            if (inlinePanelHidden) keyTarget = null
+        easingOpen -> easingOpen = false
+        inlineProperty != null -> {
+            inlineProperty = null
+            panel = EditorPanel.Tools
+            effectIndex = -1
+            volumeOpen = false
+            keyTarget = null
         }
         panel == EditorPanel.Effects && effectIndex >= 0 -> effectIndex = -1
         panel != EditorPanel.Tools -> panel = EditorPanel.Tools
@@ -239,26 +243,6 @@ fun EditorState.toggleKeyframe() {
         if (target.ref == SpeedRef) present.withSpeedKeyframeToggled(sampleMs, scene.fps)
         else present.withKeyframeToggled(target.ref, target.default).let { if (target.ref == FrameRef) it.withFrameHold() else it }
     }
-}
-
-internal fun EditorState.withInlineGraph(id: Long, ref: PropRef, frames: List<Int>) {
-    playing = false
-    selectedId = id
-    inlinePanelHidden = true
-    panel = EditorPanel.Tools
-    keyTarget = KeyTarget(ref, "")
-    val previous = frame
-    if (easing == null) {
-        frames.sorted().zipWithNext()
-            .filter { (start, end) -> end - start > 1 }
-            .map { (start, end) -> start + (end - start) / 2 }
-            .minByOrNull { kotlin.math.abs(it - previous) }?.let { frame = it }
-    }
-    if (easing == null) {
-        if (frame != previous) frame = previous
-        keyTarget = null
-        hintEasing(frames.size)
-    } else easingOpen = true
 }
 
 val EditorState.easing: Easing? get() = keyTarget?.let { keyLayer?.easing(it.ref) }

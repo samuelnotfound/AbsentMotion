@@ -127,6 +127,7 @@ import app.absentmotion.ui.editor.panels.dimmed
 import app.absentmotion.ui.editor.panels.formatPlain
 import app.absentmotion.ui.editor.panels.px
 import app.absentmotion.ui.editor.panels.turnFor
+import app.absentmotion.ui.editor.panels.Turn
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.animatedColor
 import app.absentmotion.ui.theme.Presence
@@ -456,7 +457,7 @@ private fun ToolButton(tool: Tool, modifier: Modifier, enabled: Boolean = true, 
 fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val selected = state.selected ?: return
     val panel = state.panel
-    app.absentmotion.ui.editor.panels.BorderShadowLifetime(state, selected.id, panel)
+    app.absentmotion.ui.editor.panels.BorderShadowLifetime(state, selected.id, panel, state.inlineProperty)
     val layer = selected.copy(displayNumbers = linkedNumbers(state, selected, listOf(PropRef.Location, PropRef.Scale, PropRef.Rotation, PropRef.Pivot, PropRef.Opacity, PropRef.Tilt, PropRef.Skew)))
     if (panel == EditorPanel.Effects) {
         key(selected.id) { app.absentmotion.ui.editor.panels.EffectsPanel(state, modifier) }
@@ -468,18 +469,35 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     }
     val move = panel == EditorPanel.MoveTransform
     val desk = deskLayout
-    var tab by remember(selected.kind) { mutableIntStateOf(0) }
-    var pivotMode by remember(selected.kind) { mutableStateOf(false) }
+    val requested = state.inlineProperty
+    val requestedTransform = requested?.copy(component = null)
+    val requestedAxis = requested?.component
+    val openingTab = when (requestedTransform) {
+        PropRef.Rotation, PropRef.Tilt -> ROTATE_TAB
+        PropRef.Scale -> SIZE_TAB
+        PropRef.Skew -> SKEW_TAB
+        else -> 0
+    }
+    var tab by remember(selected.id, requested) { mutableIntStateOf(openingTab) }
+    var pivotMode by remember(selected.id, requested) { mutableStateOf(requestedTransform == PropRef.Pivot) }
     val basic = state.settings.basicTransform
     if (tab !in transformTabs(basic, desk)) SideEffect { tab = 0 }
     val canPivot = selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
-    val turn = if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null
+    val turn = if (move && selected.uses3D) {
+        if (shown == ROTATE_TAB && (requestedTransform == PropRef.Tilt || requestedTransform == PropRef.Rotation)) Turn()
+        else turnFor(selected, catalog, shown, threeD = true)
+    } else null
     var menuOpen by remember { mutableStateOf(false) }
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && !(move && shown == ROTATE_TAB && turn != null)
     val known = if (!named) null else when {
-        move -> if (selected.kind == "camera" && shown == SIZE_TAB) KeyTarget(app.absentmotion.model.CameraFov, "60.000000") else TransformTargets[shown]
+        move -> if (selected.kind == "camera" && shown == SIZE_TAB) KeyTarget(app.absentmotion.model.CameraFov, "60.000000") else TransformTargets[shown].let { base ->
+            if (requestedTransform == base.ref && requestedAxis != null) {
+                val axis = state.inlineTransformAxis
+                KeyTarget(base.ref.copy(component = axis), base.default.split(',').getOrElse(axis) { "0" })
+            } else base
+        }
         panel == EditorPanel.ColorFill && layer.fillType == "color" -> KeyTarget(PropRef.FillColor, formatColor(layer.fillColor))
         panel == EditorPanel.BorderShadow -> borderShadowTarget(layer)
         panel == EditorPanel.Blending -> KeyTarget(OpacityRef, "1.000000")
@@ -499,7 +517,9 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
             FrameButton(PanelIcons.Keyframe, stringResource(R.string.a11y_add_keyframe), cell.dimmed(), enabled = false)
             FrameButton(PanelIcons.Easing, stringResource(R.string.a11y_easing), cell.dimmed(), enabled = false)
         } else {
-            val linked = layer.element(target.ref)?.children?.any { it.name == "valueLink" } == true
+            val linked = layer.propertyElement(target.ref)?.children?.any {
+                it.name == "valueLink" && (target.ref.component == null || (it["component"]?.toIntOrNull() ?: 0) == target.ref.component)
+            } == true
             val onKeyframe = layer.onKeyframe(target.ref)
             RecordingKeyframeButton(state, cell.tutorialGuard().tutorialTarget("keyframe"), !linked, { state.toggleKeyframe() }) {
                 val description = stringResource(if (onKeyframe) R.string.a11y_remove_keyframe else R.string.a11y_add_keyframe)

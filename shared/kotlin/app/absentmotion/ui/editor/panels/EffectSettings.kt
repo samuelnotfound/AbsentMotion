@@ -8,6 +8,8 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -100,21 +102,29 @@ internal fun EffectSettings(state: EditorState, layer: Layer, instance: XmlNode,
                 current.withEffect(index) { it.withEffectProperty(param.id, param.type, text, current.t, current.snap) }
             }
         }
-        when (param.kind) {
-            "switch" -> Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 8.dp).alpha(if (enabled) 1f else 0.35f), verticalAlignment = Alignment.CenterVertically) {
-                Text(param.label, Modifier.weight(1f), color = Am.OnDark, fontSize = 14.sp)
-                PanelSwitch(raw == "true") { if (enabled) set(it.toString()) }
-            }
-            "color" -> key(layer.id, index, param.id) { EffectColor(state, param, raw, enabled, active == param, { select(param) }, ::set) }
-            "choice" -> if (definition.key == "textblips" && param.id == "voice") BlipVoice(state, param, raw, instance["src"] != null, enabled) { set(it) }
-                else EffectChoice(param, raw, enabled, definition.key) { set(it) }
-            "text" -> if (param.palette) EffectPalette(param, raw, enabled, "${layer.id}:${state.effectIndex}") { set(it) } else EffectText(param, raw, enabled, state::endGesture) { set(it, true) }
-            else -> {
-                val shown = definition.bounded(param, (layer.endTime - layer.startTime) / 1000f) { p ->
-                    (instance.effectProperty(p.id)?.valueAt(layer.t) ?: p.missingDefault).finiteFloat() ?: 0f
+        val requested = state.inlineProperty?.let { it == PropRef.effect(index, param.id) } == true
+        val bringIntoView = remember(param.id) { BringIntoViewRequester() }
+        if (requested) LaunchedEffect(instance["id"], param.id) {
+            withFrameNanos { }
+            bringIntoView.bringIntoView()
+        }
+        Box(Modifier.fillMaxWidth().then(if (requested) Modifier.bringIntoViewRequester(bringIntoView) else Modifier)) {
+            when (param.kind) {
+                "switch" -> Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 8.dp).alpha(if (enabled) 1f else 0.35f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(param.label, Modifier.weight(1f), color = Am.OnDark, fontSize = 14.sp)
+                    PanelSwitch(raw == "true") { if (enabled) set(it.toString()) }
                 }
-                val within = if (shown === param) raw else formatFloats(floatArrayOf((raw.finiteFloat() ?: 0f).coerceIn(shown.min, shown.max)))
-                EffectNumbers(state, shown, within, enabled, active == param, { select(param) }, { text, gesture -> set(text, gesture) })
+                "color" -> key(layer.id, index, param.id) { EffectColor(state, param, raw, enabled, active == param, { select(param) }, ::set) }
+                "choice" -> if (definition.key == "textblips" && param.id == "voice") BlipVoice(state, param, raw, instance["src"] != null, enabled) { set(it) }
+                    else EffectChoice(param, raw, enabled, definition.key) { set(it) }
+                "text" -> if (param.palette) EffectPalette(param, raw, enabled, "${layer.id}:${state.effectIndex}") { set(it) } else EffectText(param, raw, enabled, state::endGesture) { set(it, true) }
+                else -> {
+                    val shown = definition.bounded(param, (layer.endTime - layer.startTime) / 1000f) { p ->
+                        (instance.effectProperty(p.id)?.valueAt(layer.t) ?: p.missingDefault).finiteFloat() ?: 0f
+                    }
+                    val within = if (shown === param) raw else formatFloats(floatArrayOf((raw.finiteFloat() ?: 0f).coerceIn(shown.min, shown.max)))
+                    EffectNumbers(state, shown, within, enabled, active == param, { select(param) }, { text, gesture -> set(text, gesture) })
+                }
             }
         }
     }
