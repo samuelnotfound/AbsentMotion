@@ -1,0 +1,30 @@
+name: Editor desktop compile
+
+on:
+  push:
+    branches:
+      - codex/editor-desktop-check
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Compile the desktop editor and tests
+        shell: pwsh
+        run: |
+          $env:JAVA_HOME = $env:JAVA_HOME_21_X64
+          if ($IsWindows) {
+            ./gradlew.bat -p pc compileKotlin compileTestKotlin --no-daemon
+          } else {
+            ./gradlew -p pc compileKotlin compileTestKotlin --no-daemon
+          }
+          exit $LASTEXITCODE
