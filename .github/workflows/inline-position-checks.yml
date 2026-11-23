@@ -1,0 +1,87 @@
+name: Inline Position checks
+
+on:
+  push:
+    branches:
+      - codex/inline-position-checks
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Compile the desktop editor and tests
+        shell: pwsh
+        run: |
+          $env:JAVA_HOME = $env:JAVA_HOME_21_X64
+          if ($IsWindows) {
+            ./gradlew.bat -p pc compileKotlin compileTestKotlin --no-daemon
+          } else {
+            ./gradlew -p pc compileKotlin compileTestKotlin --no-daemon
+          }
+          exit $LASTEXITCODE
+
+  native-syntax:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Fetch pinned Skia headers
+        shell: bash
+        run: |
+          revision=$(sed -n 's/^COMMIT=//p' tools/build_skia.sh)
+          git init -q third_party/skia
+          git -C third_party/skia fetch --depth=1 https://skia.googlesource.com/skia.git "$revision"
+          git -C third_party/skia checkout --detach FETCH_HEAD
+      - name: Compile the changed common renderer sources
+        shell: bash
+        run: |
+          clang++ -std=c++20 -fno-rtti -fsyntax-only -Ithird_party/skia -Ishared/cpp \
+            shared/cpp/camera.cpp shared/cpp/model.cpp shared/cpp/styles.cpp shared/cpp/preview.cpp
+
+  android-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: debian:trixie
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_NDK: /opt/android-sdk/ndk/30.0.16248370
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates curl unzip xz-utils bzip2 python3 build-essential clang lld ninja-build zstd openjdk-21-jdk-headless
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+      - name: Check out dependencies
+        run: |
+          for path in "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/third_party/FFamp" "$GITHUB_WORKSPACE/third_party/ncnn" "$GITHUB_WORKSPACE/third_party/whisper.cpp"; do
+            git config --global --add safe.directory "$path"
+          done
+          git config -f .gitmodules submodule.third_party/FFamp.url https://github.com/Comett1225/FFamp.git
+          git submodule update --init --depth=1 --recursive
+      - name: Install the Android SDK
+        run: |
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          echo '2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258  /tmp/cmdline-tools.zip' | sha256sum -c -
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
+          mv /tmp/cmdline-tools/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "cmake;3.31.6" "ndk;30.0.16248370"
+      - name: Prepare the source as F-Droid does
+        run: |
+          rm -rf third_party/whisper.cpp/models third_party/whisper.cpp/examples third_party/whisper.cpp/bindings third_party/ncnn/examples third_party/ncnn/benchmark third_party/ncnn/python third_party/ncnn/images
+          echo 'org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64' >> gradle.properties
+      - name: Check trackpad snapping on Android
+        run: ./gradlew :app:testFossDebugUnitTest --tests app.absentmotion.ui.editor.TrackpadAlignmentTest --no-daemon
