@@ -15,7 +15,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Changed
 
-- **Move & Transform** shows 3D position and rotation in Z, X, Y order. Switch between rulers and the classic move pad or rotation dial. Hold the Move tab to open Pivot.
+- **Move & Transform** shows 3D position and rotation in Z, X, Y order. Switch between rulers and the classic move pad or rotation dial. Double-tap the Move tab to open Pivot.
 - **Layer tools** show 3D as text, and the timeline thumbnail toggles 3D with a cube and check. Volume and mute are beside the trim tools.
 - **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk.
 - **Selection** outlines show the projected bounds of every selected layer.
