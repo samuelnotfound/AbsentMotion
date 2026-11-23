@@ -119,7 +119,7 @@ private val TileShape = RoundedCornerShape(6.dp)
 @Composable
 internal fun TransitionButton(state: EditorState, modifier: Modifier, compact: Boolean = false, fromEnd: Boolean = false) {
     var open by remember { mutableStateOf<Pair<Long, Long>?>(null) }
-    val cut = if (state.playing || state.transitionButtonDismissed || state.selectedId != null || state.addOpen || MultiSelect.active) null else state.scene.cutAt(state.timeMs)
+    val cut = if (state.playing || state.transitionButtonDismissed || state.showsLayerInspector || state.addOpen || MultiSelect.active) null else state.scene.cutAt(state.timeMs)
     if (cut != null) {
         var drag by remember { mutableFloatStateOf(0f) }
         val hide = stringResource(R.string.transition_hide)

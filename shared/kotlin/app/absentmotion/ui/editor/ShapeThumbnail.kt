@@ -33,6 +33,7 @@ fun ShapeThumbnail(def: ShapeDef, engine: EngineThread, modifier: Modifier = Mod
 @Composable
 fun LayerThumbnail(layer: Layer, engine: EngineThread, modifier: Modifier = Modifier) {
     if (layer.mediaFill?.video == true) { VideoLayerThumbnail(layer, modifier); return }
+    if (layer.kind == "nullobj") { androidx.compose.material3.Icon(ChromeIcons.NullObject, layer.label, modifier, tint = Am.Inactive); return }
     if (layer.kind == "audio") { androidx.compose.material3.Icon(AudioIcons.Note, layer.label, modifier, tint = Am.OnDark.copy(alpha = 0.8f)); return }
     if (layer.kind == "model") { androidx.compose.material3.Icon(PanelIcons.TabTilt, layer.label, modifier, tint = Am.OnDark.copy(alpha = 0.8f)); return }
     if (layer.kind == "camera") { androidx.compose.material3.Icon(PanelIcons.Camera, layer.label, modifier, tint = Am.OnDark.copy(alpha = 0.8f)); return }

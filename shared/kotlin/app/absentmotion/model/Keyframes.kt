@@ -13,7 +13,7 @@ data class Keyframe(val t: Float, val v: String, val e: String? = null, val gen:
 
 private val KnownKeyAttributes = setOf("t", "v", "e", "gen")
 
-data class PropRef(val kind: Kind, val name: String, val effectIndex: Int = -1) {
+data class PropRef(val kind: Kind, val name: String, val effectIndex: Int = -1, val component: Int? = null) {
     enum class Kind { Transform, Child, Property, Effect }
 
     companion object {
@@ -83,7 +83,64 @@ fun XmlNode.withKeyframes(keys: List<Keyframe>): XmlNode = copy(
     },
 )
 
+internal fun XmlNode.axis(index: Int): XmlNode? = children.firstOrNull {
+    it.name == "axis" && it["index"]?.toIntOrNull() == index
+}
+
+internal fun XmlNode.axisTrack(index: Int, defaults: String): XmlNode {
+    axis(index)?.let { return it }
+    fun part(value: String?, fallback: String = "0"): String = value?.split(',')?.getOrNull(index) ?: fallback
+    val initial = part(this["value"], part(defaults))
+    val track = XmlNode("axis", mapOf("index" to index.toString(), "value" to initial))
+    return if (isKeyframed) track.withKeyframes(keyframes.map { it.copy(v = part(it.v, initial)) }) else track
+}
+
+internal fun XmlNode.withAxis(index: Int, track: XmlNode): XmlNode =
+    copy(children = children.filterNot { it.name == "axis" && it["index"]?.toIntOrNull() == index } +
+        track.copy(name = "axis").with("index", index.toString()))
+
+internal fun PropRef.axisDefaults(): String = when (copy(component = null)) {
+    PropRef.Scale -> "1,1"
+    else -> "0,0,0"
+}
+
+private fun XmlNode.axesOrNull(): List<XmlNode>? {
+    if (children.none { it.name == "axis" }) return null
+    val width = (this["value"] ?: keyframes.firstOrNull()?.v)?.split(',')?.size ?: 0
+    val last = children.filter { it.name == "axis" }.maxOfOrNull { it["index"]?.toIntOrNull() ?: 0 } ?: 0
+    return (0 until maxOf(width, last + 1).coerceAtMost(4)).map { axisTrack(it, this["value"] ?: keyframes.firstOrNull()?.v ?: "0,0,0") }
+}
+
+internal fun XmlNode.hasAxisKeys(): Boolean = axesOrNull()?.any(XmlNode::isKeyframed) == true
+
+internal fun XmlNode.withVectorKeyToggled(t: Float, snap: ClosedFloatingPointRange<Float>): XmlNode {
+    val axes = axesOrNull() ?: return withKeyframeToggled(t, snap)
+    val removing = axes.any { it.keyframeAt(snap) >= 0 }
+    return axes.foldIndexed(this) { index, current, item ->
+        val hasKey = item.keyframeAt(snap) >= 0
+        if (hasKey == removing && index !in linkedComponents) current.withAxis(index, item.withKeyframeToggled(t, snap)) else current
+    }
+}
+
+internal fun XmlNode.hasVectorKeyAt(snap: ClosedFloatingPointRange<Float>): Boolean =
+    axesOrNull()?.any { it.keyframeAt(snap) >= 0 } ?: (keyframeAt(snap) >= 0)
+
+
 fun XmlNode.valueAt(t: Float): String? {
+    val base = legacyValueAt(t)
+    val axes = children.filter { it.name == "axis" }
+    if (axes.isEmpty()) return base
+    val values = (base?.split(',') ?: emptyList()).toMutableList()
+    for (axis in axes) {
+        val i = axis["index"]?.toIntOrNull()?.takeIf { it in 0..3 } ?: continue
+        val value = axis.legacyValueAt(t) ?: continue
+        while (values.size <= i) values += "0"
+        values[i] = value
+    }
+    return values.joinToString(",")
+}
+
+private fun XmlNode.legacyValueAt(t: Float): String? {
     val keys = keyframes
     if (keys.isEmpty()) return this["value"]
     if (t <= keys.first().t) return keys.first().v
@@ -108,6 +165,16 @@ fun XmlNode.withValueAt(t: Float, value: String, snap: ClosedFloatingPointRange<
         val kept = (valueAt(t) ?: this["value"])?.split(",") ?: return this
         return copy(children = children.filterNot { it.name == "valueLink" }).withValueAt(t, parts.indices.joinToString(",") { i -> if (i in linked) kept.getOrElse(i) { parts[i] } else parts[i] }, snap)
             .let { it.copy(children = it.children + children.filter { c -> c.name == "valueLink" }) }
+    }
+    if (children.any { it.name == "axis" }) {
+        val values = value.split(',')
+        val before = valueAt(t)?.split(',').orEmpty()
+        var current = this
+        for (i in values.indices) {
+            if (before.getOrNull(i)?.toFloatOrNull() == values[i].toFloatOrNull()) continue
+            current = current.withAxis(i, axisTrack(i, value).withValueAt(t, values[i], snap))
+        }
+        return current
     }
     if (!isKeyframed) return with("value", value)
     val keys = keyframes

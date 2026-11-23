@@ -52,7 +52,9 @@ struct Anim {
     int linkStart = 0, linkEnd = 0, linkRole = 0;
     int64_t linkOwner = 0;
 
-    bool empty() const { return value.empty() && keys.empty() && links.empty(); }
+    std::vector<Anim> axes;
+
+    bool empty() const { return value.empty() && keys.empty() && links.empty() && axes.empty(); }
     float get(int i, float t, float fallback) const;
     bool steady(float from, float to) const;
 };
@@ -332,7 +334,8 @@ void SplitSeen(std::vector<Layer>* seen, double timeMs);
 float DepthPerPixel(const Layer& layer, double timeMs);
 SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs);
 SkM44 LayerPivotMatrix(const Scene& scene, const Layer& layer, double timeMs);
-void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]);
+SkM44 LayerLocationMatrix(const Scene& scene, const Layer& layer, double timeMs);
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[42]);
 int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks);
 SkRect SelectionBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);
 SkRect DrawnBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);

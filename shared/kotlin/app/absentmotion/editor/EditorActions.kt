@@ -73,7 +73,10 @@ fun EditorState.stepBack(): Boolean {
         drawing is PointMode -> leaveDrawing()
         MultiSelect.active -> MultiSelect.clear()
         selectedId == null -> if (inGroup) exitGroup() else return false
-        easingOpen -> easingOpen = false
+        easingOpen -> {
+            easingOpen = false
+            if (inlinePanelHidden) keyTarget = null
+        }
         panel == EditorPanel.Effects && effectIndex >= 0 -> effectIndex = -1
         panel != EditorPanel.Tools -> panel = EditorPanel.Tools
         else -> selectedId = null
@@ -184,10 +187,18 @@ internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List
 private fun EditorState.stops(): List<Int> = scene.navigationStops(selected, keyScope)
 
 fun EditorState.skipBack() {
+    inlineKeyframes?.invoke()?.takeIf { it.isNotEmpty() }?.let { keys ->
+        keys.lastOrNull { it < frame }?.let { frame = it }
+        return
+    }
     frame = stops().lastOrNull { it < frame } ?: 0
 }
 
 fun EditorState.skipForward() {
+    inlineKeyframes?.invoke()?.takeIf { it.isNotEmpty() }?.let { keys ->
+        keys.firstOrNull { it > frame }?.let { frame = it }
+        return
+    }
     val next = stops().firstOrNull { it > frame }
     if (next == null || next >= scene.lastFrame) parkAtEnd() else frame = next
 }
@@ -199,7 +210,7 @@ fun EditorState.resetTransform(tabs: List<Int>) {
 
 internal fun Layer.resetValue(ref: PropRef, value: String): Layer {
     val element = element(ref) ?: XmlNode(ref.name)
-    return withElement(ref, element.copy(children = element.children.filterNot { it.name == "kf" }).with("value", value))
+    return withElement(ref, element.copy(children = element.children.filterNot { it.name == "kf" || it.name == "axis" }).with("value", value))
 }
 
 internal fun Scene.resetTransform(layer: Layer, timeMs: Int, tabs: List<Int>): Layer =
@@ -228,6 +239,26 @@ fun EditorState.toggleKeyframe() {
         if (target.ref == SpeedRef) present.withSpeedKeyframeToggled(sampleMs, scene.fps)
         else present.withKeyframeToggled(target.ref, target.default).let { if (target.ref == FrameRef) it.withFrameHold() else it }
     }
+}
+
+internal fun EditorState.withInlineGraph(id: Long, ref: PropRef, frames: List<Int>) {
+    playing = false
+    selectedId = id
+    inlinePanelHidden = true
+    panel = EditorPanel.Tools
+    keyTarget = KeyTarget(ref, "")
+    val previous = frame
+    if (easing == null) {
+        frames.sorted().zipWithNext()
+            .filter { (start, end) -> end - start > 1 }
+            .map { (start, end) -> start + (end - start) / 2 }
+            .minByOrNull { kotlin.math.abs(it - previous) }?.let { frame = it }
+    }
+    if (easing == null) {
+        if (frame != previous) frame = previous
+        keyTarget = null
+        hintEasing(frames.size)
+    } else easingOpen = true
 }
 
 val EditorState.easing: Easing? get() = keyTarget?.let { keyLayer?.easing(it.ref) }

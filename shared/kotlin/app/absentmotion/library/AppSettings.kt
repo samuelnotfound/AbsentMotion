@@ -39,10 +39,10 @@ class AppSettings(private val context: Context) {
     private var basicTransformState by mutableStateOf(prefs.getBoolean("basicTransform", true))
     private var savedPositionRulers by mutableStateOf(prefs.getBoolean("spatialRulers", false).takeIf { prefs.contains("spatialRulers") })
 
-    fun positionRulers(spatial: Boolean): Boolean = savedPositionRulers ?: spatial
+    fun positionRulers(): Boolean = savedPositionRulers ?: false
 
-    fun switchSpatialControls(spatial: Boolean) {
-        val rulers = !positionRulers(spatial)
+    fun switchSpatialControls() {
+        val rulers = !positionRulers()
         savedPositionRulers = rulers
         prefs.edit().putBoolean("spatialRulers", rulers).apply()
     }
