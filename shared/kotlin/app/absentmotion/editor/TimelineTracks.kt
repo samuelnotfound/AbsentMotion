@@ -27,6 +27,8 @@ internal data class TimelineTrack(
 ) {
     private fun root(layer: Layer): XmlNode = layer.element(ref) ?: XmlNode(ref.name, mapOf("type" to type, "value" to defaults))
     internal fun node(layer: Layer): XmlNode = root(layer).let { node -> component?.let { node.axisTrack(it, defaults) } ?: node }
+    val canScrub: Boolean get() = type != "color" && type != "string"
+    fun rawValue(layer: Layer): String = node(layer).valueAt(layer.t).orEmpty()
     fun keys(layer: Layer): List<Keyframe> = node(layer).keyframes
     fun value(layer: Layer): Float = when (val raw = node(layer).valueAt(layer.t)) {
         "true" -> 1f
@@ -95,7 +97,6 @@ internal fun timelineTrackSections(layer: Layer, catalog: EffectCatalog): List<T
     for ((index, instance) in layer.effects.withIndex()) {
         val definition = instance["id"]?.let(catalog::find) ?: continue
         val tracks = definition.params.flatMap { param ->
-            if (param.kind == "color" || param.kind == "text") return@flatMap emptyList()
             val multiplier = if (param.percent) 100f else 1f
             val unit = if (param.percent) "%" else if (param.kind == "angle") "°" else param.unit
             val discrete = param.kind == "switch" || param.kind == "choice"

@@ -593,6 +593,10 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
             scene.depthOrder = previous && previous->depthOrder;
             scene.pieceOrder = previous && previous->pieceOrder;
             if (previous) {
+                scene.layerShutterAngle = previous->layerShutterAngle;
+                scene.layerShutterPhase = previous->layerShutterPhase;
+                scene.layerShutterPreview = previous->layerShutterPreview;
+                scene.layerShutterExport = previous->layerShutterExport;
                 for (const double beat : previous->beats) {
                     const double inner = NestedTime(group, beat * 1000);
                     if (inner >= 0) scene.beats.push_back(inner / 1000);
@@ -1538,6 +1542,41 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
         return;
     }
     const auto at = [&](double u) { return std::clamp(timeMs + lead - open * (1 - u), (double)l.startTime, (double)l.endTime); };
+    if (shutter.layerSetting && l.kind != "model") {
+        const SkMatrix device = canvas->getTotalMatrix();
+        const SkMatrix reference = SiblingMatrix(siblings, l, timeMs);
+        const SkMatrix from = device * reference;
+        SkMatrix inverse;
+        if (from.invert(&inverse)) {
+            std::vector<SkMatrix> samples;
+            samples.reserve(shutter.samples);
+            for (int i = 0; i < shutter.samples; ++i) {
+                const double when = at((i + 0.5) / shutter.samples);
+                const SkMatrix pose = SiblingMatrix(siblings, l, when);
+                samples.push_back(pose == reference ? SkMatrix::I() : device * pose * inverse);
+            }
+            if (std::all_of(samples.begin(), samples.end(), [](const SkMatrix& m) { return m.isIdentity(); })) {
+                DrawOne(canvas, siblings, l, timeMs, pictures, sample);
+                return;
+            }
+            const SkRect area = SkRect::MakeLTRB(-1e6f, -1e6f, 1e6f, 1e6f);
+            const Recorded body = RecordInDevice(canvas, area, [&](SkCanvas* c) { DrawOne(c, siblings, l, timeMs, pictures, sample); });
+            canvas->saveLayer(SkCanvas::SaveLayerRec(nullptr, &composite, SkCanvas::kF16ColorType));
+            SkPaint add;
+            add.setBlendMode(SkBlendMode::kPlus);
+            add.setAlphaf(1.0f / shutter.samples);
+            for (const SkMatrix& warp : samples) {
+                canvas->saveLayer(nullptr, &add);
+                canvas->resetMatrix();
+                canvas->concat(warp);
+                canvas->drawPicture(body.picture.get());
+                canvas->restore();
+                if (gBreak) (*gBreak)();
+            }
+            canvas->restore();
+            return;
+        }
+    }
     const bool steady = Steady(siblings, l, at(0), at(1));
     int samples = shutter.samples;
     if (shutter.adaptive && !steady) samples = std::clamp((int)std::ceil(Reach(siblings, l, timeMs + lead - open / 2, open) / 2), samples, 64);

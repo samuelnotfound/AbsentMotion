@@ -1,8 +1,11 @@
 package app.absentmotion.ui.editor
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +24,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -166,21 +171,22 @@ private fun TrackCommand(label: String, modifier: Modifier, active: Boolean = fa
 @Composable
 internal fun TimelineLayerControls(state: EditorState, layer: Layer, panel: TimelineTrackPanelState) {
     val opened = layer.id in panel.expanded
+    val turn by animateFloatAsState(if (opened) 90f else 0f, label = "layer-properties")
     val mb = layer.kind !in setOf("audio", "light", "camera", "nullobj")
     Row(Modifier.background(Am.Panel)) {
         LayerSwitch(if (layer.hidden) TimelineIcons.EyeOff else TimelineIcons.Eye, null, stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer), !layer.hidden, !state.lookOnly)
         LayerSwitch(if (layer.locked) TimelineIcons.Lock else if (layer.timingLocked) TimelineIcons.LockTiming else TimelineIcons.LockOpen, null, stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock), layer.node["lock"] != null, !state.lookOnly)
         LayerSwitch(null, "MB", stringResource(R.string.export_motion_blur), layer.timelineMotionBlur, mb && !layer.locked && !state.lookOnly)
         LayerSwitch(null, "3D", stringResource(R.string.three_d_layer), layer.uses3D, layer.canToggle3D && !layer.locked && !state.lookOnly)
-        LayerSwitch(if (opened) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight, null, stringResource(if (opened) R.string.timeline_tracks_collapse else R.string.timeline_tracks_expand), opened, !state.lookOnly)
+        LayerSwitch(ChromeIcons.ChevronRight, null, stringResource(if (opened) R.string.timeline_tracks_collapse else R.string.timeline_tracks_expand), opened, !state.lookOnly, turn)
     }
 }
 
 @Composable
-private fun LayerSwitch(icon: androidx.compose.ui.graphics.vector.ImageVector?, text: String?, label: String, active: Boolean, enabled: Boolean) {
+private fun LayerSwitch(icon: androidx.compose.ui.graphics.vector.ImageVector?, text: String?, label: String, active: Boolean, enabled: Boolean, rotation: Float = 0f) {
     Box(Modifier.size(LayerSwitchSize).semantics { contentDescription = label }, Alignment.Center) {
         val color = if (!enabled) Am.OnDarkDim else if (active) Am.Accent else Am.OnDark
-        if (icon != null) PanelIcon(icon, color, size = 18.dp)
+        if (icon != null) PanelIcon(icon, color, Modifier.graphicsLayer { rotationZ = rotation }, size = 18.dp)
         else if (text != null) Text(text, color = color, fontSize = 12.sp)
     }
 }
@@ -213,10 +219,12 @@ internal fun TrackControls(state: EditorState, layer: Layer, track: TimelineTrac
                 if (keys.isEmpty()) state.editTimelineTrack(layer.id, now, change = track::toggleKey) else confirming = true
             }
             Text(track.label, Modifier.weight(1f), color = Am.OnDark, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(formatFixed(track.value(at), if (track.discrete) 0 else 2) + track.unit, color = Am.OnDarkDim, fontSize = 10.sp, maxLines = 1)
+            val value = if (track.canScrub) formatFixed(track.value(at), if (track.discrete) 0 else 2) + track.unit else track.rawValue(at)
+            Text(value, Modifier.width(65.dp), color = Am.OnDarkDim, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            TrackRing(state, layer.id, now, track, track.value(at), enabled, Modifier.weight(1f))
+            if (track.canScrub) TrackRing(state, layer.id, now, track, track.value(at), enabled, Modifier.weight(1f))
+            else Box(Modifier.weight(1f))
             val previous = keys.lastOrNull { it < state.frame }
             val next = keys.firstOrNull { it > state.frame }
             TrackButton(ChromeIcons.SkipBack, stringResource(R.string.desk_key_previous_keyframe), previous != null) { previous?.let { state.playing = false; state.frame = it } }
@@ -230,7 +238,7 @@ internal fun TrackControls(state: EditorState, layer: Layer, track: TimelineTrac
 
 @Composable
 private fun TrackButton(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, enabled: Boolean, active: Boolean = false, action: () -> Unit) {
-    Box(Modifier.size(38.dp, 44.dp).semantics { contentDescription = title }.clickable(enabled = enabled, role = Role.Button, onClick = action), Alignment.Center) {
+    Box(Modifier.size(44.dp).semantics { contentDescription = title }.clickable(enabled = enabled, role = Role.Button, onClick = action), Alignment.Center) {
         PanelIcon(icon, if (!enabled) Am.OnDarkDim else if (active) Am.Accent else Am.OnDark, size = 16.dp)
     }
 }
@@ -246,6 +254,9 @@ private fun TrackRing(state: EditorState, id: Long, sampleMs: Int, track: Timeli
     val down = stringResource(R.string.timeline_tracks_decrease)
     val tier = listOf(100, 50, 10, 1)
     val green = Color(0xFF63D995)
+    DisposableEffect(id, track) {
+        onDispose { if (fine != null) { state.endGesture(); state.fastTrackPreview = false } }
+    }
     Box(modifier.height(32.dp).padding(horizontal = 2.dp).clip(RoundedCornerShape(5.dp)).background(Am.Well)
         .semantics {
             contentDescription = track.label
@@ -321,54 +332,48 @@ internal fun TrackDiamonds(state: EditorState, layer: Layer, track: TimelineTrac
     val scene = state.scene
     val enabled = !state.lookOnly && !layer.locked && !layer.timingLocked && !track.linked(layer)
     val gestures = if (enabled) Modifier.pointerInput(layer.id, track) {
-        fun hit(pos: Offset) = track.keyFrames(state.scene, latched).minByOrNull { abs(x(it) - pos.x) }
-            ?.takeIf { abs(x(it) - pos.x) <= 22.dp.toPx() && abs(pos.y - size.height / 2) <= 22.dp.toPx() }
-        detectTapGestures(onLongPress = { pos -> hit(pos)?.let { frame ->
-            panel.extending = true
-            panel.selectedKeys = panel.selectedKeys + TrackKey(layer.id, track, frame)
-        } }, onTap = { pos -> hit(pos)?.let { frame ->
-            val key = TrackKey(layer.id, track, frame)
-            panel.select(key)
-            state.playing = false
-            state.frame = frame
-        } })
-    }.pointerInput(layer.id, track) {
-        var base = state.scene
-        var start = 0
-        var origin = 0f
-        var marked = emptySet<TrackKey>()
-        var delta = 0
-        var snap: Int? = null
-        val undo = Any()
-        val done = {
-            if (marked.isNotEmpty()) panel.selectedKeys = marked.map { it.copy(frame = it.frame + delta) }.toSet()
-            state.endGesture()
-            marked = emptySet()
-        }
-        detectDragGestures(onDragStart = { pos ->
-            val key = track.keyFrames(state.scene, latched).minByOrNull { abs(x(it) - pos.x) }
-                ?.takeIf { abs(x(it) - pos.x) <= 22.dp.toPx() && abs(pos.y - size.height / 2) <= 22.dp.toPx() }
-            if (key != null) {
-                state.playing = false
-                base = state.scene
-                start = key
-                origin = pos.x
-                val picked = TrackKey(layer.id, track, key)
-                marked = panel.selectedKeys.takeIf { picked in it } ?: setOf(picked)
-                delta = 0
-                snap = null
-            }
-        }, onDragEnd = done, onDragCancel = done) { change, _ ->
-            if (marked.isNotEmpty()) {
-                change.consume()
-                val desired = x(start) + change.position.x - origin
-                val candidate = (nearby() + state.frame).minByOrNull { abs(x(it) - desired) }?.takeIf { abs(x(it) - desired) <= 8.dp.toPx() }
-                if (candidate != null && candidate != snap) tick(HapticFeedbackType.SegmentTick)
-                snap = candidate
-                val (next, move) = base.withTimelineKeyDelta(marked, (candidate ?: at(desired)) - start)
-                delta = move
-                state.edit(undo) { next }
-                panel.selectedKeys = marked.map { it.copy(frame = it.frame + delta) }.toSet()
+        awaitEachGesture {
+            val down = awaitFirstDown()
+            if (abs(down.position.y - size.height / 2) > 22.dp.toPx()) return@awaitEachGesture
+            val start = track.keyFrames(state.scene, latched).minByOrNull { abs(x(it) - down.position.x) }
+                ?.takeIf { abs(x(it) - down.position.x) <= 22.dp.toPx() } ?: return@awaitEachGesture
+            down.consume()
+            val picked = TrackKey(layer.id, track, start)
+            val marked = panel.selectedKeys.takeIf { picked in it } ?: setOf(picked)
+            val base = state.scene
+            val stops = nearby() + state.frame - marked.map { it.frame }.toSet()
+            val undo = Any()
+            var snap: Int? = null
+            var dragged = false
+            var releasedAt = down.uptimeMillis
+            try {
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    change.consume()
+                    releasedAt = change.uptimeMillis
+                    if (!change.pressed) break
+                    val travel = change.position.x - down.position.x
+                    if (!dragged && abs(travel) <= viewConfiguration.touchSlop) continue
+                    if (!dragged) { state.playing = false; dragged = true }
+                    val want = x(start) + travel
+                    val next = stops.minByOrNull { abs(x(it) - want) }?.takeIf { abs(x(it) - want) <= 8.dp.toPx() }
+                    if (next != null && next != snap) tick(HapticFeedbackType.SegmentTick)
+                    snap = next
+                    val (scene, move) = base.withTimelineKeyDelta(marked, (next ?: at(want)) - start)
+                    state.edit(undo) { scene }
+                    panel.selectedKeys = marked.map { it.copy(frame = it.frame + move) }.toSet()
+                } while (true)
+                if (!dragged) {
+                    if (releasedAt - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis) {
+                        panel.extending = true
+                        panel.selectedKeys = panel.selectedKeys + picked
+                    } else panel.select(picked)
+                    state.playing = false
+                    state.frame = start
+                }
+            } finally {
+                if (dragged) state.endGesture()
             }
         }
     } else Modifier

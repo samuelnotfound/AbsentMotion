@@ -10,6 +10,10 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Added
 
+- **Expandable layer tracks**. Use the layer row to show or hide a layer, lock it, toggle Motion Blur or 3D, or open its Transform and Effects tracks. Each numeric track has a ring, keyframe controls and its own diamonds. Position, Scale and Tilt have independent axis keys.
+- **3D move handles**. Drag an axis in the viewer to move a selected 3D layer along that axis.
+- **Layer shutter**. Set the angle, phase and preview and export sample counts for layers with Motion Blur enabled.
+
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
 - **Viewer angles**. Pick a Front, Right, or Top view from the preview controls, or orbit in one of three custom views. Custom angles stay in the editor and leave the project camera and export unchanged.
