@@ -12,15 +12,14 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
-- **Timeline groups**. Open the chevron beside a group to edit child visibility and basic transforms from the timeline.
 - **Viewer angles**. Pick a Front, Right, or Top view from the preview controls, or orbit in one of three custom views. Custom angles stay in the editor and leave the project camera and export unchanged.
 - **3D pivots**. Edit Z, X, and Y in Pivot, or drag the anchor and its axes in the viewer. The pivot snaps to layer edges, the center, and zero depth.
 
 ### Changed
 
-- **Move & Transform** uses the same Z, X, Y field layout for 3D Position and Rotation. Position has the 3D switch and remembers its ruler or move-pad setting. 3D Rotation uses rulers. The transform tabs use icons. Double-tap Move or Pivot to switch between them.
+- **Move & Transform** uses the same Z, X, Y field layout for 3D Position and Rotation. Position and Rotation both have a compact 3D button. Position remembers its ruler or move-pad setting, and 3D Rotation uses rulers. The transform tabs use icons. Double-tap Move or Pivot to switch between them.
 - **Layer tools** show Trim or Extend depending on where the playhead is. Extend and Move to Playhead have distinct icons. Volume and mute are beside the trim tools.
-- **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses a shaded bar with compact handles in the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk.
+- **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses a shaded bar with compact handles in the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk. The layer sidebar uses the original eye, lock and thumbnail layout.
 - **Selection** outlines trace shapes and stay visible during playback. Transform handles still use the projected bounds.
 - **Group layers** use orange bars in the timeline.
 
