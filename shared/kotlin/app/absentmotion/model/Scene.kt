@@ -326,6 +326,14 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun withTransform(name: String, vararg values: Float) = withValue(PropRef(PropRef.Kind.Transform, name), formatFloats(values))
 
+    internal fun withTransformAxes(ref: PropRef, vararg values: Float): Layer {
+        val before = transform(ref.name, *floats(ref.axisDefaults(), FloatArray(0)))
+        return values.indices.fold(this) { layer, index ->
+            if (values[index] == before.getOrElse(index) { 0f }) layer
+            else layer.withValue(ref.copy(component = index), formatFloats(floatArrayOf(values[index])))
+        }
+    }
+
     fun withRotation(degrees: Float) = withTransform("rotation", -degrees)
 
     fun withSkew(x: Float, y: Float) = withTransform("skew", Math.toRadians(x.toDouble()).toFloat(), Math.toRadians(y.toDouble()).toFloat())

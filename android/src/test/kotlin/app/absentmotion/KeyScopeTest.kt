@@ -50,6 +50,15 @@ class KeyScopeTest {
         assertEquals(EditorPanel.EditShape, inlineEditorPanel(shape, PropRef.shape("size")))
     }
 
+    @Test fun editingOneAxisInTheNativePanelDoesNotAddKeysToOtherAxes() {
+        val location = XmlNode("location", children = listOf(kf(10, "20,60,0"), kf(45, "20,80,0")))
+        val original = layer().copy(node = layer().node.withChild("transform", XmlNode("transform", children = listOf(location))))
+        val at = original.at(scene.frameTime(20), scene.fps)
+        val changed = at.withTransformAxes(PropRef.Location, at.location[0], 90f, 0f)
+        assertEquals(listOf(10, 45), changed.keys(PropRef.Location.copy(component = 0)))
+        assertEquals(listOf(10, 20, 45), changed.keys(PropRef.Location.copy(component = 1)))
+    }
+
     @Test fun movingAndTogglingOnePositionAxisPreservesTheOther() {
         val location = XmlNode("location", children = listOf(kf(10, "20,60,0"), kf(45, "45,80,0")))
         val original = layer().copy(node = layer().node.withChild("transform", XmlNode("transform", children = listOf(location))))

@@ -70,6 +70,7 @@ import app.absentmotion.editor.PIVOT_LIMIT
 import app.absentmotion.editor.map
 import app.absentmotion.model.Pt
 import app.absentmotion.model.Layer
+import app.absentmotion.model.PropRef
 import app.absentmotion.model.Scene
 import app.absentmotion.ui.editor.ChromeIcons
 import app.absentmotion.ui.editor.PanelIcons
@@ -110,7 +111,9 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
     if (focus != null) SideEffect { state.inlineTransformAxis = activeAxis }
     val depth = spatial && activeAxis == 2
-    fun colour(which: Int) = if (if (rulers) activeAxis == which else depth == (which == 2)) Am.Accent else Am.OnDark
+    fun Layer.updatePosition(x: Float, y: Float, z: Float): Layer =
+        if (focus == null) withTransform("location", x, y, z) else withTransformAxes(PropRef.Location, x, y, z)
+    fun colour(which: Int) = if (if (rulers || focus != null) activeAxis == which else depth == (which == 2)) Am.Accent else Am.OnDark
     val deep by rememberUpdatedState(depth)
     fun openKeypad(active: Int) {
         activeAxis = active
@@ -118,8 +121,8 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
         val fields = axes.map { KeypadField("XYZ"[it].toString(), at[it]) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
             state.editSelected {
-                if (spatial) it.withTransform("location", v[0], v[1], v[2])
-                else it.withTransform("location", v[0], v[1], it.location[2])
+                if (spatial) it.updatePosition(v[0], v[1], v[2])
+                else it.updatePosition(v[0], v[1], it.location[2])
             }
         }
     }
@@ -159,7 +162,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 change.consume()
                 if (deep) {
                     travel += drag / density * scale
-                    state.editSelected(key = "move-z") { l -> l.withTransform("location", origin[0], origin[1], origin[2] - travel.y) }
+                    state.editSelected(key = "move-z") { l -> l.updatePosition(origin[0], origin[1], origin[2] - travel.y) }
                     return@detectDragGestures
                 }
                 travel += drag / density * scale
@@ -173,7 +176,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 val guides = if (state.playing) emptyList() else axes.first.guidesAt(snapped.x) + axes.second.guidesAt(snapped.y)
                 if (guides.any { it !in state.snapGuides }) tick(HapticFeedbackType.SegmentTick)
                 state.snapGuides = if (state.playing) emptyList() else guides
-                if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.withTransform("location", origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
+                if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.updatePosition(origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
             }
         }),
     ) {
@@ -183,14 +186,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
-                        l.withTransform("location", v[0], v[1], v[2])
+                        l.updatePosition(v[0], v[1], v[2])
                     }
                 },
                 onReset = { which ->
                     state.editSelected { l ->
                         val home = state.scene.centred(l, state.sampleMs).location
                         val v = l.location.copyOf().also { it[which] = home[which] }
-                        l.withTransform("location", v[0], v[1], v[2])
+                        l.updatePosition(v[0], v[1], v[2])
                     }
                 },
             )
@@ -506,11 +509,13 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     var active by remember(layer.id, focus, upright) { mutableIntStateOf(if (upright && focus != null) 1 - focus else focus ?: 0) }
     if (focus != null) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
     val (boxW, boxH) = box ?: (0f to 0f)
+    fun Layer.updateScale(x: Float, y: Float): Layer =
+        if (focus == null) withTransform("scale", x, y) else withTransformAxes(PropRef.Scale, x, y)
 
     fun stretch(factor: Float, isWidth: Boolean, key: Any? = null) = state.editSelected(key) { l ->
         val s = l.scale
         val first = isWidth != upright
-        l.withTransform("scale", if (first || linked) s[0] * factor else s[0], if (!first || linked) s[1] * factor else s[1])
+        l.updateScale(if (first || linked) s[0] * factor else s[0], if (!first || linked) s[1] * factor else s[1])
     }
     val drag = remember { floatArrayOf(1f, 1f, 0f) }
     fun resize(isWidth: Boolean, key: Any) = state.editSelected(key) { l ->
@@ -519,7 +524,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
         val factor = RulerMath.scale(ref, drag[2]) / ref.coerceAtLeast(1e-4f)
         val fromZero = if (ref < 1e-4f) (drag[2] * 0.01f).coerceAtLeast(0f) else null
         val s = l.scale
-        l.withTransform("scale", if (first || linked) fromZero ?: (drag[0] * factor) else s[0], if (!first || linked) fromZero ?: (drag[1] * factor) else s[1])
+        l.updateScale(if (first || linked) fromZero ?: (drag[0] * factor) else s[0], if (!first || linked) fromZero ?: (drag[1] * factor) else s[1])
     }
     val widthLabel = stringResource(R.string.transform_width)
     val heightLabel = stringResource(R.string.transform_height)
@@ -572,7 +577,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
                     onReset = {
                         state.editSelected { l ->
                             val s = l.scale
-                            l.withTransform("scale", if (linked || which == 0) 1f else s[0], if (linked || which == 1) 1f else s[1])
+                            l.updateScale(if (linked || which == 0) 1f else s[0], if (linked || which == 1) 1f else s[1])
                         }
                     },
                 )
@@ -767,7 +772,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         axis = which
         val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
         state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
-            state.editSelected { turn.withValues(it, v.toFloatArray()) }
+            state.editSelected { turn.withValues(it, v.toFloatArray(), independent = focus != null) }
         }
     }
     fun colour(which: Int) = if (if (focus != null) which == axis else turn.linked(which, axis)) Am.Accent else Am.OnDark
@@ -775,11 +780,11 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         state.editSelected(key = "axis-$which") { l ->
             val v = turn.values(l)
             v[which] += amount
-            turn.withValues(l, v)
+            turn.withValues(l, v, independent = focus != null)
         }
     }
     fun reset(which: Int) {
-        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
+        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v, independent = focus != null) } }
     }
     Box(Modifier.fillMaxSize()) {
         TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)

@@ -57,10 +57,10 @@ class RemainingContracts(unittest.TestCase):
 
     def test_border_state_lives_above_the_easing_navigation(self):
         text = kotlin('ui/editor/LayerTools.kt')
-        self.assertIn('BorderShadowLifetime(state, selected.id, panel)', text)
+        self.assertIn('BorderShadowLifetime(state, selected.id, panel, state.inlineProperty)', text)
         self.assertLess(text.index('BorderShadowLifetime'), text.index('if (state.easingOpen)'))
         text = kotlin('ui/editor/panels/BorderShadowPanel.kt')
-        self.assertIn('DisposableEffect(owner, layerId, panel)', text)
+        self.assertIn('DisposableEffect(owner, layerId, panel, property)', text)
         panel = text.split('internal fun BorderShadowPanel', 1)[1].split('private fun editColour', 1)[0]
         self.assertNotIn('onDispose', panel)
 
