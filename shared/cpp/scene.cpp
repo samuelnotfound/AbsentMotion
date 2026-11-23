@@ -150,7 +150,6 @@ const Anim* LinkAnim(const Layer& l, const ValueLink& link) {
 float Anim::get(int i, float t, float fallback) const {
     float linked;
     if (!links.empty() && PlacementLink(*this) && LinkedValue(*this, i, t, &linked)) return linked;
-    if (i >= 0 && i < (int)axes.size() && !axes[i].empty()) return axes[i].get(0, t, fallback);
     auto at = [&](const std::vector<float>& v) { return i < (int)v.size() ? v[i] : fallback; };
     if (keys.empty()) return value.empty() ? fallback : at(value);
     if (!std::isfinite(t)) return at(keys.front().v);
@@ -183,7 +182,7 @@ bool PropertyNumbers(const Layer& layer, int effect, const std::string& name, do
 }
 
 bool Anim::steady(float from, float to) const {
-    if (!links.empty() || std::any_of(axes.begin(), axes.end(), [&](const Anim& a) { return !a.steady(from, to); })) return false;
+    if (!links.empty()) return false;
     if (keys.empty()) return true;
     if (!std::isfinite(from) || !std::isfinite(to) || from > to) return false;
     const auto same = [](const std::vector<float>& a, const std::vector<float>& b) {
@@ -264,7 +263,7 @@ std::vector<float> ParseValue(const char* s) {
     return out;
 }
 
-Anim ParseAnim(const XmlNode* node, bool readAxes = true) {
+Anim ParseAnim(const XmlNode* node) {
     Anim a;
     if (!node) return a;
     a.value = ParseValue(node->attr("value"));
@@ -297,15 +296,6 @@ Anim ParseAnim(const XmlNode* node, bool readAxes = true) {
         if (std::isfinite(time)) a.keys.push_back({time, ParseValue(c->attr("v")), ParseEasing(c->attr("e"))});
     }
     std::stable_sort(a.keys.begin(), a.keys.end(), [](const Keyframe& x, const Keyframe& y) { return x.t < y.t; });
-    if (readAxes) for (const auto& c : node->children) {
-        if (c->name != "axis" || !c->attr("index")) continue;
-        const char* index = c->attr("index");
-        char* end = nullptr;
-        const long i = strtol(index, &end, 10);
-        if (end == index || *end || i < 0 || i > 3) continue;
-        if (a.axes.size() <= (size_t)i) a.axes.resize((size_t)i + 1);
-        a.axes[i] = ParseAnim(c.get(), false);
-    }
     return a;
 }
 
@@ -560,7 +550,6 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     l.endTime = std::max(l.startTime, IntAttr(*n, "endTime", 0));
     l.hidden = StrAttr(*n, "hidden") == "true";
     l.force3d = StrAttr(*n, "threeD") == "true";
-    l.layerMotionBlur = StrAttr(*n, "layerMotionBlur") == "true";
     l.mixPieces = StrAttr(*n, "mixPieces") != "false";
     if (const XmlNode* t = n->child("transform")) {
         l.location = ParseAnim(t->child("location"));
@@ -630,10 +619,6 @@ bool ParseScene(const std::string& xml, Scene* scene, std::string* error) {
     next.totalTime = IntAttr(*root, "totalTime", 0);
     next.depthOrder = StrAttr(*root, "depthOrder") == "true";
     next.pieceOrder = StrAttr(*root, "depthSort") == "piece";
-    next.layerShutterAngle = std::clamp(IntAttr(*root, "layerShutterAngle", 180), 0, 360);
-    next.layerShutterPhase = std::clamp(IntAttr(*root, "layerShutterPhase", -90), -360, 360);
-    next.layerShutterPreview = std::clamp(IntAttr(*root, "layerShutterPreview", 8), 2, 32);
-    next.layerShutterExport = std::clamp(IntAttr(*root, "layerShutterExport", 24), 2, 32);
     const char* bg = root->attr("bgcolor");
     next.bgColor = bg && *bg == '#' ? (uint32_t)strtoul(bg + 1, nullptr, 16) : 0;
     if (next.width <= 0 || next.height <= 0) {

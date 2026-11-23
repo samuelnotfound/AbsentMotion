@@ -231,25 +231,6 @@ SkM44 LayerPivotMatrix(const Scene& scene, const Layer& layer, double timeMs) {
         * SkM44::Translate(-p.pivot.fX, -p.pivot.fY, -p.pivotZ);
 }
 
-SkM44 LayerLocationMatrix(const Scene& scene, const Layer& layer, double timeMs) {
-    const Layer* camera = gCameraView ? ActiveCamera(scene.layers, timeMs) : nullptr;
-    const View v = SelectView(scene.layers, camera, scene.width, scene.height, timeMs, EditorCameraOn());
-    const Placement placed = EffectivePlacement(scene.layers, layer, timeMs);
-    Placement anchor{};
-    anchor.location = placed.location;
-    anchor.z = placed.z;
-    SkM44 axes;
-    if (const Layer* parent = scene.layer(layer.parent); parent && parent->spatial()) {
-        const Placement p = EffectivePlacement(scene.layers, *parent, timeMs);
-        axes = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * p.tilt * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
-    } else if (parent) {
-        const Placement p = EffectivePlacement(scene.layers, *parent, timeMs);
-        axes = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
-    }
-    const float t = layer.localTime(timeMs);
-    return Space(v, anchor) * axes * SkM44::Translate(-layer.location.get(0, t, 0), -layer.location.get(1, t, 0), -layer.location.get(2, t, 0));
-}
-
 void SetCameraView(bool on) {
     gCameraView = on;
     gEditorCamera = {};

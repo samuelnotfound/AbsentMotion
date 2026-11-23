@@ -593,10 +593,6 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
             scene.depthOrder = previous && previous->depthOrder;
             scene.pieceOrder = previous && previous->pieceOrder;
             if (previous) {
-                scene.layerShutterAngle = previous->layerShutterAngle;
-                scene.layerShutterPhase = previous->layerShutterPhase;
-                scene.layerShutterPreview = previous->layerShutterPreview;
-                scene.layerShutterExport = previous->layerShutterExport;
                 for (const double beat : previous->beats) {
                     const double inner = NestedTime(group, beat * 1000);
                     if (inner >= 0) scene.beats.push_back(inner / 1000);
@@ -1518,9 +1514,7 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     const bool restricted = !(shutter.position && shutter.scale && shutter.rotation);
     FrozenScope scope(restricted ? &frozen : gFrozen);
     SkPaint composite;
-    const double lead = shutter.layerSetting
-        ? 1000.0 / std::max(gScene ? gScene->fps : 30, 1) * (shutter.phase + shutter.angle) / 360
-        : shutter.trailing ? 0 : open / 2;
+    const double lead = shutter.trailing ? 0 : open / 2;
     if (shutter.fast) {
         const SkPoint middle = ShapePath(l, l.localTime(timeMs)).getBounds().center();
         const SkVector moved = SiblingMatrix(siblings, l, timeMs + lead).mapPoint(middle) -
@@ -1542,44 +1536,6 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
         return;
     }
     const auto at = [&](double u) { return std::clamp(timeMs + lead - open * (1 - u), (double)l.startTime, (double)l.endTime); };
-    const auto toLinear = shutter.layerSetting ? SkColorFilters::SRGBToLinearGamma() : nullptr;
-    if (shutter.layerSetting) composite.setColorFilter(SkColorFilters::LinearToSRGBGamma());
-    if (shutter.layerSetting && l.kind != "model") {
-        const SkMatrix device = canvas->getTotalMatrix();
-        const SkMatrix reference = SiblingMatrix(siblings, l, timeMs);
-        const SkMatrix from = device * reference;
-        SkMatrix inverse;
-        if (from.invert(&inverse)) {
-            std::vector<SkMatrix> samples;
-            samples.reserve(shutter.samples);
-            for (int i = 0; i < shutter.samples; ++i) {
-                const double when = at((i + 0.5) / shutter.samples);
-                const SkMatrix pose = SiblingMatrix(siblings, l, when);
-                samples.push_back(pose == reference ? SkMatrix::I() : device * pose * inverse);
-            }
-            if (std::all_of(samples.begin(), samples.end(), [](const SkMatrix& m) { return m.isIdentity(); })) {
-                DrawOne(canvas, siblings, l, timeMs, pictures, sample);
-                return;
-            }
-            const SkRect area = SkRect::MakeLTRB(-1e6f, -1e6f, 1e6f, 1e6f);
-            const Recorded body = RecordInDevice(canvas, area, [&](SkCanvas* c) { DrawOne(c, siblings, l, timeMs, pictures, sample); });
-            canvas->saveLayer(SkCanvas::SaveLayerRec(nullptr, &composite, SkCanvas::kF16ColorType));
-            SkPaint add;
-            add.setBlendMode(SkBlendMode::kPlus);
-            add.setAlphaf(1.0f / shutter.samples);
-            add.setColorFilter(toLinear);
-            for (const SkMatrix& warp : samples) {
-                canvas->saveLayer(nullptr, &add);
-                canvas->resetMatrix();
-                canvas->concat(warp);
-                canvas->drawPicture(body.picture.get());
-                canvas->restore();
-                if (gBreak) (*gBreak)();
-            }
-            canvas->restore();
-            return;
-        }
-    }
     const bool steady = Steady(siblings, l, at(0), at(1));
     int samples = shutter.samples;
     if (shutter.adaptive && !steady) samples = std::clamp((int)std::ceil(Reach(siblings, l, timeMs + lead - open / 2, open) / 2), samples, 64);
@@ -1598,8 +1554,7 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
             while (i + same < samples && (steady || at((i + same + 0.5) / samples) == when)) same++;
             const float weight = (float)same / samples;
             const float scale[20] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, weight, 0};
-            const auto weightFilter = SkColorFilters::Matrix(scale);
-            add.setColorFilter(toLinear ? SkColorFilters::Compose(weightFilter, toLinear) : weightFilter);
+            add.setColorFilter(SkColorFilters::Matrix(scale));
             add.setImageFilter(SmearFilter(gap(i, i + same)));
             canvas->saveLayer(nullptr, &add);
             DrawOne(canvas, siblings, l, when, pictures, sample);
@@ -1633,8 +1588,7 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     add.setBlendMode(SkBlendMode::kPlus);
     for (const auto& [r, share, move] : taken) {
         const float scale[20] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, share, 0};
-        const auto weightFilter = SkColorFilters::Matrix(scale);
-        add.setColorFilter(toLinear ? SkColorFilters::Compose(weightFilter, toLinear) : weightFilter);
+        add.setColorFilter(SkColorFilters::Matrix(scale));
         add.setImageFilter(SmearFilter(move));
         const SkRect spread = r.bounds.makeOutset(move.length(), move.length());
         canvas->saveLayer(bounded ? &spread : nullptr, &add);
@@ -1765,7 +1719,7 @@ void DrawOne(SkCanvas* canvas, const std::vector<Layer>& siblings, const Layer& 
         return;
     }
     ShutterBlur shutter;
-    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter, gScene) && !SeesPrevious(siblings, l)) {
+    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter) && !SeesPrevious(siblings, l)) {
         DrawShuttered(canvas, siblings, l, timeMs, pictures, ov, shutter);
         return;
     }
@@ -2175,17 +2129,14 @@ SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs) {
     return SiblingMatrix(scene.layers, layer, timeMs);
 }
 
-void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[42]) {
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]) {
     WorldMatrix(scene, layer, timeMs).get9(m);
     PlaneMatrix(scene.layers, layer, scene.width, scene.height, timeMs).get9(m + 9);
+    const SkM44 pivot = LayerPivotMatrix(scene, layer, timeMs);
     int i = 18;
-    const auto append = [&](const SkM44& matrix) {
-        for (int row : {0, 1, 3}) {
-            for (int col = 0; col < 4; ++col) m[i++] = matrix.rc(row, col);
-        }
-    };
-    append(LayerPivotMatrix(scene, layer, timeMs));
-    append(layer.spatial() ? LayerLocationMatrix(scene, layer, timeMs) : SkM44());
+    for (int row : {0, 1, 3}) {
+        for (int col = 0; col < 4; ++col) m[i++] = pivot.rc(row, col);
+    }
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {
@@ -2270,7 +2221,7 @@ bool Mixable(const std::vector<Layer>& layers, const Layer& l, double timeMs) {
     if (std::any_of(l.borders.begin(), l.borders.end(), [](const Edge& e) { return e.enabled; })) return false;
     Echo echo;
     ShutterBlur shutter;
-    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter, gScene)) return false;
+    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter)) return false;
     const bool effects = EffectsApply(layers, l);
     if (effects && (gEffects->lifted(l) || gEffects->behind(l) || (gEffects->spills && gEffects->spills(l, timeMs)))) return false;
     const float t = l.localTime(timeMs);

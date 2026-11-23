@@ -83,36 +83,7 @@ fun XmlNode.withKeyframes(keys: List<Keyframe>): XmlNode = copy(
     },
 )
 
-internal fun XmlNode.axis(index: Int): XmlNode? = children.firstOrNull {
-    it.name == "axis" && it["index"]?.toIntOrNull() == index
-}
-
-internal fun XmlNode.axisTrack(index: Int, defaults: String): XmlNode {
-    axis(index)?.let { return it }
-    fun part(value: String?, fallback: String = "0"): String = value?.split(',')?.getOrNull(index) ?: fallback
-    val initial = part(this["value"], part(defaults))
-    val track = XmlNode("axis", mapOf("index" to index.toString(), "value" to initial))
-    return if (isKeyframed) track.withKeyframes(keyframes.map { it.copy(v = part(it.v, initial)) }) else track
-}
-
-internal fun XmlNode.withAxis(index: Int, track: XmlNode): XmlNode =
-    copy(children = children.filterNot { it.name == "axis" && it["index"]?.toIntOrNull() == index } + track)
-
 fun XmlNode.valueAt(t: Float): String? {
-    val base = legacyValueAt(t)
-    val axes = children.filter { it.name == "axis" }
-    if (axes.isEmpty()) return base
-    val values = (base?.split(',') ?: emptyList()).toMutableList()
-    for (axis in axes) {
-        val i = axis["index"]?.toIntOrNull()?.takeIf { it in 0..3 } ?: continue
-        val value = axis.legacyValueAt(t) ?: continue
-        while (values.size <= i) values += "0"
-        values[i] = value
-    }
-    return values.joinToString(",")
-}
-
-private fun XmlNode.legacyValueAt(t: Float): String? {
     val keys = keyframes
     if (keys.isEmpty()) return this["value"]
     if (t <= keys.first().t) return keys.first().v
@@ -138,16 +109,6 @@ fun XmlNode.withValueAt(t: Float, value: String, snap: ClosedFloatingPointRange<
         return copy(children = children.filterNot { it.name == "valueLink" }).withValueAt(t, parts.indices.joinToString(",") { i -> if (i in linked) kept.getOrElse(i) { parts[i] } else parts[i] }, snap)
             .let { it.copy(children = it.children + children.filter { c -> c.name == "valueLink" }) }
     }
-    if (children.any { it.name == "axis" }) {
-        val values = value.split(',')
-        val before = valueAt(t)?.split(',').orEmpty()
-        var current = this
-        for (i in values.indices) {
-            if (before.getOrNull(i)?.toFloatOrNull() == values[i].toFloatOrNull()) continue
-            current = current.withAxis(i, axisTrack(i, value).withValueAt(t, values[i], snap))
-        }
-        return current
-    }
     if (!isKeyframed) return with("value", value)
     val keys = keyframes
     val here = keys.indexOfFirst { it.t in snap }
@@ -157,18 +118,6 @@ fun XmlNode.withValueAt(t: Float, value: String, snap: ClosedFloatingPointRange<
 fun XmlNode.keyframeAt(snap: ClosedFloatingPointRange<Float>): Int = keyframes.indexOfFirst { it.t in snap }
 
 fun XmlNode.withKeyframeToggled(t: Float, snap: ClosedFloatingPointRange<Float>): XmlNode {
-    if (children.any { it.name == "axis" }) {
-        val values = valueAt(t) ?: return this
-        val tracks = values.split(',').indices.map { axisTrack(it, values) }
-        val remove = tracks.any { it.keyframeAt(snap) >= 0 }
-        var result = this
-        for ((i, track) in tracks.withIndex()) {
-            if ((track.keyframeAt(snap) >= 0) == remove && i !in linkedComponents) {
-                result = result.withAxis(i, track.withKeyframeToggled(t, snap))
-            }
-        }
-        return result
-    }
     if (fullyLinked((valueAt(t) ?: this["value"])?.split(",")?.size ?: 1)) return this
     val keys = keyframes
     val here = keyframeAt(snap)

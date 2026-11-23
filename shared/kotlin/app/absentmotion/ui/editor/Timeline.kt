@@ -17,12 +17,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -149,10 +146,6 @@ import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.PreviewCache
 import app.absentmotion.editor.toggleBookmark
 import app.absentmotion.editor.toggleHidden
-import app.absentmotion.editor.timelineTrackSections
-import app.absentmotion.editor.keyFrames
-import app.absentmotion.editor.toggleTimelineMotionBlur
-import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.toggleLock
 import app.absentmotion.editor.setLock
 import app.absentmotion.editor.selectAll
@@ -185,7 +178,7 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
 private val RulerHeight = 42.dp
-private val RowHeight = LayerSwitchSize
+private val RowHeight get() = if (deskLayout) 30.dp else 28.dp
 
 
 private val PlayheadWidth = 1.5.dp
@@ -215,7 +208,7 @@ private val BookmarkPeakHalf = 2.5.dp
 private val PillOutline = 1.1.dp
 
 private var lockReveal by mutableFloatStateOf(0f)
-internal val HeaderWidth: Dp get() = LayerSwitchSize * 5
+internal val HeaderWidth: Dp get() = 62.dp + LockZone * lockReveal
 private val HeaderInset = 1.dp
 private val TagStripWidth = 2.1.dp
 private val EyeZone = 36.dp
@@ -300,22 +293,13 @@ private class TimelineStyles(font: androidx.compose.ui.text.font.FontFamily?) {
 
 @Composable
 fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
-    val panel = remember(state) { TimelineTrackPanelState(state) }
-    Column(modifier) {
-        TimelineTrackTools(state, panel, Modifier.fillMaxWidth())
-        TimelineWithTracks(state, panel, Modifier.weight(1f).fillMaxWidth())
-    }
-}
-
-@Composable
-private fun TimelineWithTracks(state: EditorState, tracks: TimelineTrackPanelState, modifier: Modifier) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val focus = LocalFocusManager.current
     val wide = LocalWide.current
     val view = remember(state, density) {
-        TimelineView(state, density, scope, tracks).also { v ->
+        TimelineView(state, density, scope).also { v ->
             v.onTick = { if (state.settings.vibration) haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
         }
     }
@@ -392,10 +376,15 @@ private fun TimelineWithTracks(state: EditorState, tracks: TimelineTrackPanelSta
             }
             .drawBehind { drawTimeline(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, proxies, appear.value) },
     ) {
-        TimelineProperties(view)
         HeaderPictures(view) { drawLifted(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, appear.value) }
         RowSemantics(view)
         LockMenu(view)
+        if (!state.lookOnly) LaunchedEffect(view) {
+            val reveal = Animatable(lockReveal)
+            snapshotFlow { state.selectedId != null || MultiSelect.active && MultiSelect.ids.isNotEmpty() }.collectLatest { on ->
+                reveal.animateTo(if (on) 1f else 0f, tween(180)) { lockReveal = value }
+            }
+        }
         if (deskLayout) {
             DesktopTimelineMenu(view)
             DesktopTimelineRename(view)
@@ -497,10 +486,6 @@ private fun RowSemantics(view: TimelineView) {
     val unlock = stringResource(R.string.layer_unlock)
     val locked = stringResource(R.string.a11y_layer_locked)
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
-    val mb = stringResource(R.string.export_motion_blur)
-    val dimension = stringResource(R.string.three_d_layer)
-    val expand = stringResource(R.string.timeline_tracks_expand)
-    val collapse = stringResource(R.string.timeline_tracks_collapse)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -514,10 +499,6 @@ private fun RowSemantics(view: TimelineView) {
                     customActions = if (app.absentmotion.ui.tutorial.Tutorial.running || view.state.lookOnly) emptyList() else listOf(
                         CustomAccessibilityAction(if (layer.hidden) show else hide) { view.state.toggleHidden(layer.id); true },
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true },
-                        CustomAccessibilityAction(if (layer.id in view.tracks.expanded) collapse else expand) { view.tracks.toggle(layer.id); true },
-                    ) + listOfNotNull(
-                        CustomAccessibilityAction(mb) { view.state.toggleTimelineMotionBlur(layer.id); true }.takeIf { !layer.locked && layer.kind !in setOf("audio", "camera", "light", "nullobj") },
-                        CustomAccessibilityAction(dimension) { view.state.toggleLayer3D(layer.id); true }.takeIf { !layer.locked && layer.canToggle3D },
                     )
                 })
             }
@@ -530,45 +511,39 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
     val rows by remember(view) { derivedStateOf { view.visibleRows() } }
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
-            val layer = view.layerAt(row) ?: continue
-            key(layer.id) {
-                Box(Modifier.zIndex(if (view.liftId == layer.id) 2f else 0f)
-                    .offset { IntOffset(0, (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }) {
-                    TimelineLayerControls(view.state, layer, view.tracks)
+            val layer = view.layerAt(row)
+            if (layer != null) {
+                key(layer.id) {
+                    val lifted = layer.id == view.liftId
+                    if (deskLayout) {
+                        val eyeLabel = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
+                        Box(Modifier.offset { IntOffset(0, (view.rowTop(row) - view.rulerH).roundToInt()) }) {
+                            app.absentmotion.platform.Hint(eyeLabel) { Box(Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand)) }
+                        }
+                        val lockLabel = stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock)
+                        if (lockReveal > 0.5f) Box(Modifier.offset { IntOffset(EyeZone.roundToPx(), (view.rowTop(row) - view.rulerH).roundToInt()) }) {
+                            app.absentmotion.platform.Hint(lockLabel) { Box(Modifier.size(LockZone, 28.dp).pointerHoverIcon(PointerIcon.Hand)) }
+                        }
+                    }
+                    val thumb = Modifier
+                            .zIndex(if (lifted) 2f else 0f)
+                            .offset {
+                                val top = view.shownTop(row, layer.id) - view.rulerH + (RowHeight - ThumbSize).toPx() / 2
+                                IntOffset(ThumbLeft.roundToPx(), top.roundToInt())
+                            }
+                            .then(if (lifted && !deskLayout) Modifier.graphicsLayer {
+                                val grow = 1 + (LIFT_SCALE - 1) * view.liftAmount
+                                scaleX = grow
+                                scaleY = grow
+                                transformOrigin = TransformOrigin((view.size.width / 2f - ThumbLeft.toPx()) / ThumbSize.toPx(), 0.5f)
+                            } else Modifier)
+                            .size(ThumbSize)
+                            .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f)
+                    LayerThumbnail(layer, view.state.engine, thumb)
                 }
             }
         }
         if (view.liftId != null && !deskLayout) Box(Modifier.fillMaxSize().zIndex(1f).drawBehind(drawLift))
-    }
-}
-
-@Composable
-private fun TimelineProperties(view: TimelineView) {
-    val rows by remember(view) { derivedStateOf { view.visibleRows() } }
-    val panelWidth = with(LocalDensity.current) { view.headerWidth.toDp() }
-    Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
-        for (row in rows) {
-            val layer = view.layerAt(row) ?: continue
-            if (layer.id == view.liftId) continue
-            var y = view.shownTop(row, layer.id) + view.rowH - view.rulerH
-            for ((index, detail) in view.detailRows(layer.id).withIndex()) {
-                val height = view.detailHeight(detail)
-                val top = y
-                y += height
-                if (y <= 0f || top + view.rulerH >= view.rowsEnd) continue
-                key(layer.id, index, detail) {
-                    val position = Modifier.offset { IntOffset(0, top.roundToInt()) }.fillMaxWidth()
-                    when (detail) {
-                        is DetailTrackRow.Section -> TrackHeading(detail, layer, view.tracks, position)
-                        is DetailTrackRow.Property -> Row(position) {
-                            TrackControls(view.state, layer, detail.track, Modifier.width(panelWidth))
-                            TrackDiamonds(view.state, layer, detail.track, view.tracks, Modifier.weight(1f),
-                                xOf = view::positionOfTrackFrame, frameAt = view::trackFrameAt, otherKeys = view::timelineTrackFrames)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -682,9 +657,6 @@ private sealed interface Hit {
     data class WorkAreaEdge(val start: Boolean) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
-    data class MotionBlur(val id: Long) : Hit
-    data class Depth(val id: Long) : Hit
-    data class Expand(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
 
     data class Bar(val id: Long) : Hit
@@ -701,7 +673,7 @@ private const val KEY_MOVE = "keyframe-move"
 private const val MOVE_EDIT = "clip-move"
 
 
-private class TimelineView(val state: EditorState, density: Density, private val scope: CoroutineScope, val tracks: TimelineTrackPanelState) {
+private class TimelineView(val state: EditorState, density: Density, private val scope: CoroutineScope) {
     var wide = false
     var rail = false
     private val scale = density.density
@@ -712,7 +684,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     val rowH = RowHeight.px
     var coordinates: LayoutCoordinates? = null
     var headerDp by mutableFloatStateOf(DeskTimelineControls.headerDp)
-    val headerWidth: Float get() = if (deskLayout) max(HeaderWidth.px, headerDp * scale) else HeaderWidth.px
+    val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
     private var viewStartMs by mutableFloatStateOf(0f)
     var desktopCancel by mutableStateOf(false)
     var rubber by mutableStateOf<Rect?>(null)
@@ -820,7 +792,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     fun timeScale(): TimeScale {
         val pxPerMs = dpPerSecond * scale / 1000f
-        val origin = if (deskLayout) headerWidth + (nowMs - viewStartMs) * pxPerMs else (headerWidth + size.width - PlayheadWidth.px) / 2f
+        val origin = if (deskLayout) headerWidth + (nowMs - viewStartMs) * pxPerMs else (size.width - PlayheadWidth.px) / 2f
         return TimeScale(nowMs, origin, pxPerMs)
     }
 
@@ -845,7 +817,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     private var followFit = true
 
     val rowsEnd: Float get() = rowsBottom
-    val maxScroll: Float get() = max(0f, trackLayout.second.last() - (rowsBottom - rulerH))
+    val maxScroll: Float get() = TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom)
     private val panMax: Float get() = (endMs - visibleMs / 2f).coerceAtLeast(0f)
     val panSpan: Float get() = (visibleMs / (panMax + visibleMs).coerceAtLeast(1f)).coerceIn(0f, 1f)
     val panFraction: Float get() = if (panMax > 0f) viewStartMs / panMax else 0f
@@ -907,7 +879,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.MotionBlur || hit is Hit.Depth || hit is Hit.Expand || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
         hoveredKey = (hit as? Hit.Key)?.let { it.id to it.frame }
     }
 
@@ -1024,7 +996,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         MultiSelect.active = ids.isNotEmpty()
     }
 
-    fun resizeHeader(x: Float) { headerDp = (x / scale).coerceIn(HeaderWidth.value, 460f); DeskTimelineControls.headerDp = headerDp; refit() }
+    fun resizeHeader(x: Float) { headerDp = (x / scale).coerceIn(120f, 320f); DeskTimelineControls.headerDp = headerDp; refit() }
     fun nearHeaderEdge(x: Float) = x <= headerWidth && x >= headerWidth - 5.dp.px
 
     private val covered: Boolean get() = !wide && !deskLayout && state.selectedId != null
@@ -1037,45 +1009,15 @@ private class TimelineView(val state: EditorState, density: Density, private val
         get() = TimelineMath.rowsBottom(size.height.toFloat(), if (covered) panelTop else null, multiBar)
 
     val scroll: Float
-        get() = scrollPx.coerceIn(0f, maxScroll)
+        get() = scrollPx.coerceIn(0f, TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom))
 
     fun layerAt(row: Int): Layer? = layers.getOrNull(layers.lastIndex - row)
 
-    private val trackLayout by derivedStateOf {
-        val details = HashMap<Long, List<DetailTrackRow>>()
-        val tops = ArrayList<Float>(layers.size + 1)
-        var y = 0f
-        val expanded = tracks.expanded
-        val catalog = state.engine.effects.value
-        for (layer in layers.asReversed()) {
-            tops += y
-            y += rowH
-            if (layer.id in expanded) {
-                val rows = trackRows(layer, timelineTrackSections(layer, catalog), tracks)
-                details[layer.id] = rows
-                y += rows.sumOf { detailHeight(it).toDouble() }.toFloat()
-            }
-        }
-        tops += y
-        details to tops
-    }
+    fun rowTop(row: Int): Float = rulerH + row * rowH - scroll
 
-    fun detailRows(id: Long): List<DetailTrackRow> = trackLayout.first[id].orEmpty()
-    fun detailHeight(row: DetailTrackRow): Float = if (row is DetailTrackRow.Section) TrackSectionHeight.px else TrackRowHeight.px
-    fun positionOfTrackFrame(frame: Int): Float = timeScale().x(state.scene.frameStart(frame).toFloat()) - headerWidth
-    fun trackFrameAt(x: Float): Int = TimelineMath.nearestFrame(timeScale().time(x + headerWidth), fps)
-    fun timelineTrackFrames(): List<Int> = layers.flatMap { layer ->
-        detailRows(layer.id).filterIsInstance<DetailTrackRow.Property>().flatMap { it.track.keyFrames(state.scene, layer) }
-    }.distinct()
+    private fun rowAt(y: Float): Int = floor((y - rulerH + scroll) / rowH).toInt()
 
-    fun rowTop(row: Int): Float = rulerH + trackLayout.second[row] - scroll
-
-    private fun rowAt(y: Float): Int {
-        val index = trackLayout.second.binarySearch(y - rulerH + scroll)
-        return if (index >= 0) index else -index - 2
-    }
-
-    fun visibleRows(): IntRange = max(0, rowAt(rulerH))..min(layers.lastIndex, rowAt(rowsBottom))
+    fun visibleRows(): IntRange = TimelineMath.visibleRows(layers.size, rowH, rulerH, rowsBottom, scroll)
 
     fun clipRows(media: Boolean): List<Rect> {
         val time = timeScale()
@@ -1158,7 +1100,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val index = layers.indexOfFirst { it.id == id }
         if (index < 0) return
         if (scrollBeforeSelect == null) scrollBeforeSelect = scrollPx
-        scrollPx = trackLayout.second[layers.lastIndex - index] + rowH / 2 - (rowsBottom - rulerH) / 2
+        scrollPx = TimelineMath.centredScroll(layers.lastIndex - index, rowH, rulerH, rowsBottom)
     }
 
     fun isCovered(at: Offset): Boolean = (covered && at.y >= panelTop) || (multiBar > 0f && at.y >= size.height - multiBar)
@@ -1188,9 +1130,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
             val centre = (origin + PlayheadWidth.px / 2).let { if (deskLayout) maxOf(it, headerWidth + PillInset.px + PillWidth.px / 2) else it }
             return if (at.y >= ReadoutTop.px && abs(at.x - centre) <= ReadoutHalfWidth.px) Hit.Readout else Hit.Ruler
         }
-        val row = rowAt(at.y)
-        val layer = layerAt(row) ?: return Hit.Empty
-        if (at.y > rowTop(row) + rowH) return Hit.Corner
+        val layer = layerAt(rowAt(at.y)) ?: return Hit.Empty
         val time = timeScale()
         val left = time.x(layer.startTime.toFloat())
         val right = time.x(layer.endTime + 1f)
@@ -1202,11 +1142,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val startReach = if (keyX != null && abs(keyX - left) <= zone) min(zone, GripStub.px) else zone
         val endReach = if (keyX != null && abs(keyX - right) <= zone) min(zone, GripStub.px) else zone
         return when {
-            at.x < LayerSwitchSize.px -> Hit.Eye(layer.id)
-            at.x < 2 * LayerSwitchSize.px -> Hit.Lock(layer.id)
-            at.x < 3 * LayerSwitchSize.px -> Hit.MotionBlur(layer.id)
-            at.x < 4 * LayerSwitchSize.px -> Hit.Depth(layer.id)
-            at.x < 5 * LayerSwitchSize.px -> Hit.Expand(layer.id)
+            at.x < EyeZone.px -> Hit.Eye(layer.id)
+            lockReveal > 0f && at.x < ThumbLeft.px -> Hit.Lock(layer.id)
             at.x < headerWidth -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..startReach -> Hit.Grip(layer.id, start = true)
             deskLayout && right - at.x in -zone..endReach -> Hit.Grip(layer.id, start = false)
@@ -1220,7 +1157,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     }
 
     fun openLockMenu(id: Long) {
-        lockMenu = id to Offset(LayerSwitchSize.px, rowTop(rowOf(id) ?: return) + rowH)
+        lockMenu = id to Offset(EyeZone.px, rowTop(rowOf(id) ?: return) + rowH)
     }
 
     private fun showLockHint() {
@@ -1232,11 +1169,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun tap(hit: Hit) {
         if (state.lookOnly) return
         when (hit) {
-            is Hit.Eye -> state.toggleHidden(hit.id)
+            is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
-            is Hit.MotionBlur -> state.toggleTimelineMotionBlur(hit.id)
-            is Hit.Depth -> state.toggleLayer3D(hit.id)
-            is Hit.Expand -> tracks.toggle(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
             is Hit.Header -> select(hit.id, toggle = true)
             is Hit.Bar -> select(hit.id, toggle = true)
@@ -1341,7 +1275,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     private fun selectUpdate() {
         val anchor = rowOf(selectAnchor ?: return) ?: return
-        val finger = if (selectArmed) rowAt(selectFinger.coerceIn(rulerH, rowsBottom)).coerceIn(0, layers.lastIndex.coerceAtLeast(0)) else anchor
+        val finger = if (selectArmed) RowDrag.fingerRow(selectFinger, rowH, rulerH, rowsBottom, scroll, layers.size) else anchor
         val rows = abs(finger - anchor) + 1
         if (rows > selectRows) onTick()
         selectRows = rows
@@ -1675,9 +1609,9 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val layers = layers
         val index = layers.indexOfFirst { it.id == id }
         if (index < 0) return
-        liftTop = (liftFinger - liftGrab).coerceIn(rowTop(0), rowTop(layers.lastIndex))
+        liftTop = RowDrag.clampTop(liftFinger - liftGrab, rowH, rulerH, rowsBottom, scroll, layers.size)
         val from = layers.lastIndex - index
-        val to = rowAt(liftTop + rowH / 2).coerceIn(0, layers.lastIndex)
+        val to = RowDrag.slot(liftTop, rowH, rulerH, scroll, layers.size)
         if (to == from) return
         val now = SystemClock.uptimeMillis()
         for ((i, layer) in layers.withIndex()) {
@@ -1896,7 +1830,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    is Hit.MotionBlur, is Hit.Depth, is Hit.Expand, Hit.Readout -> view.tap(h)
+                    Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
@@ -1930,7 +1864,7 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
     var second: PointerId? = null
     val dismissing = view.dismissZone(down.position)
     val holdable = !view.state.lookOnly && !dismissing &&
-        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.MotionBlur || hit is Hit.Depth || hit is Hit.Expand || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Key || hit is Hit.Bar)
+        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Key || hit is Hit.Bar)
     val deadline = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
     try {
         while (true) {
@@ -2281,7 +2215,7 @@ private fun DrawScope.drawRow(
     layer.labelColour?.let { drawTagCorner(outline, left, barTop, (barBottom - barTop) / 2, Color(it.start)) }
     val mediaLabel = deskLayout && picture != null
     val labelStyle = if (mediaLabel) styles.mediaLabel else if (layer.kind == "audio") styles.audioLabel else styles.label
-    drawLabel(layer.shownName(), measurer, max(left, headerWidth), right, barTop, barBottom, labelStyle, mediaLabel)
+    drawLabel(layer.shownName(), measurer, if (deskLayout) max(left, headerWidth) else left, right, barTop, barBottom, labelStyle, mediaLabel)
     drawKeyframes(keyFrames, scene, selected, frame, time, left, right, centre, outline, appear, held, hoverKey)
     if (deskLayout) {
         val chosen = selected || layer.id in MultiSelect.ids
@@ -2336,7 +2270,7 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     val icon = eye.intrinsicSize
     translate(EyeCentre.toPx() - icon.width / 2, top + (height - icon.height) / 2) { with(eye) { draw(icon) } }
     drawPadlock(lock, layer.locked || layer.timingLocked, top, height)
-    val left = (HeaderWidth + 4.dp).toPx()
+    val left = (ThumbLeft + ThumbSize + 4.dp).toPx()
     val room = (width - trim - left - pillHeight / 2 - 4.dp.toPx()).toInt()
     if (room < 1) return
     val text = measurer.measure(layer.shownName(), if (layer.hidden) styles.hiddenHeader else styles.header, TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = room))
