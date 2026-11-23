@@ -53,8 +53,6 @@ for p in "$ROOT"/tools/skia-patches/*.patch; do
     fi
 done
 
-if [ "${AM_SKIA_PREPARE_ONLY:-0}" = 1 ]; then exit 0; fi
-
 GN="$("$ROOT/tools/build_gn.sh")"
 GN="$(printf '%s\n' "$GN" | tail -n 1)"
 mkdir -p "$OUT"

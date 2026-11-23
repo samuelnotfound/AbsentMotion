@@ -21,7 +21,7 @@ jobs:
       - name: Install packages
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates curl unzip xz-utils bzip2 python3 build-essential clang lld ninja-build zstd openjdk-21-jdk-headless
+          apt-get install -y --no-install-recommends git ca-certificates curl unzip xz-utils bzip2 python3 build-essential clang lld ninja-build openjdk-21-jdk-headless
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
@@ -45,26 +45,8 @@ jobs:
         run: |
           rm -rf third_party/whisper.cpp/models third_party/whisper.cpp/examples third_party/whisper.cpp/bindings third_party/ncnn/examples third_party/ncnn/benchmark third_party/ncnn/python third_party/ncnn/images
           echo 'org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64' >> gradle.properties
-      - name: Prepare the pinned Skia sources
-        id: skia-inputs
-        run: |
-          AM_SKIA_PREPARE_ONLY=1 tools/build_skia.sh
-          printf 'ndk=%s\n' "$(basename "$ANDROID_NDK")" >> "$GITHUB_OUTPUT"
-      - name: Restore compiled Skia libraries
-        id: skia-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: third_party/skia/out/android-arm64/*.a
-          key: skia-android-arm64-v1-debian-trixie-${{ runner.os }}-${{ runner.arch }}-ndk-${{ steps.skia-inputs.outputs.ndk }}-${{ hashFiles('tools/build_skia.sh', 'tools/build_gn.sh', 'tools/skia_sync.py', 'tools/skia-args.gn', 'tools/skia-patches/*.patch') }}
       - name: Build Skia
-        if: steps.skia-cache.outputs.cache-hit != 'true'
         run: tools/build_skia.sh
-      - name: Save compiled Skia libraries
-        if: steps.skia-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: third_party/skia/out/android-arm64/*.a
-          key: ${{ steps.skia-cache.outputs.cache-primary-key }}
       - name: Build FFamp's Xvid library
         run: third_party/FFamp/third_party/build_android.sh build/ffamp-android
       - name: Create a temporary Android test signing key
