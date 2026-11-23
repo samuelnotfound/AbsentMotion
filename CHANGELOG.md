@@ -17,7 +17,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Changed
 
-- **Move & Transform** uses the same Z, X, Y field layout for 3D Position and Rotation. Position and Rotation both have a compact 3D button. Position remembers its ruler or move-pad setting, and 3D Rotation uses rulers. The transform tabs use icons. Double-tap Move or Pivot to switch between them.
+- **Move & Transform** orders the fields X, Y, Z. Tap the selected Move tab to switch between the rulers and the move pad. Both work on flat layers, with Z visible and disabled. Double-tap Move or Pivot to switch between them. Position and Rotation keep the compact 3D button.
 - **Layer tools** show Trim or Extend depending on where the playhead is. Extend and Move to Playhead have distinct icons. Volume and mute are beside the trim tools.
 - **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses ruler handles in the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk. The layer sidebar uses the original eye, lock and thumbnail layout.
 - **Selection** outlines trace shapes and stay visible during playback. Transform handles still use the projected bounds.

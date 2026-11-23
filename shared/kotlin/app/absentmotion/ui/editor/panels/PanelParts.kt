@@ -162,6 +162,7 @@ internal fun RulerSpinner(
     fling: Boolean = true,
     onReset: (() -> Unit)? = null,
     atLimit: ((Float) -> Boolean)? = null,
+    enabled: Boolean = true,
 ) {
     val wheelDensity = androidx.compose.ui.platform.LocalDensity.current.density
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -180,7 +181,7 @@ internal fun RulerSpinner(
     val wheelEnd = remember { arrayOfNulls<Job>(1) }
     DisposableEffect(Unit) { onDispose { Glide.stop(); if (running[0]) ended() } }
     Canvas(
-        modifier.then(app.absentmotion.platform.wheel { delta, _, _ ->
+        modifier.then(if (enabled) Modifier.then(app.absentmotion.platform.wheel { delta, _, _ ->
             Glide.stop()
             if (!running[0]) { started(); running[0] = true }
             val px = (delta.x + delta.y) * 10f * wheelDensity
@@ -257,7 +258,7 @@ internal fun RulerSpinner(
                 }
                 if (running[0]) { running[0] = false; ended() }
             }
-        },
+        } else Modifier),
     ) {
         val step = tickSpacing.toPx()
         val half = size.width / 2f

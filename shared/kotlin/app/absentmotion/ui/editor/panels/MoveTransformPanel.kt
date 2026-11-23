@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,30 +87,18 @@ import app.absentmotion.ui.HoldName
 
 @Composable
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
-    val spatialPosition = tab == 0 && layer.uses3D
-    val rulers = state.settings.spatialRulers
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = spatialPosition && rulers)
+            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers(layer.uses3D))
             1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)
             else -> PivotTab(state, layer, onFlip)
         }
-        if (spatialPosition) {
-            val label = stringResource(if (rulers) R.string.transform_basic_controls else R.string.transform_advanced_controls)
-            Box(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 4.px).height(28.dp).clip(PanelShape)
-                    .background(Am.Field).clickable(role = Role.Button, onClick = state.settings::switchSpatialControls).padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, color = Am.OnDark, fontSize = 11.sp, maxLines = 1)
-            }
-        }
     }
 }
 
-private val transformAxisOrder = listOf(2, 0, 1)
+private val transformAxisOrder = listOf(0, 1, 2)
 
 @Composable
 private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?, rulers: Boolean) {
@@ -125,7 +114,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
         val fields = axes.map { KeypadField("XYZ"[it].toString(), at[it]) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
             state.editSelected {
-                if (spatial) it.withTransform("location", v[1], v[2], v[0])
+                if (spatial) it.withTransform("location", v[0], v[1], v[2])
                 else it.withTransform("location", v[0], v[1], it.location[2])
             }
         }
@@ -181,7 +170,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     ) {
         if (rulers) {
             TransformRulers(
-                state, ::colour, onSelect = { activeAxis = it },
+                state, ::colour, onSelect = { activeAxis = it }, depthEnabled = spatial,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
@@ -206,7 +195,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             }
         }
         TransformAxisHeader(state, layer, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
-            Modifier.align(Alignment.TopCenter).padding(top = 17.px))
+            Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
     }
 }
 
@@ -234,10 +223,10 @@ private fun LayerDimensionButton(state: EditorState, layer: Layer, modifier: Mod
 @Composable
 private fun TransformAxisHeader(
     state: EditorState, layer: Layer, value: (Int) -> String, colour: (Int) -> Color,
-    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier,
+    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier, depthVisible: Boolean = layer.uses3D,
 ) {
     Row(modifier, verticalAlignment = Alignment.Top) {
-        AxisFields(layer.uses3D, value, colour, onSelect, onType)
+        AxisFields(layer.uses3D, value, colour, onSelect, onType, depthVisible = depthVisible)
         if (layer.canToggle3D) {
             Spacer(Modifier.width(20.px))
             LayerDimensionButton(state, layer)
@@ -246,26 +235,31 @@ private fun TransformAxisHeader(
 }
 
 @Composable
-private fun AxisFields(spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier = Modifier) {
+private fun AxisFields(
+    spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit,
+    modifier: Modifier = Modifier, depthVisible: Boolean = spatial,
+) {
     val width = 153.px
     Column(modifier) {
         Row {
-            if (spatial) {
-                NumberBox(value(2), colour(2), Modifier.width(width).height(70.px), fontSize = 10.5f, onSelect = { onSelect(2) }) { onType(2) }
-                Spacer(Modifier.width(20.px))
-            }
             Row(Modifier.width(width * 2).height(70.px).clip(PanelShape).background(Am.Field)) {
                 ValueCell(value(0), colour(0), Modifier.weight(1f), "X", { onSelect(0) }) { onType(0) }
                 ValueCell(value(1), colour(1), Modifier.weight(1f), "Y", { onSelect(1) }) { onType(1) }
             }
+            if (depthVisible) {
+                Spacer(Modifier.width(20.px))
+                NumberBox(value(2), if (spatial) colour(2) else Am.OnDarkDim,
+                    Modifier.width(width).height(70.px).alpha(if (spatial) 1f else 0.55f),
+                    fontSize = 10.5f, onSelect = { onSelect(2) }, onType = if (spatial) { { onType(2) } } else null)
+            }
         }
         Row(Modifier.height(23.px)) {
-            if (spatial) {
-                Caption("Z", Modifier.width(width).fillMaxHeight())
-                Spacer(Modifier.width(20.px))
-            }
             Caption("X", Modifier.width(width).fillMaxHeight())
             Caption("Y", Modifier.width(width).fillMaxHeight())
+            if (depthVisible) {
+                Spacer(Modifier.width(20.px))
+                Caption("Z", Modifier.width(width).fillMaxHeight().alpha(if (spatial) 1f else 0.55f))
+            }
         }
     }
 }
@@ -667,10 +661,10 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
         onDispose { state.pivotEditing = false }
     }
     fun openKeypad(active: Int) {
-        val axes = if (spatial) listOf(2, 0, 1) else listOf(0, 1)
+        val axes = if (spatial) transformAxisOrder else listOf(0, 1)
         val fields = axes.map { axis -> KeypadField("XYZ"[axis].toString(), at[axis], min = -PIVOT_LIMIT, max = PIVOT_LIMIT) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
-            if (spatial) state.setPivot(v[1], v[2], z = v[0]) else state.setPivot(v[0], v[1])
+            if (spatial) state.setPivot(v[0], v[1], z = v[2]) else state.setPivot(v[0], v[1])
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -755,7 +749,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         axis = which
         val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
         state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
-            state.editSelected { turn.withValues(it, floatArrayOf(v[1], v[2], v[0])) }
+            state.editSelected { turn.withValues(it, v.toFloatArray()) }
         }
     }
     fun colour(which: Int) = if (turn.linked(which, axis)) Am.Accent else Am.OnDark
@@ -770,7 +764,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
         state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
     }
     Box(Modifier.fillMaxSize()) {
-        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset, bottom = 12.px)
+        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
         TransformAxisHeader(state, layer, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
             Modifier.align(Alignment.TopCenter).padding(top = 17.px))
     }
@@ -779,18 +773,19 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
 @Composable
 private fun TransformRulers(
     state: EditorState, colour: (Int) -> Color, onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit,
-    bottom: androidx.compose.ui.unit.Dp = 86.px,
+    depthEnabled: Boolean = true,
 ) {
-    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = bottom)) {
+    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = 12.px)) {
         for (which in transformAxisOrder) {
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            val enabled = which != 2 || depthEnabled
+            Box(Modifier.fillMaxWidth().weight(1f).alpha(if (enabled) 1f else 0.38f)) {
                 RulerSpinner(
-                    colour(which),
+                    if (enabled) colour(which) else Am.OnDarkDim,
                     onDrag = { dx -> onDrag(which, dx) },
                     onEnd = { state.endGesture() },
                     modifier = Modifier.fillMaxSize(),
                     onStart = { onSelect(which) },
-                    onReset = { onReset(which) },
+                    onReset = { onReset(which) }, enabled = enabled,
                 )
                 Text("XYZ"[which].toString(), Modifier.align(Alignment.CenterStart).padding(start = 22.px), color = colour(which), fontSize = 13.sp)
             }
