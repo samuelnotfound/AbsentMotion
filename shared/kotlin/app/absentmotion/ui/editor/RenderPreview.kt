@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import app.absentmotion.R
 import app.absentmotion.editor.EditorPanel
 import app.absentmotion.editor.EditorState
+import app.absentmotion.editor.MultiSelect
 import app.absentmotion.editor.PreviewCache
 import app.absentmotion.editor.matchesFrames
 import app.absentmotion.ui.theme.Am
@@ -72,7 +73,7 @@ internal class LiveHandoff {
 
 internal fun cacheMatches(state: EditorState, resources: Long): Boolean =
     PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused && PreviewCache.key?.matchesFrames(PreviewCache.keyOf(state, resources)) == true && state.soloMode == 0 && !state.pixelMode &&
-        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && (state.selectedId == null || state.playing) && state.drawing == null && state.panel != EditorPanel.EditText
+        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && state.selectedId == null && MultiSelect.ids.isEmpty() && state.drawing == null && state.panel != EditorPanel.EditText
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
