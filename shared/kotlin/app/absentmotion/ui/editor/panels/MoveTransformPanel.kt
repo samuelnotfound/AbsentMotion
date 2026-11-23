@@ -60,6 +60,7 @@ import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.KeypadField
 import app.absentmotion.editor.KeypadRequest
 import app.absentmotion.engine.SnapGuide
+import app.absentmotion.editor.centred
 import app.absentmotion.editor.chain
 import app.absentmotion.editor.place
 import app.absentmotion.editor.LayerPoints
@@ -188,7 +189,8 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 },
                 onReset = { which ->
                     state.editSelected { l ->
-                        val v = l.location.copyOf().also { it[which] = 0f }
+                        val home = state.scene.centred(l, state.sampleMs).location
+                        val v = l.location.copyOf().also { it[which] = home[which] }
                         l.withTransform("location", v[0], v[1], v[2])
                     }
                 },
