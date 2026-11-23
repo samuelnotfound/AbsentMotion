@@ -65,11 +65,13 @@ import app.absentmotion.editor.chain
 import app.absentmotion.editor.place
 import app.absentmotion.editor.LayerPoints
 import app.absentmotion.editor.setPivot
+import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.PIVOT_LIMIT
 import app.absentmotion.editor.map
 import app.absentmotion.model.Pt
 import app.absentmotion.model.Layer
 import app.absentmotion.model.Scene
+import app.absentmotion.ui.editor.ChromeIcons
 import app.absentmotion.ui.editor.PanelIcons
 import app.absentmotion.ui.editor.rememberHaptic
 import app.absentmotion.ui.theme.Am
@@ -85,17 +87,16 @@ import app.absentmotion.ui.HoldName
 @Composable
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
     val spatialPosition = tab == 0 && layer.uses3D
-    val spatialRotation = (tab == 1 || tab == 3) && turn != null
     val rulers = state.settings.spatialRulers
     Box(modifier) {
         when (tab) {
             0 -> PositionTab(state, layer, onFlip, rulers = spatialPosition && rulers)
-            1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn, rulers)
+            1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)
             else -> PivotTab(state, layer, onFlip)
         }
-        if (spatialPosition || spatialRotation) {
+        if (spatialPosition) {
             val label = stringResource(if (rulers) R.string.transform_basic_controls else R.string.transform_advanced_controls)
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 4.px).height(28.dp).clip(PanelShape)
@@ -204,25 +205,45 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 }
             }
         }
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
-            Row {
-                if (spatial) {
-                    NumberBox(formatFixed(at[2], 2), colour(2), Modifier.width(177.px).height(70.px), fontSize = 10.5f, onSelect = { activeAxis = 2 }) { openKeypad(2) }
-                    Spacer(Modifier.width(20.px))
-                }
-                Row(Modifier.width(354.px).height(70.px).clip(PanelShape).background(Am.Field)) {
-                    ValueCell(formatFixed(at[0], 2), colour(0), Modifier.weight(1f), "X", { activeAxis = 0 }) { openKeypad(0) }
-                    ValueCell(formatFixed(at[1], 2), colour(1), Modifier.weight(1f), "Y", { activeAxis = 1 }) { openKeypad(1) }
+        Row(Modifier.align(Alignment.TopCenter).padding(top = 17.px), verticalAlignment = Alignment.Top) {
+            AxisFields(spatial, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad)
+            if (layer.canToggle3D) {
+                Spacer(Modifier.width(20.px))
+                Box(Modifier.width(1.dp).height(70.px).background(Am.Line))
+                val description = stringResource(R.string.three_d_layer)
+                Row(Modifier.height(70.px).padding(start = 18.px), verticalAlignment = Alignment.CenterVertically) {
+                    PanelIcon(ChromeIcons.ObjectTab, Am.OnDark, size = 15.dp)
+                    Text("3D", Modifier.padding(start = 4.dp), color = Am.OnDark, fontSize = 11.sp)
+                    ThinSwitch(spatial, Modifier.semantics { contentDescription = description }, enabled = !layer.locked && !state.lookOnly) {
+                        state.toggleLayer3D(layer.id)
+                    }
                 }
             }
-            Row(Modifier.height(23.px)) {
-                if (spatial) {
-                    Caption("Z", Modifier.width(177.px).fillMaxHeight())
-                    Spacer(Modifier.width(20.px))
-                }
-                Caption("X", Modifier.width(177.px).fillMaxHeight())
-                Caption("Y", Modifier.width(177.px).fillMaxHeight())
+        }
+    }
+}
+
+@Composable
+private fun AxisFields(spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val width = 153.px
+    Column(modifier) {
+        Row {
+            if (spatial) {
+                NumberBox(value(2), colour(2), Modifier.width(width).height(70.px), fontSize = 10.5f, onSelect = { onSelect(2) }) { onType(2) }
+                Spacer(Modifier.width(20.px))
             }
+            Row(Modifier.width(width * 2).height(70.px).clip(PanelShape).background(Am.Field)) {
+                ValueCell(value(0), colour(0), Modifier.weight(1f), "X", { onSelect(0) }) { onType(0) }
+                ValueCell(value(1), colour(1), Modifier.weight(1f), "Y", { onSelect(1) }) { onType(1) }
+            }
+        }
+        Row(Modifier.height(23.px)) {
+            if (spatial) {
+                Caption("Z", Modifier.width(width).fillMaxHeight())
+                Spacer(Modifier.width(20.px))
+            }
+            Caption("X", Modifier.width(width).fillMaxHeight())
+            Caption("Y", Modifier.width(width).fillMaxHeight())
         }
     }
 }
@@ -700,15 +721,14 @@ private fun FlipHint(text: String) {
 }
 
 @Composable
-private fun AxesTab(state: EditorState, layer: Layer, turn: Turn, rulers: Boolean) {
+private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     var axis by remember(layer.id) { mutableIntStateOf(2) }
     SideEffect { state.keyTarget = turn.target(axis) }
     TurnHook(state, turn)
     val values = turn.values(layer)
-    val labels = listOf(stringResource(R.string.tilt_x_rotation), stringResource(R.string.tilt_y_rotation), stringResource(R.string.tilt_z_rotation))
     fun openKeypad(which: Int) {
         axis = which
-        val fields = transformAxisOrder.map { KeypadField(labels[it], values[it], "\u00B0") }
+        val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
         state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
             state.editSelected { turn.withValues(it, floatArrayOf(v[1], v[2], v[0])) }
         }
@@ -725,27 +745,18 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn, rulers: Boolea
         state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
     }
     Box(Modifier.fillMaxSize()) {
-        if (rulers) {
-            TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
-        } else key(axis) {
-            RotationDial(state, values[axis], Modifier.fillMaxSize().padding(top = 109.px, bottom = 86.px), { drag(axis, it) }, { reset(axis) })
-        }
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
-            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.px)) {
-                for (i in transformAxisOrder) NumberBox(formatFixed(values[i], 1) + "º", colour(i), Modifier.width(177.px).height(70.px), fontSize = 13.5f, onSelect = { axis = i }) { openKeypad(i) }
-            }
-            Row(Modifier.height(23.px), androidx.compose.foundation.layout.Arrangement.spacedBy(20.px)) {
-                for (i in transformAxisOrder) Caption(labels[i], Modifier.width(177.px).fillMaxHeight())
-            }
-        }
+        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset, bottom = 12.px)
+        AxisFields(true, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
+            Modifier.align(Alignment.TopCenter).padding(top = 17.px))
     }
 }
 
 @Composable
 private fun TransformRulers(
     state: EditorState, colour: (Int) -> Color, onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit,
+    bottom: androidx.compose.ui.unit.Dp = 86.px,
 ) {
-    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = 86.px)) {
+    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = bottom)) {
         for (which in transformAxisOrder) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 RulerSpinner(

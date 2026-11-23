@@ -96,7 +96,6 @@ import app.absentmotion.editor.split
 import app.absentmotion.editor.stepBack
 import app.absentmotion.editor.trimEnd
 import app.absentmotion.editor.trimStart
-import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.ui.editor.panels.BlendingPanel
 import app.absentmotion.ui.editor.panels.BorderShadowPanel
 import app.absentmotion.ui.editor.panels.CameraPanel
@@ -247,9 +246,6 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
         val more = listOfNotNull(
             if (kind == "shape" && still.isShapeTemplate == true) Tile(EditPoints) { state.requestPoints(enter = true) } else null,
             if (kind == "shape" && drawn && still.let(ShapeCatalog::paramsFor).orEmpty().isNotEmpty()) Tile(EditShape) { state.panel = EditorPanel.EditShape } else null,
-            still?.takeIf { it.canToggle3D }?.let { layer ->
-                Tile(ThreeDLayer, enabled = !layer.locked, active = layer.uses3D) { state.toggleLayer3D(layer.id) }
-            },
             if (still?.canCrop == true) Tile(Crop) { state.openCrop() } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && still?.mediaFill != null) Tile(AiTools) { openEffectBrowser(state, "ai") } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && video) Tile(CaptionTools) { state.playing = false; captions = true } else null,
@@ -396,7 +392,6 @@ private val CameraOptions = Tool(R.string.layer_tool_camera_options, PanelIcons.
 private val CameraMoves = Tool(R.string.camera_moves, PanelIcons.Animate, 19.4f)
 private val ModelOptions = Tool(R.string.layer_tool_model_options, PanelIcons.TabTilt, 19.4f)
 private val LightOptions = Tool(R.string.light_options, PanelIcons.Brightness, 19.4f)
-private val ThreeDLayer = Tool(R.string.three_d_layer, ChromeIcons.ObjectTab, 19.4f)
 private val Presets = Tool(R.string.presets, PanelIcons.Star, 19.4f)
 private val Effects = Tool(R.string.layer_tool_effects, PanelIcons.Effects, 19.6f)
 private val Crop = Tool(R.string.layer_tool_crop, PanelIcons.Crop, 18.1f)
@@ -445,10 +440,7 @@ private fun ToolButton(tool: Tool, modifier: Modifier, enabled: Boolean = true, 
             .then(if (enabled) Modifier.combinedClickable(press, LocalIndication.current, onLongClick = onLongClick, onClick = onClick) else Modifier),
     ) {
         menu?.invoke()
-        val icon = Modifier.align(Alignment.TopCenter).offset(y = (tool.iconY - 12f).dp)
-        val tint = if (active) Am.Accent else Am.OnDark
-        if (tool == ThreeDLayer) Text("3D", icon, color = tint, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
-        else PanelIcon(tool.icon, tint, icon)
+        PanelIcon(tool.icon, if (active) Am.Accent else Am.OnDark, Modifier.align(Alignment.TopCenter).offset(y = (tool.iconY - 12f).dp))
         Text(
             stringResource(tool.label), Modifier.align(Alignment.TopCenter).offset(y = 32.dp).fillMaxWidth().height(if (deskLayout) 30.dp else 24.dp).padding(horizontal = 4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
