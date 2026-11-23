@@ -52,6 +52,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
@@ -157,6 +158,7 @@ import app.absentmotion.model.Layer
 import app.absentmotion.ai.trimmedClip
 import app.absentmotion.ai.withClip
 import app.absentmotion.model.KeyScope
+import app.absentmotion.model.PropRef
 import app.absentmotion.model.withKeyframesMoved
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.Motion
@@ -208,7 +210,7 @@ private val BookmarkPeakHalf = 2.5.dp
 private val PillOutline = 1.1.dp
 
 private var lockReveal by mutableFloatStateOf(0f)
-internal val HeaderWidth: Dp get() = 62.dp + LockZone * lockReveal
+internal val HeaderWidth: Dp get() = 62.dp + LockZone * lockReveal + DisclosureWidth
 private val HeaderInset = 1.dp
 private val TagStripWidth = 2.1.dp
 private val EyeZone = 36.dp
@@ -217,6 +219,8 @@ private val LockZone = 22.dp
 private val LockCentre = 45.dp
 private val ThumbLeft: Dp get() = EyeZone + LockZone * lockReveal
 private val ThumbSize = 16.dp
+private val DisclosureWidth = 20.dp
+private val DisclosureLeft: Dp get() = ThumbLeft + ThumbSize + 2.dp
 private val ClipTrim = 8.dp
 private val DeskClipTrim = 12.dp
 private const val HIDDEN_ALPHA = 0.55f
@@ -379,6 +383,15 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
         HeaderPictures(view) { drawLifted(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, appear.value) }
         RowSemantics(view)
         LockMenu(view)
+        view.detailsMenu?.let { (id, at) ->
+            state.scene.layer(id)?.let { layer ->
+                TimelineLayerDetails(state, layer, view.focusedProperty?.takeIf { it.first == id }?.second,
+                    Modifier.offset { IntOffset(at.x.roundToInt(), at.y.roundToInt()) },
+                    onScope = { view.focusTimelineProperty(id, it) },
+                    onDismiss = { view.detailsMenu = null },
+                )
+            }
+        }
         if (!state.lookOnly) LaunchedEffect(view) {
             val reveal = Animatable(lockReveal)
             snapshotFlow { state.selectedId != null || MultiSelect.active && MultiSelect.ids.isNotEmpty() }.collectLatest { on ->
@@ -486,6 +499,7 @@ private fun RowSemantics(view: TimelineView) {
     val unlock = stringResource(R.string.layer_unlock)
     val locked = stringResource(R.string.a11y_layer_locked)
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
+    val properties = stringResource(R.string.asset_properties)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -499,7 +513,7 @@ private fun RowSemantics(view: TimelineView) {
                     customActions = if (app.absentmotion.ui.tutorial.Tutorial.running || view.state.lookOnly) emptyList() else listOf(
                         CustomAccessibilityAction(if (layer.hidden) show else hide) { view.state.toggleHidden(layer.id); true },
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true },
-                    )
+                    ) + listOfNotNull(CustomAccessibilityAction(properties) { view.openDetails(layer.id); true }.takeIf { layer.hasTimelineDetails() })
                 })
             }
         }
@@ -540,6 +554,19 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                             .size(ThumbSize)
                             .alpha(if (layer.hidden) HIDDEN_ALPHA else 1f)
                     LayerThumbnail(layer, view.state.engine, thumb)
+                    if (remember(layer.node) { layer.hasTimelineDetails() }) {
+                        Box(
+                            Modifier.offset { IntOffset(DisclosureLeft.roundToPx(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
+                                .size(DisclosureWidth, RowHeight),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val open = view.detailsMenu?.first == layer.id
+                            app.absentmotion.ui.editor.panels.PanelIcon(
+                                if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
+                                if (open) Am.Accent else Am.OnDarkDim, size = 14.dp,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -657,6 +684,7 @@ private sealed interface Hit {
     data class WorkAreaEdge(val start: Boolean) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
+    data class Details(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
 
     data class Bar(val id: Long) : Hit
@@ -697,6 +725,9 @@ private class TimelineView(val state: EditorState, density: Density, private val
     var menuId by mutableStateOf<Long?>(null)
     var renameId by mutableStateOf<Long?>(null)
     var lockMenu by mutableStateOf<Pair<Long, Offset>?>(null)
+    var detailsMenu by mutableStateOf<Pair<Long, Offset>?>(null)
+    var focusedProperty by mutableStateOf<Pair<Long, PropRef>?>(null)
+        private set
     var snapDisabled = false
     private var lockHint: Int? = null
 
@@ -879,7 +910,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Details || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.Key || hit == Hit.Readout || hit == Hit.Ruler
         hoveredKey = (hit as? Hit.Key)?.let { it.id to it.frame }
     }
 
@@ -1043,7 +1074,23 @@ private class TimelineView(val state: EditorState, density: Density, private val
     private val keyFrames = HashMap<Pair<Long, KeyScope?>, List<Int>>()
     private val keyFrameNodes = HashMap<Pair<Long, KeyScope?>, app.absentmotion.model.XmlNode>()
 
-    private fun scopeOf(layer: Layer): KeyScope? = if (layer.id == state.selectedId) state.keyScope else null
+    fun scopeOf(layer: Layer): KeyScope? {
+        if (layer.id != state.selectedId) return null
+        val focused = focusedProperty?.takeIf { it.first == layer.id }?.second
+        return focused?.takeIf { layer.element(it) != null }?.let { KeyScope(it) } ?: state.keyScope
+    }
+
+    fun focusTimelineProperty(id: Long, ref: PropRef?) {
+        if (ref == null) {
+            focusedProperty = null
+            return
+        }
+        if (state.scene.layer(id)?.locked != false) return
+        MultiSelect.clear()
+        if (state.selectedId != id) state.panel = EditorPanel.Tools
+        state.selectedId = id
+        focusedProperty = id to ref
+    }
 
     private var keyFramesFps = 0
 
@@ -1144,6 +1191,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         return when {
             at.x < EyeZone.px -> Hit.Eye(layer.id)
             lockReveal > 0f && at.x < ThumbLeft.px -> Hit.Lock(layer.id)
+            at.x < headerWidth && at.x in DisclosureLeft.px..(DisclosureLeft + DisclosureWidth).px && layer.hasTimelineDetails() -> Hit.Details(layer.id)
             at.x < headerWidth -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..startReach -> Hit.Grip(layer.id, start = true)
             deskLayout && right - at.x in -zone..endReach -> Hit.Grip(layer.id, start = false)
@@ -1154,6 +1202,12 @@ private class TimelineView(val state: EditorState, density: Density, private val
             at.x in left..right -> Hit.Bar(layer.id)
             else -> Hit.Row(layer.id)
         }.let { if (layer.locked && (it is Hit.Header || it is Hit.Bar || it is Hit.Key || it is Hit.Grip || it is Hit.Handle)) Hit.Locked(layer.id) else it }
+    }
+
+    fun openDetails(id: Long) {
+        val row = rowOf(id) ?: return
+        state.playing = false
+        detailsMenu = id to Offset(DisclosureLeft.px, rowTop(row) + rowH)
     }
 
     fun openLockMenu(id: Long) {
@@ -1171,6 +1225,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         when (hit) {
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
+            is Hit.Details -> openDetails(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
             is Hit.Header -> select(hit.id, toggle = true)
             is Hit.Bar -> select(hit.id, toggle = true)
@@ -1195,7 +1250,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
         return keyFrames(layer).minByOrNull(::distance)?.takeIf { distance(it) <= KeyGrab.px }
     }
 
-    fun grabKey(hit: Hit.Key, scope: KeyScope? = if (hit.id == state.selectedId) state.keyScope else null) {
+    fun grabKey(hit: Hit.Key, scope: KeyScope? = state.scene.layer(hit.id)?.let(::scopeOf)) {
         state.playing = false
         keyLayer = state.scene.layer(hit.id)
         keyScope = scope
@@ -1760,7 +1815,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     is Hit.Grip -> { view.selectDesktop(h.id, false, false); drag = view.beginDrag(h, Offset.Zero) }
                     is Hit.WorkAreaEdge -> drag = view.beginDrag(h, Offset.Zero)
                     is Hit.Key -> {
-                        val scope = if (h.id == view.state.selectedId) view.state.keyScope else null
+                        val scope = view.state.scene.layer(h.id)?.let(view::scopeOf)
                         view.selectDesktop(h.id, false, false)
                         view.grabKey(h, scope)
                         drag = Drag.Key
@@ -1830,7 +1885,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    Hit.Readout -> view.tap(h)
+                    is Hit.Details, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
@@ -2270,7 +2325,7 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     val icon = eye.intrinsicSize
     translate(EyeCentre.toPx() - icon.width / 2, top + (height - icon.height) / 2) { with(eye) { draw(icon) } }
     drawPadlock(lock, layer.locked || layer.timingLocked, top, height)
-    val left = (ThumbLeft + ThumbSize + 4.dp).toPx()
+    val left = (ThumbLeft + ThumbSize + DisclosureWidth + 4.dp).toPx()
     val room = (width - trim - left - pillHeight / 2 - 4.dp.toPx()).toInt()
     if (room < 1) return
     val text = measurer.measure(layer.shownName(), if (layer.hidden) styles.hiddenHeader else styles.header, TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = room))
