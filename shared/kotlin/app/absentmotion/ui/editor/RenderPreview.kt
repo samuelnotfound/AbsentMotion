@@ -226,7 +226,10 @@ internal fun RenderPreviewNotes(state: EditorState, cachedPlaying: State<Boolean
 
 private const val STALE_NOTE_MS = 5_000L
 
-private data class PreparationRequest(val key: app.absentmotion.editor.CacheKey, val frame: Int, val eligible: Boolean, val fit: Float, val cell: Float)
+private data class PreparationRequest(val key: app.absentmotion.editor.CacheKey, val frame: Int?, val eligible: Boolean, val fit: Float, val cell: Float)
+
+private fun app.absentmotion.model.Scene.hasPreviewVideo(): Boolean =
+    layers.any { it.mediaFill?.video == true || it.nested?.hasPreviewVideo() == true }
 
 @Composable
 private fun AutomaticPreview(state: EditorState) {
@@ -244,21 +247,33 @@ private fun AutomaticPreview(state: EditorState) {
             thermal.start()
             try {
                 snapshotFlow {
-                    PreparationRequest(PreviewCache.keyOf(state), state.frame,
-                        !state.playing && !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
+                    val frame = if (state.playing) null else state.frame
+                    PreparationRequest(PreviewCache.keyOf(state), frame,
+                        !state.exportOpen && state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero &&
                             state.drawing == null && state.panel != EditorPanel.EditText, PreviewCache.fit, PreviewCache.checkerCell)
                 }.collectLatest { request ->
                     delay(100)
                     PreviewCache.follow(request.key)
                     if (!request.eligible || hot) return@collectLatest
-                    delay(PreviewCache.idleMs - 100)
-                    while (!PreviewCache.idle() || PreviewCache.coolingDown()) delay(100)
-                    fun current() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && PreviewCache.idle() && !thermal.hot &&
-                        !state.playing && !state.exportOpen && state.scene == request.key.scene && state.frame == request.frame &&
+                    val duringPlayback = request.frame == null
+                    if (duringPlayback && request.key.scene.hasPreviewVideo()) return@collectLatest
+                    if (!duringPlayback) delay(PreviewCache.idleMs - 100)
+                    fun eligible() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !thermal.hot &&
+                        state.playing == duringPlayback && !state.exportOpen && state.scene == request.key.scene &&
                         state.settings.fullMotionBlur == request.key.accurateBlur && state.settings.androidEmoji == request.key.androidEmoji &&
                         state.settings.previewQuality.divisor == request.key.divisor && state.cameraMode == request.key.camera &&
                         state.soloMode == 0 && !state.pixelMode && !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && state.drawing == null && state.panel != EditorPanel.EditText
-                    if (current()) PreviewCache.prepare(state, context, ::current)
+                    fun current() = eligible() && if (duringPlayback) PreviewCache.canBufferPlayback(state)
+                        else PreviewCache.idle() && !PreviewCache.coolingDown() && state.frame == request.frame
+                    if (duringPlayback) {
+                        while (eligible()) {
+                            if (current()) PreviewCache.prepare(state, context, duringPlayback = true, ::current)
+                            delay(150)
+                        }
+                    } else {
+                        while (!PreviewCache.idle() || PreviewCache.coolingDown()) delay(100)
+                        if (current()) PreviewCache.prepare(state, context, duringPlayback = false, ::current)
+                    }
                 }
             } finally { thermal.stop() }
         }

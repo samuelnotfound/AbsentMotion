@@ -396,6 +396,20 @@ object PreviewCache {
     fun idle(): Boolean = System.nanoTime() - interactionNs >= idleMs * 1_000_000L
     fun coolingDown(): Boolean = System.nanoTime() < slowUntilNs
 
+    fun canBufferPlayback(state: EditorState): Boolean {
+        if (paused || phase != Phase.Ready || player == null || preparedCell != checkerCell || coolingDown()) return false
+        val scene = state.scene
+        val frames = scene.workArea
+        val at = state.frame
+        val lead = (scene.fps / 4).coerceAtLeast(3)
+        if (at !in frames || frames.last - at < lead || state.engine.lastStillMs > 1500.0 / scene.fps) return false
+        val built = store ?: return false
+        if (!(at until at + lead).all { it in built }) return false
+        if ((at + lead..minOf(frames.last, at + scene.fps * 2)).all { it in built }) return false
+        val width = cacheFrameSize(scene.width, scene.height, fit, state.settings.previewQuality.divisor).first
+        return player?.width == width && key?.matchesFrames(keyOf(state)) == true
+    }
+
     suspend fun follow(next: CacheKey) {
         val previous = key ?: return
         if (!automatic || phase == Phase.Rendering || previous.scene == next.scene || previous.copy(scene = next.scene) != next) return
@@ -412,7 +426,7 @@ object PreviewCache {
         revise(force = true)
     }
 
-    suspend fun prepare(state: EditorState, context: Context, accept: () -> Boolean) {
+    suspend fun prepare(state: EditorState, context: Context, duringPlayback: Boolean, accept: () -> Boolean) {
         if (!accept() || phase == Phase.Rendering || fit <= 0f || !state.settings.backgroundPreview) return
         val next = keyOf(state)
         val area = next.scene.workArea
@@ -457,19 +471,21 @@ object PreviewCache {
             return
         }
         try {
-            val order = listOf(at) + previewOrder(area.last, at, if (built.raw) 30 else 1, first = area.first)
+            val order = if (duringPlayback) (at..minOf(area.last, at + next.scene.fps * 2)).toList()
+                else listOf(at) + previewOrder(area.last, at, if (built.raw) 30 else 1, first = area.first)
             var index = 0
             var refused = 0
             while (index < order.size) {
                 val frame = order[index]
                 currentCoroutineContext().ensureActive()
                 if (!current()) return
-                if (frame in built) { index++; continue }
+                if ((duringPlayback && frame < state.frame) || frame in built) { index++; continue }
                 if (!heapRoom(width.toLong() * height * 12)) return
                 val started = System.nanoTime()
-                val pixels = state.engine.capturePreviewFrame(next.scene, next.scene.frameStart(frame), width, height, next.accurateBlur, next.camera, ::current)
+                val pixels = state.engine.capturePreviewFrame(next.scene, next.scene.frameStart(frame), width, height, next.accurateBlur, next.camera, duringPlayback, ::current)
                 if (pixels == null) {
-                    if (++refused >= if (built.raw) 20 else 5) { refused = 0; index++; continue }
+                    val attempts = if (duringPlayback) 1 else if (built.raw) 20 else 5
+                    if (++refused >= attempts) { refused = 0; index++; continue }
                     delay(50)
                     continue
                 }
@@ -482,13 +498,13 @@ object PreviewCache {
                 val saved = withContext(Dispatchers.IO) {
                     while (current()) {
                         if (built.put(frame, stored)) return@withContext true
-                        if (extendingManual || !built.evictFarther(at, frame)) break
+                        if (duringPlayback || extendingManual || !built.evictFarther(at, frame)) break
                     }
                     false
                 }
                 revise(force = !saved)
                 if (!saved) return
-                if (encoder == null && built.inMemory(frame)) continue
+                if (encoder == null && built.inMemory(frame) && !duringPlayback) continue
                 val elapsed = System.nanoTime() - started
                 delay((elapsed / 500_000L).coerceIn(30L, 1_000L))
             }
