@@ -2330,7 +2330,6 @@
     <string name="cutout_edge_photo">تُضبط الحافة عند إنشاء القص. لتغييرها، شغّل إزالة الخلفية مرة أخرى: يبدأ من جديد من الصورة الأصلية.</string>
     <string name="prerender">تصيير مسبق</string>
     <string name="prerender_progress">جاري التصيير المسبق %1$d%%</string>
-    <string name="prerender_playing">مصيّر مسبقًا</string>
     <string name="prerender_outdated">التصيير المسبق قديم.</string>
     <string name="prerender_again">إعادة التصيير المسبق</string>
     <string name="caption_outline_thickness">السُمك</string>

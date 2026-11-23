@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">Viền được đặt khi tạo phần cắt. Để thay đổi, hãy chạy lại Xóa nền: quá trình sẽ bắt đầu lại từ ảnh gốc.</string>
     <string name="prerender">Kết xuất trước</string>
     <string name="prerender_progress">Đang kết xuất trước %1$d%%</string>
-    <string name="prerender_playing">Đã kết xuất trước</string>
     <string name="prerender_outdated">Bản kết xuất trước đã lỗi thời.</string>
     <string name="prerender_again">Kết xuất trước lại</string>
     <string name="caption_outline_thickness">Độ dày</string>

@@ -2276,7 +2276,6 @@
     <string name="cutout_edge_photo">Край задаётся при создании выреза. Чтобы изменить его, снова запустите удаление фона: оно начнётся заново с исходного фото.</string>
     <string name="prerender">Предрендер</string>
     <string name="prerender_progress">Предрендер %1$d%%</string>
-    <string name="prerender_playing">Предрендер готов</string>
     <string name="prerender_outdated">Предрендер устарел.</string>
     <string name="prerender_again">Предрендерить снова</string>
     <string name="caption_outline_thickness">Толщина</string>

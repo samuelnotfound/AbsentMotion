@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">ขอบจะถูกกำหนดตอนสร้างคัตเอาต์ หากต้องการเปลี่ยน ให้ลบพื้นหลังอีกครั้ง ซึ่งจะเริ่มจากรูปต้นฉบับใหม่</string>
     <string name="prerender">เรนเดอร์ล่วงหน้า</string>
     <string name="prerender_progress">กำลังเรนเดอร์ล่วงหน้า %1$d%%</string>
-    <string name="prerender_playing">เรนเดอร์ล่วงหน้าแล้ว</string>
     <string name="prerender_outdated">การเรนเดอร์ล่วงหน้าล้าสมัยแล้ว</string>
     <string name="prerender_again">เรนเดอร์ล่วงหน้าอีกครั้ง</string>
     <string name="caption_outline_thickness">ความหนา</string>

@@ -2222,7 +2222,6 @@
     <string name="cutout_edge_photo">Kenar, kesim oluşturulurken ayarlanır. Değiştirmek için Arka planı kaldır\'ı yeniden çalıştır: orijinal fotoğraftan yeniden başlar.</string>
     <string name="prerender">Önceden işle</string>
     <string name="prerender_progress">Önceden işleniyor %%%1$d</string>
-    <string name="prerender_playing">Önceden işlendi</string>
     <string name="prerender_outdated">Önceden işleme güncel değil.</string>
     <string name="prerender_again">Yeniden önceden işle</string>
     <string name="caption_outline_thickness">Kalınlık</string>

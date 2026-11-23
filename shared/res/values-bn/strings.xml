@@ -2222,7 +2222,6 @@
     <string name="cutout_edge_photo">কাট-আউট তৈরি হওয়ার সময় প্রান্ত সেট হয়। এটি বদলাতে আবার ব্যাকগ্রাউন্ড রিমুভ চালান: এটি মূল ছবি থেকে আবার শুরু হবে।</string>
     <string name="prerender">প্রি-রেন্ডার</string>
     <string name="prerender_progress">প্রি-রেন্ডার হচ্ছে %1$d%%</string>
-    <string name="prerender_playing">প্রি-রেন্ডার করা</string>
     <string name="prerender_outdated">প্রি-রেন্ডারটি পুরোনো হয়ে গেছে।</string>
     <string name="prerender_again">আবার প্রি-রেন্ডার</string>
     <string name="caption_outline_thickness">পুরুত্ব</string>

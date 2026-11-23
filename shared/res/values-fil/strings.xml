@@ -2222,7 +2222,6 @@
     <string name="cutout_edge_photo">Naitatakda ang gilid kapag ginawa ang cut-out. Para baguhin ito, patakbuhin muli ang Remove Background: magsisimula ulit ito sa orihinal na larawan.</string>
     <string name="prerender">Pre-render</string>
     <string name="prerender_progress">Nag-pre-render %1$d%%</string>
-    <string name="prerender_playing">Naka-pre-render</string>
     <string name="prerender_outdated">Luma na ang pre-render.</string>
     <string name="prerender_again">Pre-render muli</string>
     <string name="caption_outline_thickness">Kapal</string>

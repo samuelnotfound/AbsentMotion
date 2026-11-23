@@ -2222,7 +2222,6 @@
     <string name="cutout_edge_photo">कट-आउट बनाते समय एज सेट हो जाता है। इसे बदलने के लिए फिर से बैकग्राउंड हटाएँ: यह मूल फ़ोटो से फिर शुरू होता है।</string>
     <string name="prerender">प्री-रेंडर</string>
     <string name="prerender_progress">प्री-रेंडर हो रहा है %1$d%%</string>
-    <string name="prerender_playing">प्री-रेंडर</string>
     <string name="prerender_outdated">प्री-रेंडर पुराना हो गया है।</string>
     <string name="prerender_again">फिर से प्री-रेंडर करें</string>
     <string name="caption_outline_thickness">मोटाई</string>

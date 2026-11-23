@@ -2276,7 +2276,6 @@
     <string name="cutout_edge_photo">Край задається під час створення вирізу. Щоб змінити його, запустіть «Видалити фон» ще раз: усе почнеться знову з оригінального фото.</string>
     <string name="prerender">Попередній рендеринг</string>
     <string name="prerender_progress">Попередній рендеринг %1$d%%</string>
-    <string name="prerender_playing">Відрендерено наперед</string>
     <string name="prerender_outdated">Попередній рендеринг застарів.</string>
     <string name="prerender_again">Рендерити наперед знову</string>
     <string name="caption_outline_thickness">Товщина</string>

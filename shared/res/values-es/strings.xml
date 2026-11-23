@@ -2249,7 +2249,6 @@
     <string name="cutout_edge_photo">El borde se define al hacer el recorte. Para cambiarlo, vuelve a ejecutar Quitar fondo: empieza de nuevo desde la foto original.</string>
     <string name="prerender">Pre-renderizar</string>
     <string name="prerender_progress">Pre-renderizando %1$d%%</string>
-    <string name="prerender_playing">Pre-renderizado</string>
     <string name="prerender_outdated">La pre-renderización está desactualizada.</string>
     <string name="prerender_again">Volver a pre-renderizar</string>
     <string name="caption_outline_thickness">Grosor</string>
