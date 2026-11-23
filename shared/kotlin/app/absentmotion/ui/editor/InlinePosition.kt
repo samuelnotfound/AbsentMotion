@@ -27,9 +27,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -40,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import app.absentmotion.R
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.InlineKey
-import app.absentmotion.editor.InlineKeyMove
 import app.absentmotion.editor.InlineSection
 import app.absentmotion.editor.InlineTrack
 import app.absentmotion.editor.inlineEditorPanel
@@ -50,7 +46,6 @@ import app.absentmotion.model.PropRef
 import app.absentmotion.model.valueAt
 import app.absentmotion.ui.editor.panels.formatFixed
 import app.absentmotion.ui.theme.Am
-import kotlin.math.abs
 
 private val SectionHeight = 27.dp
 internal val inlineTrackHeight = 27.dp
@@ -75,7 +70,7 @@ internal fun inlineTrackOffset(sections: List<InlineSection>, ref: PropRef): and
 @Composable
 internal fun InlinePositionDetails(
     state: EditorState, layer: Layer, sections: List<InlineSection>, modifier: Modifier,
-    xOf: (Int) -> Float, frameAt: (Float) -> Int, selection: InlineKeySelection,
+    xOf: (Int) -> Float, selection: InlineKeySelection,
 ) {
     val scene = state.scene
     val at = layer.at(state.sampleMs, scene.fps)
@@ -86,7 +81,6 @@ internal fun InlinePositionDetails(
     BoxWithConstraints(modifier) {
         val labelWidth = minOf(172.dp, maxWidth * 0.59f)
         val valueWidth = minOf(58.dp, labelWidth * 0.39f)
-        val tapWidth = with(LocalDensity.current) { (labelWidth - valueWidth).toPx() }
         Column(Modifier.fillMaxWidth()) {
             if (sections.isEmpty()) Row(Modifier.height(SectionHeight).padding(start = TreeTrunk), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.inline_no_keyframes), color = Am.OnDarkDim, fontSize = 11.sp)
@@ -109,10 +103,9 @@ internal fun InlinePositionDetails(
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
                         .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
-                        InlinePositionKeys(state, layer, track, track.frames(scene, layer), canEdit && !layer.timingLocked && !track.linked(layer),
-                            Modifier.matchParentSize(), xOf, frameAt, tapWidth, openEditor, selection)
+                        InlinePositionKeys(state, layer, track, track.frames(scene, layer), Modifier.matchParentSize(), xOf, selection)
                         Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
-                            .then(if (openEditor == null) Modifier else Modifier.semantics { onClick { openEditor(); true } })
+                            .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
                                 val x = TreeTrunk.toPx()
                                 val middle = size.height / 2f
@@ -141,7 +134,7 @@ private fun Modifier.inlineTap(action: () -> Unit): Modifier {
     return semantics { onClick { current(); true } }.pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown()
-            if (waitForUpOrCancellation() != null) current()
+            waitForUpOrCancellation()?.let { it.consume(); current() }
         }
     }
 }
@@ -156,88 +149,10 @@ internal class InlineKeySelection {
 
 @Composable
 private fun InlinePositionKeys(
-    state: EditorState, layer: Layer, track: InlineTrack, frames: List<Int>, editable: Boolean, modifier: Modifier,
-    xOf: (Int) -> Float, frameAt: (Float) -> Int, labelWidth: Float, openEditor: (() -> Unit)?, selection: InlineKeySelection,
+    state: EditorState, layer: Layer, track: InlineTrack, frames: List<Int>, modifier: Modifier,
+    xOf: (Int) -> Float, selection: InlineKeySelection,
 ) {
-    val currentFrames by rememberUpdatedState(frames)
-    val position by rememberUpdatedState(xOf)
-    val toFrame by rememberUpdatedState(frameAt)
-    val open by rememberUpdatedState(openEditor)
-    val haptic = LocalHapticFeedback.current
-    val gesture = Modifier.pointerInput(layer.id, track.ref, editable, labelWidth, selection) {
-        awaitEachGesture {
-            val down = awaitFirstDown()
-            val action = open.takeIf { down.position.x < labelWidth }
-            val from = currentFrames.minByOrNull { abs(position(it) - down.position.x) }
-                ?.takeIf { abs(position(it) - down.position.x) <= 9.dp.toPx() }
-            if (from == null || !editable) {
-                if (action != null) waitForUpOrCancellation()?.let { it.consume(); action() }
-                return@awaitEachGesture
-            }
-            val hit = InlineKey(layer.id, track.ref, from)
-            val start = position(from)
-            var pointer = down
-            var group = selection.keys
-            val wasSelected = hit in group
-            down.consume()
-            suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.nextPointer() =
-                awaitPointerEvent().changes.firstOrNull { it.id == down.id }
-            val held = if (wasSelected) false else withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                do {
-                    pointer = nextPointer() ?: return@withTimeoutOrNull false
-                    if (!pointer.pressed || pointer.isConsumed) return@withTimeoutOrNull false
-                    pointer.consume()
-                } while ((pointer.position - down.position).getDistance() <= viewConfiguration.touchSlop)
-                false
-            } == null
-            if (held) {
-                state.playing = false
-                group = group + hit
-                selection.keys = group
-                if (state.settings.vibration) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
-            if (!pointer.pressed) {
-                pointer.consume()
-                if (action != null && group.isEmpty()) action()
-                else if (group.isNotEmpty()) selection.keys = if (hit in group) group - hit else group + hit
-                else { state.playing = false; state.frame = from }
-                return@awaitEachGesture
-            }
-            if (!wasSelected && !held && action != null) return@awaitEachGesture
-            if (hit !in group) group = setOf(hit)
-            val move = InlineKeyMove(state.scene, group)
-            var moved = false
-            var lastDelta: Int? = null
-            try {
-                while (true) {
-                    val travel = pointer.position.x - down.position.x
-                    if (moved || abs(travel) > viewConfiguration.touchSlop) {
-                        moved = true
-                        state.playing = false
-                        val delta = toFrame(start + travel) - from
-                        if (delta != lastDelta) {
-                            lastDelta = delta
-                            state.edit("inline-key-move") { scene ->
-                                val (updated, movedKeys) = move.apply(scene, delta)
-                                if (wasSelected || held) selection.keys = movedKeys
-                                updated
-                            }
-                        }
-                    }
-                    pointer = nextPointer() ?: break
-                    if (pointer.isConsumed) break
-                    pointer.consume()
-                    if (!pointer.pressed) {
-                        if (!moved && !held && wasSelected) selection.keys = selection.keys - hit
-                        break
-                    }
-                }
-            } finally {
-                if (moved) state.endGesture()
-            }
-        }
-    }
-    Canvas(modifier.then(gesture)) {
+    Canvas(modifier) {
         val y = center.y
         val radius = 4.5.dp.toPx()
         for (frame in frames) {
