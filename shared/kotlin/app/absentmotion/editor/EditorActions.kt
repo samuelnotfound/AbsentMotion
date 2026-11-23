@@ -118,6 +118,11 @@ fun EditorState.duplicateSelected() {
 
 fun EditorState.toggleHidden(id: Long) = edit { it.update(id) { layer -> layer.withHidden(!layer.hidden) } }
 
+fun EditorState.toggleLayer3D(id: Long) {
+    if (lookOnly || scene.layer(id)?.let { it.canToggle3D && !it.locked } != true) return
+    edit { it.update(id) { layer -> layer.copy(node = layer.node.with("threeD", if (layer.uses3D) null else "true")) } }
+}
+
 fun EditorState.setLock(id: Long, lock: String?) = edit { it.update(id) { layer -> layer.withLock(lock) } }
 
 fun EditorState.toggleLock(id: Long) {
