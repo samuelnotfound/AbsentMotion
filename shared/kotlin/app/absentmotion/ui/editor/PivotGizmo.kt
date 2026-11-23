@@ -149,18 +149,25 @@ internal fun DrawScope.drawPivotRing(projection: PivotProjection, at: FloatArray
     val extent = maxOf(x, y) * scale
     if (extent < 1e-5f) return
     val reach = radius / extent
+    fun point(x: Float, y: Float) = projection.project(floatArrayOf(at[0] + x * reach, at[1] + y * reach, at[2]))?.let { it * scale + offset }
     val path = Path()
     var connected = false
     for (i in 0..24) {
         val angle = (2 * PI * i / 24).toFloat()
-        val p = projection.project(floatArrayOf(at[0] + cos(angle) * reach, at[1] + sin(angle) * reach, at[2]))
-            ?.let { it * scale + offset }
+        val p = point(cos(angle), sin(angle))
         if (p == null) {
             connected = false
         } else {
             if (connected) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
             connected = true
         }
+    }
+    for (dir in listOf(Offset(1f, 0f), Offset(-1f, 0f), Offset(0f, 1f), Offset(0f, -1f))) {
+        val from = point(dir.x * 0.75f, dir.y * 0.75f) ?: continue
+        val length = if (dir.x > 0f) 1.65f else 1.28f
+        val to = point(dir.x * length, dir.y * length) ?: continue
+        path.moveTo(from.x, from.y)
+        path.lineTo(to.x, to.y)
     }
     drawPath(path, Color.Black.copy(alpha = 0.6f), style = Stroke(stroke * 2.5f))
     drawPath(path, tint, style = Stroke(stroke))

@@ -453,7 +453,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                 pivotDrag.move(pivotGrab, position - down.position)?.let { (value, snaps) ->
                                     if (snaps.any { it !in pivotSnaps }) tick(HapticFeedbackType.SegmentTick)
                                     pivotSnaps = snaps
-                                    state.setPivot(value[0], value[1], PIVOT_DRAG, value[2])
+                                    state.setPivot(value[0], value[1], PIVOT_DRAG, value[2].takeIf { pivotGrab == 2 })
                                 }
                             }
                             event.changes.forEach { it.consume() }
