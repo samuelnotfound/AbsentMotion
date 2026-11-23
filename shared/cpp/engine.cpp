@@ -1452,7 +1452,8 @@ bool EngineImpl::layerOutline(int64_t layerId, double timeMs, std::string* svg) 
     const SceneScope scope(fScene);
     const Layer* layer = fScene.layer(layerId);
     if (!layer) return false;
-    const SkPath path = layer->text ? TextGlyphPath(*layer, layer->localTime(timeMs), fScene.fps) : ShapePath(*layer, layer->localTime(timeMs));
+    const float t = layer->localTime(timeMs);
+    const SkPath path = layer->text ? TextGlyphPath(*layer, t, fScene.fps) : Cropped(*layer, t, ShapePath(*layer, t));
     if (path.isEmpty()) return false;
     *svg = OutlineSvg(path);
     return true;
