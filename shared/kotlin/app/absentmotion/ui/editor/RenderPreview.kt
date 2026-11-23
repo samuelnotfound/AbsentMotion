@@ -154,7 +154,7 @@ internal fun CachedFrame(state: EditorState, usable: Boolean, live: LiveHandoff,
     if (state.playing && covered) CachedSelection(state, frame, left, top, width, height) { player.shown?.frame == frame }
 }
 
-private data class CachedLayerControls(val contour: Path, val corners: List<Offset>, val anchor: Offset?)
+private data class CachedLayerControls(val contour: Path, val corners: List<Offset>, val pivot: Pair<PivotProjection, FloatArray>?)
 
 @Composable
 private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Float, width: Float, height: Float, visible: () -> Boolean) {
@@ -172,7 +172,8 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
                 val corners = List(4) { Offset(points[it * 2], points[it * 2 + 1]) }
                 if (corners.any { !it.x.isFinite() || !it.y.isFinite() }) return@mapNotNull null
                 val shape = layer.kind == "shape"
-                val projection = if (shape || id == selected) state.engine.layerMatrix(id, ms)?.let(::selectionMatrix) else null
+                val matrices = if (shape || id == selected) state.engine.layerMatrix(id, ms) else null
+                val projection = matrices?.let(::selectionMatrix)
                 val path = if (shape && projection != null) state.engine.layerOutline(id, ms)?.let { svg ->
                     runCatching { PathParser().parsePathString(svg).toPath().apply { transform(projection) } }.getOrNull()
                 } else null
@@ -181,8 +182,11 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
                     corners.drop(1).forEach { lineTo(it.x, it.y) }
                     close()
                 }
-                val anchor = if (id == selected) projection?.map(Offset(layer.pivot[0], layer.pivot[1])) else null
-                CachedLayerControls(contour, corners, anchor)
+                val pivot = if (id == selected) matrices?.let { PivotProjection.from(it) }?.let {
+                    val point = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
+                    it to point
+                } else null
+                CachedLayerControls(contour, corners, pivot)
             }
         }
     }
@@ -196,12 +200,12 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
             0f, 0f, 1f, 0f,
             left, top, 0f, 1f,
         ))
-        for ((contour, corners, anchor) in controls) {
+        for ((contour, corners, pivot) in controls) {
             val outline = Path().apply { addPath(contour); transform(toScreen) }
             drawPath(outline, Color.Black.copy(alpha = 0.65f), style = Stroke(1.75.dp.toPx()))
             drawPath(outline, Am.Accent, style = Stroke(1.dp.toPx()))
-            if (anchor == null || !anchor.x.isFinite() || !anchor.y.isFinite()) continue
-            drawCircle(Am.OnDarkDim, 2.dp.toPx(), toScreen.map(anchor), style = Stroke(1.dp.toPx()))
+            if (pivot == null) continue
+            drawPivotRing(pivot.first, pivot.second, scaleX, Offset(left, top), 3.dp.toPx(), Am.OnDarkDim, 1.dp.toPx())
             for (i in corners.indices) {
                 val next = corners[(i + 1) % corners.size]
                 for (point in listOf(corners[i], (corners[i] + next) / 2f)) {

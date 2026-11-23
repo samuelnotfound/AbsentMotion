@@ -44,7 +44,7 @@ SkM44 Spin(const Layer& l, double timeMs) {
 SkM44 Body(const Layer& l, const Placement& p, double timeMs) {
     const float size = l.value("size", 0, l.localTime(timeMs), 200);
     const float sx = p.scale.fX, sy = p.scale.fY;
-    return p.space * SkM44::Scale(sx, sy, std::sqrt(std::fabs(sx * sy))) * SkM44::Translate(-p.pivot.fX, -p.pivot.fY) * Spin(l, timeMs) *
+    return p.space * SkM44::Scale(sx, sy, std::sqrt(std::fabs(sx * sy))) * SkM44::Translate(-p.pivot.fX, -p.pivot.fY, -p.pivotZ) * Spin(l, timeMs) *
            SkM44::Scale(size, size, size);
 }
 
@@ -90,7 +90,7 @@ void DrawModel(SkCanvas* canvas, const Layer& l, double timeMs, float alpha, con
     const SkM44 turn = p.turn * unscale * spin;
     const SkM44 worldTurn = SkM44::Rotate({0, 0, 1}, p.rotation * kRadians) * p.tilt * unscale * spin;
     const SkM44 worldPlace = SkM44::Rotate({0, 0, 1}, p.rotation * kRadians) * p.tilt * SkM44::Scale(sx, sy, sz) *
-                             SkM44::Translate(-p.pivot.fX, -p.pivot.fY) * spin * SkM44::Scale(size, size, size);
+                             SkM44::Translate(-p.pivot.fX, -p.pivot.fY, -p.pivotZ) * spin * SkM44::Scale(size, size, size);
     const LightSet lights = l.sight.layers ? SceneLights(*l.sight.layers, timeMs) : LightSet{};
     const float mirror = sx * sy < 0 ? -1.0f : 1.0f;
     const float angle = l.value("lightAngle", 0, t, 135) * kRadians;
