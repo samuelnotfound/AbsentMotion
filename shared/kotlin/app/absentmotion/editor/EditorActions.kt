@@ -183,7 +183,7 @@ internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List
 private fun EditorState.stops(): List<Int> = scene.navigationStops(selected, keyScope)
 
 fun EditorState.skipBack() {
-    frame = stops().lastOrNull { it < frame } ?: frame
+    frame = stops().lastOrNull { it < frame } ?: 0
 }
 
 fun EditorState.skipForward() {

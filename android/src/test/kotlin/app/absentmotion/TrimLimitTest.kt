@@ -44,6 +44,9 @@ class TrimLimitTest {
         val marked = trimmed.withBookmarks(listOf(trimmed.frameStart(40), trimmed.frameStart(90)))
         assertEquals(listOf(0, 40, 90, 149), marked.navigationStops(null))
         assertEquals(listOf(0, 40, 90, 149), marked.navigationStops(marked.layer(1)))
+        val workArea = marked.withWorkArea(60, 110)
+        assertEquals(listOf(0, 40, 60, 90, 110, 149), workArea.navigationStops(null))
+        assertEquals(listOf(0, 40, 60, 90, 110, 149), workArea.navigationStops(workArea.layer(1)))
     }
 
     @Test fun unknownLengthAndStillLayersNeverHitTheLimit() {
