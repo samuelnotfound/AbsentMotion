@@ -197,6 +197,7 @@ class EditorState(
             if (inlinePanelHidden) {
                 inlinePanelHidden = false
                 inlineProperty = null
+                inlineGroupReturnDepth = null
                 easingOpen = false
                 keyTarget = null
             }
@@ -383,6 +384,7 @@ class EditorState(
     var timelineDetailsOpen by mutableStateOf(false)
     var inlineProperty by mutableStateOf<PropRef?>(null)
         internal set
+    internal var inlineGroupReturnDepth: Int? = null
     var inlineTransformAxis by mutableIntStateOf(0)
     val showsLayerInspector get() = selectedId != null && (!inlinePanelHidden || inlineProperty != null)
     internal var inlineKeyframes: (() -> List<Int>)? = null

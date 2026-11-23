@@ -1,6 +1,9 @@
 package app.absentmotion
 
 import app.absentmotion.editor.EditorPanel
+import app.absentmotion.editor.grouped
+import app.absentmotion.effects.EffectCatalog
+import app.absentmotion.ui.editor.timelineGroupRows
 import app.absentmotion.editor.InlineKey
 import app.absentmotion.editor.InlineKeyMove
 import app.absentmotion.editor.inlineNavigationStops
@@ -43,6 +46,20 @@ class KeyScopeTest {
 
     private fun Layer.frames(scope: KeyScope? = null) = keyframeTimes(scope).map { scene.frameAt(it) }
     private fun Layer.keys(ref: PropRef) = keyframes(ref).map { scene.frameAt(timeOf(it.t)) }
+
+    @Test fun groupDisclosureKeepsChildTimingAndIndependentExpansion() {
+        val host = blank.add(shapeLayer(id = 2, start = 500, end = 1999))
+            .add(shapeLayer(id = 3, start = 200, end = 2199))
+            .grouped(setOf(2L, 3L), null, 7, "Folder")
+        val group = host.layer(7)!!
+        val rows = timelineGroupRows(host, group, EffectCatalog()) { it == listOf(7L, 2L) }
+        assertEquals(listOf(7L, 3L, 2L), rows.map { it.layer.id })
+        assertEquals(true, rows.first().add)
+        assertEquals(null, rows[1].details)
+        assertEquals(emptyList<app.absentmotion.editor.InlineSection>(), rows[2].details)
+        assertEquals(500..1999, rows[2].visibleRange())
+        assertEquals(300, rows[2].localTime(500))
+    }
 
     @Test fun viewerRotationUsesTheLayerAxesAfterItHasTurned() {
         val initial = floatArrayOf(0f, 0f, 90f)

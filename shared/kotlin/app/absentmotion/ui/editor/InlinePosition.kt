@@ -43,6 +43,7 @@ import app.absentmotion.editor.inlineEditorPanel
 import app.absentmotion.editor.openInlineEditor
 import app.absentmotion.model.Layer
 import app.absentmotion.model.PropRef
+import app.absentmotion.model.Scene
 import app.absentmotion.model.valueAt
 import app.absentmotion.ui.editor.panels.formatFixed
 import app.absentmotion.ui.theme.Am
@@ -71,12 +72,14 @@ internal fun inlineTrackOffset(sections: List<InlineSection>, ref: PropRef): and
 internal fun InlinePositionDetails(
     state: EditorState, layer: Layer, sections: List<InlineSection>, modifier: Modifier,
     xOf: (Int) -> Float, selection: InlineKeySelection,
+    scene: Scene = state.scene, sampleMs: Int = state.sampleMs, nested: Boolean = false, editable: Boolean = true,
+    onOpen: (PropRef) -> Unit = { state.openInlineEditor(layer, it) },
+    onEditValue: ((InlineTrack, Float) -> Unit)? = null,
 ) {
-    val scene = state.scene
-    val at = layer.at(state.sampleMs, scene.fps)
-    val canEdit = !state.lookOnly && !layer.locked
+    val at = layer.at(sampleMs, scene.fps)
+    val canEdit = editable && !state.lookOnly && !layer.locked
     fun editor(track: InlineTrack): (() -> Unit)? = if (canEdit && inlineEditorPanel(layer, track.ref) != null) {
-        { state.openInlineEditor(layer, track.ref) }
+        { onOpen(track.ref) }
     } else null
     BoxWithConstraints(modifier) {
         val labelWidth = minOf(172.dp, maxWidth * 0.59f)
@@ -96,14 +99,14 @@ internal fun InlinePositionDetails(
                 }
                 for ((index, track) in section.tracks.withIndex()) key(track.ref) {
                     val openEditor = editor(track)
-                    val raw = at.element(track.ref)?.valueAt(at.t)
+                    val raw = at.element(track.ref)?.valueAt(at.t) ?: track.default
                     val value = raw?.toFloatOrNull()?.times(track.multiplier)
                     val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
-                    val active = layer.id == state.selectedId && state.inlineProperty != null &&
+                    val active = !nested && layer.id == state.selectedId && state.inlineProperty != null &&
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
                         .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
-                        InlinePositionKeys(state, layer, track, track.frames(scene, layer), Modifier.matchParentSize(), xOf, selection)
+                        InlinePositionKeys(state, layer, track, track.frames(scene, layer), Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
                         Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
                             .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
@@ -115,7 +118,10 @@ internal fun InlinePositionDetails(
                             }.padding(start = TrackIndent, end = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(track.label, Modifier.weight(1f).padding(end = 5.dp), color = Am.OnDark,
                                 maxLines = 1, fontSize = 11.sp, overflow = TextOverflow.Ellipsis)
-                            Text(display, Modifier.width(valueWidth), color = Am.Accent, fontSize = 10.5.sp,
+                            val valueTap = if (canEdit && value != null && onEditValue != null && !track.linked(layer)) {
+                                Modifier.inlineTap { onEditValue(track, value) }
+                            } else Modifier
+                            Text(display, Modifier.width(valueWidth).then(valueTap), color = Am.Accent, fontSize = 10.5.sp,
                                 textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
@@ -129,7 +135,7 @@ internal fun InlinePositionDetails(
 }
 
 @Composable
-private fun Modifier.inlineTap(action: () -> Unit): Modifier {
+internal fun Modifier.inlineTap(action: () -> Unit): Modifier {
     val current by rememberUpdatedState(action)
     return semantics { onClick { current(); true } }.pointerInput(Unit) {
         awaitEachGesture {
@@ -150,7 +156,7 @@ internal class InlineKeySelection {
 @Composable
 private fun InlinePositionKeys(
     state: EditorState, layer: Layer, track: InlineTrack, frames: List<Int>, modifier: Modifier,
-    xOf: (Int) -> Float, selection: InlineKeySelection,
+    xOf: (Int) -> Float, selection: InlineKeySelection?,
 ) {
     Canvas(modifier) {
         val y = center.y
@@ -165,7 +171,7 @@ private fun InlinePositionKeys(
                 lineTo(x, y + radius)
                 close()
             }
-            val selected = InlineKey(layer.id, track.ref, frame) in selection.keys
+            val selected = selection?.keys?.contains(InlineKey(layer.id, track.ref, frame)) == true
             if (selected) drawPath(diamond, Am.Accent.copy(alpha = 0.30f), style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
             drawPath(diamond, if (selected || state.frame == frame) Am.Accent else Am.OnDark)
         }
