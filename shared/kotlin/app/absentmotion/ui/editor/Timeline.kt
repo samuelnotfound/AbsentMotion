@@ -1077,7 +1077,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun scopeOf(layer: Layer): KeyScope? {
         if (layer.id != state.selectedId) return null
         val focused = focusedProperty?.takeIf { it.first == layer.id }?.second
-        return focused?.takeIf { layer.element(it) != null }?.let { KeyScope(it) } ?: state.keyScope
+        return state.keyScope ?: focused?.takeIf { layer.element(it) != null }?.let { KeyScope(it) }
     }
 
     fun focusTimelineProperty(id: Long, ref: PropRef?) {
@@ -1087,8 +1087,9 @@ private class TimelineView(val state: EditorState, density: Density, private val
         }
         if (state.scene.layer(id)?.locked != false) return
         MultiSelect.clear()
-        if (state.selectedId != id) state.panel = EditorPanel.Tools
+        state.panel = EditorPanel.Tools
         state.selectedId = id
+        state.keyTarget = null
         focusedProperty = id to ref
     }
 
