@@ -16,8 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -41,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.MultiSelect
+import app.absentmotion.editor.Viewpoint
+import app.absentmotion.ui.editor.panels.PanelIcon
 import app.absentmotion.library.PreviewQuality
 import androidx.compose.ui.res.stringResource
 import app.absentmotion.R
@@ -56,7 +64,6 @@ private val DisabledTint = Color(0xFF818390)
 @Composable
 internal fun PreviewModePanel(state: EditorState, modifier: Modifier = Modifier) {
     val selected = state.selectedId != null || MultiSelect.ids.isNotEmpty()
-    val cameraToggle = state.cameraMode || state.scene.layers.any { it.kind == "camera" }
     BoxWithConstraints(modifier.width(55.dp).fillMaxHeight().background(PanelBg).pointerInput(Unit) {}) {
     val tight = maxHeight < 127.dp + 36.dp * 7
     Column(Modifier.fillMaxSize().then(if (tight) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
@@ -65,7 +72,7 @@ internal fun PreviewModePanel(state: EditorState, modifier: Modifier = Modifier)
         ModeCell(cell, true, { state.gridMode = !state.gridMode }, stringResource(R.string.camera_grid)) { GridIcon(state.gridMode) }
         val solo = selected || state.soloMode != 0
         ModeCell(cell, solo, { state.soloMode = (state.soloMode + 1) % 3 }, stringResource(R.string.a11y_solo)) { SoloIcon(state.soloMode, solo) }
-        ModeCell(cell, cameraToggle, { state.cameraMode = !state.cameraMode }, stringResource(R.string.camerapanel_tab_camera_view)) { CameraIcon(state.cameraMode, cameraToggle) }
+        ViewpointPicker(state, cell)
         val quality = state.settings.previewQuality
         ModeCell(cell, true, { state.settings.previewQuality = PreviewQuality.entries[(quality.ordinal + 1) % PreviewQuality.entries.size] }) {
             Text(stringResource(quality.label), color = if (quality == PreviewQuality.Full) Color.White else Am.Accent, fontSize = deskSp(10f), maxLines = 1)
@@ -78,6 +85,38 @@ internal fun PreviewModePanel(state: EditorState, modifier: Modifier = Modifier)
         PreRenderCell(state, cell)
         ZoomBlock(state)
     }
+    }
+}
+
+@Composable
+internal fun viewpointName(viewpoint: Viewpoint): String = when (viewpoint) {
+    Viewpoint.Scene -> stringResource(R.string.viewer_scene)
+    Viewpoint.Active -> stringResource(R.string.viewer_active_camera)
+    Viewpoint.Front -> stringResource(R.string.viewer_front)
+    Viewpoint.Right -> stringResource(R.string.viewer_right)
+    Viewpoint.Top -> stringResource(R.string.viewer_top)
+    Viewpoint.Custom1, Viewpoint.Custom2, Viewpoint.Custom3 -> stringResource(R.string.viewer_custom, viewpoint.ordinal - Viewpoint.Custom1.ordinal + 1)
+}
+
+@Composable
+private fun ViewpointPicker(state: EditorState, modifier: Modifier) {
+    var open by remember { mutableStateOf(false) }
+    val hasCamera = state.scene.layers.any { it.kind == "camera" }
+    Box(modifier.fillMaxWidth()) {
+        ModeCell(Modifier.fillMaxSize(), true, { open = true }, stringResource(R.string.viewer_viewpoint)) {
+            CameraIcon(state.viewpoint != Viewpoint.Scene, true)
+        }
+        DropdownMenu(open, { open = false }, containerColor = Am.Panel) {
+            for (viewpoint in Viewpoint.entries) {
+                val picked = state.viewpoint == viewpoint
+                DropdownMenuItem(
+                    text = { Text(viewpointName(viewpoint)) },
+                    enabled = viewpoint != Viewpoint.Active || hasCamera || picked,
+                    onClick = { state.selectViewpoint(viewpoint); open = false },
+                    trailingIcon = { if (picked) PanelIcon(PanelIcons.Check, Am.Accent, size = 16.dp) },
+                )
+            }
+        }
     }
 }
 

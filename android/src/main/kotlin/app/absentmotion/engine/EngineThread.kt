@@ -575,7 +575,12 @@ class EngineThread(private val background: Int, context: Context? = null, privat
         if (closed || capturing) return
         pendingView.getAndSet(null)?.let { (next, serial) -> view = next; shownSerial = serial }
         try {
-            view?.let { engine().setCameraView(it.camera); engine().setAccurateBlur(it.accurateBlur) }
+            view?.let {
+                val native = engine()
+                native.setCameraView(it.camera)
+                native.setEditorCamera(it.editorCamera)
+                native.setAccurateBlur(it.accurateBlur)
+            }
             pendingScene.take(scene)?.let { setEngineScene(it) }
             prepareTextTime(view?.timeMs ?: 0)
         } catch (e: IllegalArgumentException) {

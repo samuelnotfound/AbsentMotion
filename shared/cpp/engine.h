@@ -29,6 +29,7 @@ struct PreviewOptions {
 };
 
 struct Target;
+struct EditorCamera;
 
 struct FrameCrop {
     int left = 0, top = 0, right = 0, bottom = 0;
@@ -98,6 +99,7 @@ public:
                             uint32_t background, int64_t selectedId, int handles, const PreviewOptions& view) = 0;
 
     virtual void setCameraView(bool on) = 0;
+    virtual void setEditorCamera(const EditorCamera& camera) = 0;
 
     virtual void setAccurateBlur(bool on) = 0;
 

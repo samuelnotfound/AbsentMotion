@@ -20,6 +20,7 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,6 +78,7 @@ import app.absentmotion.editor.EditorPanel
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.clearSelection
 import app.absentmotion.editor.MultiSelect
+import app.absentmotion.editor.Viewpoint
 import app.absentmotion.editor.place
 import app.absentmotion.editor.withWorldLocation
 import app.absentmotion.editor.movedTogether
@@ -173,11 +175,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             if (!playing && blurred) { kotlinx.coroutines.delay(300); blurSettled = true }
         }
     }
+    val editorCamera = state.editorCamera.takeUnless { fixedView }
     val baseView = if (size.width > 0) PreviewView(
         0, scale * quality, dx * quality, dy * quality, shownId, handles,
         pixels = state.pixelMode, divisor = divisor, gridSpacing = if (state.gridMode) state.gridSpacing.toFloat() else 0f,
         solo = state.soloMode, soloIds = selection, camera = state.cameraMode, guides = state.snapGuides, refPx = refPx * quality,
-        accurateBlur = state.settings.fullMotionBlur || blurSettled,
+        accurateBlur = state.settings.fullMotionBlur || blurSettled, editorCamera = editorCamera,
     ) else null
     val cacheMatch by remember(state, mediaRevision) { derivedStateOf { cacheMatches(state, mediaRevision) } }
     val cacheUsable = cacheMatch && app.absentmotion.editor.cacheFrameSize(scene.width, scene.height, scale, divisor).first <= (PreviewCache.player?.width ?: 0) * 1.25f
@@ -210,7 +213,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var quadFor by remember { mutableStateOf<Any?>(null) }
     val cropping = state.livePanel == EditorPanel.Crop
     val shownChange = state.previewChange
-    LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, cropping, shownChange) {
+    LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange) {
         if (quadFor != Triple(state.selectedId, cropping, shownChange)) {
             quadFor = Triple(state.selectedId, cropping, shownChange)
             quad = null
@@ -231,7 +234,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
 
     var multiBox by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     val multiIds = MultiSelect.ids
-    LaunchedEffect(multiIds, scene, mediaRevision) {
+    LaunchedEffect(multiIds, scene, mediaRevision, state.cameraMode, editorCamera) {
         if (multiIds.isEmpty()) { multiBox = null; return@LaunchedEffect }
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
             if (timeMs == null) return@collectLatest
@@ -336,7 +339,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             fontSize = 96.sp, fontWeight = FontWeight.Bold, style = TextStyle(shadow = Shadow(Color.Black, Offset(2f, 2f), 8f)),
         )
         Box(
-            Modifier.fillMaxSize().pointerInput(state) {
+            Modifier.fillMaxSize().then(if (!fixedView && state.orbiting && state.viewpoint.custom) Modifier.pointerInput(state) {
+                detectDragGestures { change, motion ->
+                    change.consume()
+                    state.orbit(motion.x / density * 0.45f, motion.y / density * 0.45f)
+                }
+            } else Modifier.pointerInput(state) {
                 var lastTwoFingerTap = -1_000_000L
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -606,8 +614,19 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                         }
                     }
                 }
-            },
+            }),
         )
+        if (!fixedView && state.viewpoint != Viewpoint.Scene) {
+            val custom = state.viewpoint.custom
+            val name = viewpointName(state.viewpoint)
+            val action = if (state.orbiting) R.string.viewer_end_orbit else R.string.viewer_orbit
+            val chip = Modifier.align(Alignment.TopEnd).padding(8.dp).clip(RoundedCornerShape(20.dp)).background(Am.Panel.copy(alpha = 0.92f))
+            Text(
+                if (custom) name + "  ·  " + stringResource(action) else name,
+                chip.then(if (custom) Modifier.clickable { state.orbiting = !state.orbiting } else Modifier).padding(horizontal = 12.dp, vertical = 6.dp),
+                color = if (state.orbiting) Am.Accent else Am.OnDark, fontSize = 12.sp, maxLines = 1,
+            )
+        }
         Presence(hint) { SwipeHint(hintLabel, Modifier.align(Alignment.Center).presence()) }
         if (!fixedView) CanvasZoomHud(state, Modifier.align(Alignment.TopStart))
         if (state.drawing == null && !editingText) {
@@ -620,7 +639,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
         CropOverlay(state, quad.takeUnless { state.playing }, scale, Offset(dx, dy))
         CropAutoView(state, quad.takeUnless { state.playing }, size, with(LocalDensity.current) { reserveEnd.toPx() }, touching)
         state.layerPoints?.let { points -> world?.takeUnless { state.playing }?.let { LayerPointsOverlay(points, it, scale, Offset(dx, dy)) } }
-        if (editingPivot && !state.playing && !state.panZoomMode && !state.lookOnly) {
+        if (editingPivot && !state.playing && !state.panZoomMode && !state.lookOnly && !state.orbiting) {
             state.selected?.takeIf { !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }?.let { layer ->
                 val at = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
                 pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.uses3D, pivotSnaps) }
