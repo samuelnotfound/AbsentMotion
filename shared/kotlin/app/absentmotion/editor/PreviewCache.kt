@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.getValue
@@ -167,7 +168,14 @@ class FrameStore(
     private fun release(record: Record) {
         bytes -= record.size
         if (record.data != null) memoryBytes -= record.size
-        if (record.saved?.delete() == true) diskBytes -= record.size
+        record.saved?.let { saved -> if (saved.delete() || !saved.exists()) diskBytes -= record.size }
+    }
+
+    @Synchronized fun remove(frame: Int): Boolean {
+        val record = records.remove(frame) ?: return false
+        release(record)
+        count = records.size
+        return true
     }
 
     @Synchronized fun removeWhere(remove: (Int) -> Boolean) {
@@ -243,7 +251,7 @@ internal fun cacheBarShows(cached: CacheKey, now: CacheKey, catchingUp: Boolean)
 private fun IntRange.inside(area: IntRange): IntRange = maxOf(first, area.first)..minOf(last, area.last)
 private val IntRange.frameCount: Int get() = if (isEmpty()) 0 else last - first + 1
 
-class FramePlayer internal constructor(private val store: FrameStore, val width: Int, val height: Int) {
+class FramePlayer internal constructor(private val store: FrameStore, val width: Int, val height: Int, private val onLostFrame: () -> Unit) {
     class Shown(val frame: Int, val image: ImageBitmap, val at: Long)
     private class Decoded(val bitmap: Bitmap?, val image: ImageBitmap)
 
@@ -297,12 +305,13 @@ class FramePlayer internal constructor(private val store: FrameStore, val width:
 
     private fun decode(frame: Int, version: Long): Decoded? {
         synchronized(this) { decoded[frame] }?.let { return it }
-        val bytes = store[frame] ?: return null
+        if (frame !in store) return null
+        val bytes = store[frame] ?: return lost(frame)
         val reuse = synchronized(this) { victim() }
         val made = if (store.raw) {
-            Decoded(null, (try { rawFrameImage(bytes, width, height) } catch (_: OutOfMemoryError) { null }) ?: return null)
+            Decoded(null, (try { rawFrameImage(bytes, width, height) } catch (_: OutOfMemoryError) { null }) ?: return lost(frame))
         } else {
-            val bitmap = decodeEncoded(bytes, reuse) ?: return null
+            val bitmap = decodeEncoded(bytes, reuse) ?: return lost(frame)
             Decoded(bitmap, bitmap.asImageBitmap())
         }
         synchronized(this) {
@@ -310,6 +319,11 @@ class FramePlayer internal constructor(private val store: FrameStore, val width:
             decoded[frame] = made
         }
         return made
+    }
+
+    private fun lost(frame: Int): Decoded? {
+        if (store.remove(frame)) onLostFrame()
+        return null
     }
 
     private fun decodeEncoded(bytes: ByteArray, reuse: Bitmap?): Bitmap? {
@@ -389,6 +403,7 @@ object PreviewCache {
     private var preparedCell = 0f
     private var slowUntilNs = 0L
     private val cleanup = CoroutineScope(Dispatchers.IO)
+    private val main by lazy { Handler(Looper.getMainLooper()) }
     private var checkedSpill = false
     @Volatile private var interactionNs = 0L
     fun interaction() { interactionNs = System.nanoTime() }
@@ -456,7 +471,7 @@ object PreviewCache {
             clear()
             val spill = if (spillBudget > 0) java.io.File(folder, SPILL_PREFIX + System.nanoTime()).takeIf { it.mkdir() } else null
             store = FrameStore(0, budget + (if (spill == null) 0 else spillBudget), raw = raw, spill = spill, memoryBudget = budget)
-            player = FramePlayer(store!!, width, height)
+            player = createPlayer(store!!, width, height)
             automatic = true
             preparedCell = cell
         } else follow(next)
@@ -522,7 +537,20 @@ object PreviewCache {
     val first: Int get() = store?.first ?: 0
     val last: Int get() = store?.last ?: -1
 
-    fun covers(frame: Int): Boolean = store?.contains(frame) == true
+    fun covers(frame: Int): Boolean {
+        revision
+        return store?.contains(frame) == true
+    }
+
+    private fun createPlayer(built: FrameStore, width: Int, height: Int): FramePlayer =
+        FramePlayer(built, width, height) {
+            main.post {
+                if (store === built) {
+                    renderedArea = null
+                    revise(force = true)
+                }
+            }
+        }
 
     fun preRender(state: EditorState, resources: Long = state.engine.mediaRevision.value): PreRender {
         if (phase == Phase.Rendering) return PreRender.Rendering
@@ -695,7 +723,7 @@ object PreviewCache {
         rendered = if (paused) null else next
         renderedArea = if (paused) null else area
         storeSize = width to height
-        player = FramePlayer(built, width, height)
+        player = createPlayer(built, width, height)
         phase = Phase.Ready
         progress = 1f
         if (outcome == Outcome.Failed) {
