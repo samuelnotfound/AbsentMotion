@@ -264,7 +264,6 @@ private const val MAX_ZOOM = 1000f
 private val TickColor get() = Am.Line
 private val CacheBarColor = Color(0xFF45C46A)
 private val CacheBarHeight = 3.dp
-private val WorkAreaColor = Color(0xFFFF9B45)
 private val WorkAreaHitZone = 14.dp
 private val RulerMajor get() = Am.Inactive
 private val RulerMinor get() = Am.Inactive.copy(alpha = 0.7f)
@@ -2142,6 +2141,7 @@ private fun DrawScope.drawBookmark(x: Float, outline: Path) {
 
 private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
     val scene = view.state.scene
+    val color = Am.Accent
     val startX = time.x(TimelineMath.frameTimeMs(scene.workAreaStartFrame, fps))
     val endX = time.x(TimelineMath.frameTimeMs(scene.workAreaEndFrame, fps))
     val clipLeft = left.coerceIn(0f, size.width)
@@ -2149,16 +2149,16 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
         val from = max(startX, clipLeft)
         val to = min(endX, size.width)
         if (to > from) {
-            drawRect(WorkAreaColor.copy(alpha = 0.08f), Offset(from, 0f), Size(to - from, rulerH))
+            drawRect(color.copy(alpha = 0.08f), Offset(from, 0f), Size(to - from, rulerH))
             val stripTop = rulerH - CacheBarHeight.toPx() - 3.dp.toPx()
-            drawRect(WorkAreaColor.copy(alpha = 0.72f), Offset(from, stripTop), Size(to - from, 2.dp.toPx()))
+            drawRect(color.copy(alpha = 0.72f), Offset(from, stripTop), Size(to - from, 2.dp.toPx()))
         }
         val stemTop = 2.dp.toPx()
         val stemBottom = (rulerH - CacheBarHeight.toPx() - 4.dp.toPx()).coerceAtLeast(stemTop + 1.dp.toPx())
         val stemWidth = 3.dp.toPx()
         fun marker(x: Float) {
-            drawRoundRect(WorkAreaColor, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
-            drawCircle(WorkAreaColor, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
+            drawRoundRect(color, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
+            drawCircle(color, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
         }
         marker(startX)
         marker(endX)
