@@ -31,7 +31,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
@@ -74,14 +73,7 @@ internal val LocalEditorScope = staticCompositionLocalOf<CoroutineScope> { error
 fun EditorScreen(state: EditorState, onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
     CompositionLocalProvider(LocalEditorScope provides scope, LocalDeskEditor provides deskLayout) {
-        Box(Modifier.fillMaxSize().pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitPointerEvent(PointerEventPass.Initial)
-                    app.absentmotion.editor.PreviewCache.interaction()
-                }
-            }
-        }) {
+        Box(Modifier.fillMaxSize()) {
             EditorBody(state, onExit)
             state.enhanceCompare?.let { images ->
                 app.absentmotion.ui.home.ToolSheet(stringResource(R.string.ai_compare), { state.enhanceCompare = null }, bottom = {
