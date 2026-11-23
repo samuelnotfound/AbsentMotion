@@ -1230,7 +1230,13 @@ private class TimelineView(val state: EditorState, density: Density, private val
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
             is Hit.Header -> select(hit.id, toggle = true)
             is Hit.Bar -> select(hit.id, toggle = true)
-            is Hit.Key -> select(hit.id)
+            is Hit.Key -> {
+                select(hit.id)
+                if (focusedProperty?.first == hit.id && state.selectedId == hit.id) {
+                    state.playing = false
+                    state.frame = hit.frame
+                }
+            }
             Hit.Readout -> state.toggleBookmark()
             Hit.Empty, Hit.Ruler, is Hit.Row -> state.clearSelection()
             Hit.Corner, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
@@ -1886,6 +1892,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
+                    is Hit.Key -> if (view.focusedProperty?.first == h.id) view.tap(h)
                     is Hit.Details, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
