@@ -7,6 +7,7 @@ import app.absentmotion.ui.editor.deskSp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -204,20 +205,42 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 }
             }
         }
-        Row(Modifier.align(Alignment.TopCenter).padding(top = 17.px), verticalAlignment = Alignment.Top) {
-            AxisFields(spatial, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad)
-            if (layer.canToggle3D) {
-                Spacer(Modifier.width(20.px))
-                Box(Modifier.width(1.dp).height(70.px).background(Am.Line))
-                val description = stringResource(R.string.three_d_layer)
-                Row(Modifier.height(70.px).padding(start = 18.px), verticalAlignment = Alignment.CenterVertically) {
-                    PanelIcon(ChromeIcons.ObjectTab, Am.OnDark, size = 15.dp)
-                    Text("3D", Modifier.padding(start = 4.dp), color = Am.OnDark, fontSize = 11.sp)
-                    ThinSwitch(spatial, Modifier.semantics { contentDescription = description }, enabled = !layer.locked && !state.lookOnly) {
-                        state.toggleLayer3D(layer.id)
-                    }
-                }
-            }
+        TransformAxisHeader(state, layer, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
+            Modifier.align(Alignment.TopCenter).padding(top = 17.px))
+    }
+}
+
+@Composable
+private fun LayerDimensionButton(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
+    if (!layer.canToggle3D) return
+    val enabled = !layer.locked && !state.lookOnly
+    val label = stringResource(R.string.three_d_layer)
+    val tint = when {
+        !enabled -> Am.OnDarkDim
+        layer.uses3D -> Am.Accent
+        else -> Am.OnDark
+    }
+    Row(
+        modifier.height(70.px).clip(PanelShape).background(Am.Field)
+            .toggleable(layer.uses3D, enabled = enabled, role = Role.Button, onValueChange = { state.toggleLayer3D(layer.id) })
+            .semantics { contentDescription = label }.padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PanelIcon(ChromeIcons.ObjectTab, tint, size = 15.dp)
+        Text("3D", Modifier.padding(start = 4.dp), color = tint, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun TransformAxisHeader(
+    state: EditorState, layer: Layer, value: (Int) -> String, colour: (Int) -> Color,
+    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier,
+) {
+    Row(modifier, verticalAlignment = Alignment.Top) {
+        AxisFields(layer.uses3D, value, colour, onSelect, onType)
+        if (layer.canToggle3D) {
+            Spacer(Modifier.width(20.px))
+            LayerDimensionButton(state, layer)
         }
     }
 }
@@ -366,6 +389,7 @@ private fun RotationTab(state: EditorState, layer: Layer) {
         onDelta = { delta -> state.editSelected(key = "rotate") { l -> l.withRotation(l.rotation + delta) } },
         onReset = { state.editSelected { it.withRotation(0f) } },
     ) {
+        LayerDimensionButton(state, layer, Modifier.align(Alignment.TopEnd).padding(top = 17.px, end = 20.px))
         Box(
             Modifier.align(Alignment.Center).height(140.px).widthIn(min = 267.px).clip(PanelShape).background(Am.Field).typeOnDoubleTap {
                 state.keypad = KeypadRequest(listOf(KeypadField(ROTATION_LABEL, angle, "\u00B0")), 0) { v ->
@@ -747,7 +771,7 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     }
     Box(Modifier.fillMaxSize()) {
         TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset, bottom = 12.px)
-        AxisFields(true, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
+        TransformAxisHeader(state, layer, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
             Modifier.align(Alignment.TopCenter).padding(top = 17.px))
     }
 }
