@@ -148,25 +148,27 @@ private fun Layer.motion(ms: Double): Pair<Double, Double> {
     return rotation to scale
 }
 
-private fun Scene.stance(layer: Layer, ms: Double, depth: Int = 0): Stance {
+private fun Scene.stance(layer: Layer, ms: Double, depth: Int = 0, flat: Boolean = false): Stance {
+    val flatten = flat || !layer.uses3D
     val at = layer.atMs(ms)
     val (spin, pulse) = layer.motion(ms)
     val s = at.scale
     val tilt = at.tilt
     val rot = at.transform("rotation", 0f)[0] + spin
-    val own = if (tilt[0] != 0f || tilt[1] != 0f) mul(turn(1, -tilt[1].toDouble()), turn(0, -tilt[0].toDouble())) else null
-    val parent = chain(layer).getOrNull(1)?.takeIf { depth < 16 }?.let { stance(it, ms, depth + 1) }
+    val own = if (!flatten && (tilt[0] != 0f || tilt[1] != 0f)) mul(turn(1, -tilt[1].toDouble()), turn(0, -tilt[0].toDouble())) else null
+    val parent = chain(layer).getOrNull(1)?.takeIf { depth < 16 }?.let { stance(it, ms, depth + 1, flatten) }
         ?: return Stance(rot, s[0] * pulse, s[1] * pulse, own, null)
     val tilted = parent.tilt?.let { mul(mul(mul(turn(2, -rot), it), turn(2, rot)), own ?: IDENTITY) } ?: own
     val link = mul(parent.turned, doubleArrayOf(parent.sx, 0.0, 0.0, 0.0, parent.sy, 0.0, 0.0, 0.0, 1.0))
     return Stance(rot + parent.rot, s[0] * pulse * parent.sx, s[1] * pulse * parent.sy, tilted, link)
 }
 
-private fun Stance.mapped(layer: Layer, dx: Float, dy: Float): DoubleArray {
+private fun Stance.mapped(layer: Layer, dx: Float, dy: Float, dz: Float): DoubleArray {
     val skew = if (layer.kind == "model") floatArrayOf(0f, 0f) else layer.transform("skew", 0f, 0f)
     val x = dx * sx
     val y = dy * sy
-    return apply(turned, doubleArrayOf(x + tan(skew[0].toDouble()) * y, tan(skew[1].toDouble()) * x + y, 0.0))
+    val z = if (layer.kind == "model") dz * kotlin.math.sqrt(abs(sx * sy)) else dz.toDouble()
+    return apply(turned, doubleArrayOf(x + tan(skew[0].toDouble()) * y, tan(skew[1].toDouble()) * x + y, z))
 }
 
 private fun Stance.solve(v: DoubleArray): DoubleArray? {
@@ -324,15 +326,15 @@ private fun Layer.withLocationShift(scene: Scene, plan: Plan, hat: Hat?, pick: (
     return out
 }
 
-private class PivotEdit(val layer: Layer, val hat: Hat?, val dx: Float, val dy: Float)
+private class PivotEdit(val layer: Layer, val hat: Hat?, val dx: Float, val dy: Float, val dz: Float)
 
-private fun Layer.withPivotKey(x: Float, y: Float): PivotEdit? {
+private fun Layer.withPivotKey(x: Float, y: Float, z: Float): PivotEdit? {
     val transform = node.child("transform") ?: XmlNode("transform")
     val pivot = transform.child("pivot")
     if (pivot?.isKeyframed != true) {
         val old = this.pivot
-        if (old[0] == x && old[1] == y) return null
-        return PivotEdit(withValue(PropRef.Pivot, formatFloats(floatArrayOf(x, y, old[2]))), null, x - old[0], y - old[1])
+        if (old[0] == x && old[1] == y && old[2] == z) return null
+        return PivotEdit(withValue(PropRef.Pivot, formatFloats(floatArrayOf(x, y, z))), null, x - old[0], y - old[1], z - old[2])
     }
     val zeros = floatArrayOf(0f, 0f, 0f)
     var keys = pivot.keyframes
@@ -346,14 +348,14 @@ private fun Layer.withPivotKey(x: Float, y: Float): PivotEdit? {
         j = keys.indexOfFirst { abs(it.t - t) < 1e-6f }
     }
     val old = floats(keys[j].v, zeros)
-    if (old[0] == x && old[1] == y && keys.size == pivot.keyframes.size) return null
-    keys = keys.toMutableList().also { it[j] = it[j].copy(v = formatFloats(floatArrayOf(x, y, old[2]))) }
-    return PivotEdit(copy(node = node.withChild("transform", transform.withChild("pivot", pivot.withKeyframes(keys)))), Hat(keys, j), x - old[0], y - old[1])
+    if (old[0] == x && old[1] == y && old[2] == z && keys.size == pivot.keyframes.size) return null
+    keys = keys.toMutableList().also { it[j] = it[j].copy(v = formatFloats(floatArrayOf(x, y, z))) }
+    return PivotEdit(copy(node = node.withChild("transform", transform.withChild("pivot", pivot.withKeyframes(keys)))), Hat(keys, j), x - old[0], y - old[1], z - old[2])
 }
 
-private fun Scene.pull(layer: Layer, ms: Double, dx: Float, dy: Float): Pull {
+private fun Scene.pull(layer: Layer, ms: Double, dx: Float, dy: Float, dz: Float = 0f): Pull {
     val stance = stance(layer, ms)
-    val world = stance.mapped(layer.atMs(ms), dx, dy)
+    val world = stance.mapped(layer.atMs(ms), dx, dy, dz)
     val own = stance.solve(world) ?: DoubleArray(3)
     val child = stance.undo(world)?.let { v -> DoubleArray(3) { -v[it] } } ?: DoubleArray(3)
     return Pull(own, child, world)
@@ -397,22 +399,25 @@ private fun Scene.planFor(layer: Layer, kids: List<Layer>, edit: PivotEdit, seen
     val times = chain.flatMap { it.motionTimes() } + if (chain.any { it.running }) listOf(lo, hi) else emptyList()
     val path = layer.followsPath(this)
     val anchors = bake(times.map { it.coerceIn(lo, hi) }) { ms ->
-        pull(layer, ms, BAKE_REACH, 0f).watched(kids.isNotEmpty(), path) + pull(layer, ms, 0f, BAKE_REACH).watched(kids.isNotEmpty(), path)
+        val xy = pull(layer, ms, BAKE_REACH, 0f).watched(kids.isNotEmpty(), path) + pull(layer, ms, 0f, BAKE_REACH).watched(kids.isNotEmpty(), path)
+        if (edit.dz == 0f) xy else xy + pull(layer, ms, 0f, 0f, BAKE_REACH).watched(kids.isNotEmpty(), path)
     }
-    val steady = if (anchors.isEmpty()) pull(layer, seenMs.toDouble(), edit.dx, edit.dy) else null
+    val steady = if (anchors.isEmpty()) pull(layer, seenMs.toDouble(), edit.dx, edit.dy, edit.dz) else null
     val memo = HashMap<Double, Pull>()
-    val raw = { ms: Double -> steady ?: memo.getOrPut(ms) { pull(layer, ms, edit.dx, edit.dy) } }
+    val raw = { ms: Double -> steady ?: memo.getOrPut(ms) { pull(layer, ms, edit.dx, edit.dy, edit.dz) } }
     if ((if (steady != null) listOf(steady) else anchors.map(raw)).any { p -> p.all.any { !it.isFinite() } }) return null
     return Plan(anchors) { ms -> raw(ms).let { Pull(it.own.finite(), it.child.finite(), it.world.finite()) } }
 }
 
 private fun DoubleArray.finite() = DoubleArray(size) { if (this[it].isFinite()) this[it] else 0.0 }
 
-internal fun Scene.withPivotMoved(id: Long, timeMs: Int, x: Float, y: Float, seenMs: Int = timeMs): Scene {
+internal fun Scene.withPivotMoved(id: Long, timeMs: Int, x: Float, y: Float, seenMs: Int = timeMs, z: Float? = null): Scene {
     val layer = layer(id) ?: return this
-    if (!x.isFinite() || !y.isFinite()) return this
-    val edit = layer.at(timeMs, fps).withPivotKey(x.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT), y.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT)) ?: return this
-    if (edit.dx == 0f && edit.dy == 0f) return update(id) { Layer(edit.layer.node) }
+    if (!x.isFinite() || !y.isFinite() || z?.isFinite() == false) return this
+    val at = layer.at(timeMs, fps)
+    val depth = if (at.uses3D && z != null) z.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT) else at.pivot[2]
+    val edit = at.withPivotKey(x.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT), y.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT), depth) ?: return this
+    if (edit.dx == 0f && edit.dy == 0f && edit.dz == 0f) return update(id) { Layer(edit.layer.node) }
     val kids = layers.filter { it.id != id && it.node["parent"]?.toLongOrNull() == id }
     val plan = planFor(layer, kids, edit, seenMs) ?: return this
     var next = update(id) { Layer(edit.layer.withLocationShift(this, plan, edit.hat, Pull::own, true).node) }
@@ -420,16 +425,16 @@ internal fun Scene.withPivotMoved(id: Long, timeMs: Int, x: Float, y: Float, see
     return next
 }
 
-fun EditorState.setPivot(x: Float, y: Float, key: Any? = null) {
+fun EditorState.setPivot(x: Float, y: Float, key: Any? = null, z: Float? = null) {
     val id = selectedId ?: return
-    if (scene.layer(id)?.kind == "camera") return
-    edit(key, pivot = id) { it.withPivotMoved(id, sampleMs, x, y, timeMs) }
+    if (scene.layer(id)?.let { it.kind == "camera" || it.locked } != false) return
+    edit(key, pivot = id) { it.withPivotMoved(id, sampleMs, x, y, timeMs, z) }
 }
 
 internal fun Scene.withPivotReset(id: Long, timeMs: Int, seenMs: Int = timeMs): Scene {
     val layer = layer(id) ?: return this
     if (layer.kind == "camera") return this
-    val next = withPivotMoved(id, timeMs, 0f, 0f, seenMs)
+    val next = withPivotMoved(id, timeMs, 0f, 0f, seenMs, z = 0f)
     val pivot = next.layer(id)?.at(timeMs, fps) ?: return next
     if (pivot.element(PropRef.Pivot)?.children?.none { it.name == "kf" } != false) return next
     return next.update(id) { it.resetValue(PropRef.Pivot, formatFloats(floatArrayOf(0f, 0f, pivot.pivot[2]))) }
@@ -448,7 +453,7 @@ internal fun Scene.withRecordedPivot(id: Long, pivot: XmlNode): Scene {
         val t = layer.tOf(ms)
         val before = floats(oldPivot.valueAt(t), floatArrayOf(0f, 0f, 0f))
         val after = floats(pivot.valueAt(t), floatArrayOf(0f, 0f, 0f))
-        pull(layer, ms, after[0] - before[0], after[1] - before[1])
+        pull(layer, ms, after[0] - before[0], after[1] - before[1], if (layer.uses3D) after[2] - before[2] else 0f)
     }
     fun compensate(target: Layer, ref: PropRef, fallback: FloatArray, pick: (Pull) -> DoubleArray): Layer {
         val element = target.element(ref) ?: XmlNode(ref.name, mapOf("value" to formatFloats(fallback)))

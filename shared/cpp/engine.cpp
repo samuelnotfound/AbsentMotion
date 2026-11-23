@@ -231,7 +231,7 @@ public:
     void flushPartial();
     bool layerQuad(int64_t layerId, double timeMs, float xy[8]) override;
     bool propertyNumbers(int64_t layerId, int effect, const std::string& name, double timeMs, float values[3]) override;
-    bool layerMatrix(int64_t layerId, double timeMs, float m[18]) override;
+    bool layerMatrix(int64_t layerId, double timeMs, float m[30]) override;
     bool layerBounds(int64_t layerId, double timeMs, float ltrb[4]) override;
     int64_t hitTest(float x, float y, double timeMs) override;
     bool still(double timeMs, int width, int height, std::vector<uint8_t>* rgba) override;
@@ -1421,13 +1421,12 @@ bool EngineImpl::propertyNumbers(int64_t layerId, int effect, const std::string&
     return layer && PropertyNumbers(*layer, effect, name, timeMs, values);
 }
 
-bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[18]) {
+bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[30]) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
     const Layer* layer = fScene.layer(layerId);
     if (!layer) return false;
-    WorldMatrix(fScene, *layer, timeMs).get9(m);
-    PlaneMatrix(fScene.layers, *layer, fScene.width, fScene.height, timeMs).get9(m + 9);
+    LayerMatrices(fScene, *layer, timeMs, m);
     return true;
 }
 

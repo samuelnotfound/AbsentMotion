@@ -92,6 +92,16 @@ class PivotEngineTest {
 
     private val frames = (0..30).map { it * 1000 / 30 }
 
+    @Test fun aSpatialPivotCanMoveInDepthWithoutMovingTheArtwork() {
+        val layer = layer(1, prop("location", 0f to "260,360,25"), prop("scale", 0f to "1.2,0.65"),
+            prop("rotation", 0f to "35"), prop("tilt", 0f to "30,-42"))
+        val scene = sceneOf(layer.with("threeD", "true"))
+        val moved = scene.withPivotMoved(1, 500, 12f, -8f, z = 60f)
+        assertEquals(listOf(12f, -8f, 60f), moved.layer(1)!!.pivot.toList())
+        assertStays(scene, moved, listOf(1), frames)
+        assertStays(moved, moved.withPivotReset(1, 500), listOf(1), frames)
+    }
+
     @Test fun aChildUnderARotatedAndScaledParentStaysWhereItIs() {
         val s = sceneOf(
             layer(1, prop("location", 0f to "200,200,0"), prop("rotation", 0f to "45"), prop("scale", 0f to "2,1.5"), prop("pivot", 0f to "5,-3,0")),

@@ -214,6 +214,7 @@ Placement OwnAt(const Layer& l, double timeMs) {
                 {l.scale.get(0, t, 1), l.scale.get(1, t, 1)},
                 l.rotation.get(0, t, 0),
                 l.location.get(2, t, 0)};
+    if (l.spatial()) p.pivotZ = l.pivot.get(2, t, 0);
     const float tx = l.tilt.get(0, t, 0), ty = l.tilt.get(1, t, 0);
     if (tx != 0 || ty != 0) p.tilt = SkM44::Rotate({0, 1, 0}, -ty * kRadians) * SkM44::Rotate({1, 0, 0}, -tx * kRadians);
     ApplyMotion(l, timeMs, &p);
@@ -255,7 +256,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     flat = flat || !l.spatial();
     Placement own = Own(l, timeMs);
     if (flat) {
-        own.z = 0;
+        own.z = own.pivotZ = 0;
         own.tilt = SkM44();
     }
     if (depth >= kMaxParentDepth) return own;
@@ -292,7 +293,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
 }
 
 SkMatrix MatrixOf(const Placement& p, const Layer& l, float t) {
-    SkMatrix m = l.projected ? p.space.asM33() : SkMatrix::Translate(p.location.fX, p.location.fY);
+    SkMatrix m = l.projected ? (p.space * SkM44::Translate(0, 0, -p.pivotZ)).asM33() : SkMatrix::Translate(p.location.fX, p.location.fY);
     if (!l.projected) m.preRotate(p.rotation);
     m.preSkew(tanf(l.skew.get(0, t, 0)), tanf(l.skew.get(1, t, 0)));
     m.preScale(p.scale.fX, p.scale.fY);
@@ -2124,6 +2125,16 @@ SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs) {
     const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage);
     for (const Layer& l : list) if (l.id == layer.id) return SiblingMatrix(list, l, timeMs);
     return SiblingMatrix(scene.layers, layer, timeMs);
+}
+
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]) {
+    WorldMatrix(scene, layer, timeMs).get9(m);
+    PlaneMatrix(scene.layers, layer, scene.width, scene.height, timeMs).get9(m + 9);
+    const SkM44 pivot = LayerPivotMatrix(scene, layer, timeMs);
+    int i = 18;
+    for (int row : {0, 1, 3}) {
+        for (int col = 0; col < 4; ++col) m[i++] = pivot.rc(row, col);
+    }
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {

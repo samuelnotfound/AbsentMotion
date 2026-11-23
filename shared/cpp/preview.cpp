@@ -38,7 +38,42 @@ static void DrawLayerEdges(SkCanvas* canvas, const SkPath& outline, float px) {
     canvas->drawPath(outline, paint);
 }
 
-static void DrawSelection(SkCanvas* canvas, const SkPath& outline, const SkPoint q[4], SkPoint anchor, int handles, float px) {
+static void DrawAnchor(SkCanvas* canvas, const SkM44& matrix, const SkV3& pivot, const SkMatrix& screen, float px) {
+    auto project = [&](float x, float y) {
+        const SkV4 h = matrix.map(pivot.x + x, pivot.y + y, pivot.z, 1);
+        return h.w > 0 ? screen.mapPoint({h.x / h.w, h.y / h.w}) : SkPoint{NAN, NAN};
+    };
+    const SkPoint centre = project(0, 0);
+    if (!centre.isFinite()) return;
+    const float unit = std::max((project(1, 0) - centre).length(), (project(0, 1) - centre).length());
+    if (!(unit > 1e-5f) || !std::isfinite(unit)) return;
+    const float radius = 7.5f * px / unit;
+    SkPathBuilder ring;
+    bool connected = false;
+    for (int i = 0; i <= 20; ++i) {
+        const float angle = i * 6.283185307f / 20;
+        const SkPoint point = project(radius * cosf(angle), radius * sinf(angle));
+        if (!point.isFinite()) {
+            connected = false;
+        } else {
+            if (connected) ring.lineTo(point);
+            else ring.moveTo(point);
+            connected = true;
+        }
+    }
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setStyle(SkPaint::kStroke_Style);
+    const SkPath path = ring.detach();
+    paint.setStrokeWidth(3.5f * px);
+    paint.setColor(SkColorSetARGB(0xb0, 0, 0, 0));
+    canvas->drawPath(path, paint);
+    paint.setStrokeWidth(1.5f * px);
+    paint.setColor(SkColorSetRGB(0xdf, 0xdf, 0xdf));
+    canvas->drawPath(path, paint);
+}
+
+static void DrawSelection(SkCanvas* canvas, const SkPath& outline, const SkPoint q[4], int handles, float px) {
     SkPaint paint;
     paint.setAntiAlias(true);
     auto dot = [&](SkPoint at, SkColor color, float radius) {
@@ -53,10 +88,6 @@ static void DrawSelection(SkCanvas* canvas, const SkPath& outline, const SkPoint
         dot(handle(handles), SK_ColorBLACK, 18.5f);
         dot(handle(handles), accent, 15.5f);
     } else {
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(1.1f * px);
-        if (std::isfinite(anchor.fX) && std::isfinite(anchor.fY)) dot(anchor, SkColorSetRGB(0x80, 0x80, 0x80), 3.4f);
-        paint.setStyle(SkPaint::kFill_Style);
         for (int i = 0; i < 8 && handles == 8; i++) {
             dot(handle(i), SK_ColorBLACK, 15.5f);
             dot(handle(i), SK_ColorWHITE, 12.5f);
@@ -295,10 +326,12 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
             toPreview(xy, q);
             const SceneScope scope(scene);
             const float t = selected->localTime(timeMs);
-            const SkPoint pivot = {selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0)};
-            const SkPoint anchor = WorldMatrix(scene, *selected, timeMs).mapPoint(pivot);
-            DrawSelection(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), q,
-                          {anchor.fX * scale + dx, anchor.fY * scale + dy}, handles, px);
+            DrawSelection(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), q, handles, px);
+            if (handles != -3 && (handles < 0 || handles >= 8)) {
+                const SkV3 pivot{selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0),
+                                selected->spatial() ? selected->pivot.get(2, t, 0) : 0};
+                DrawAnchor(canvas, LayerPivotMatrix(scene, *selected, timeMs), pivot, toTarget, px);
+            }
         }
         DrawSnapGuides(canvas, canvas->getBaseLayerSize(), view.guides, scale, dx, dy, px);
 }

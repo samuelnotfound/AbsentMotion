@@ -69,7 +69,6 @@ class PointAdjust(val label: String, val move: (dx: Float, dy: Float, width: Flo
 class LayerPoints(
     val points: List<app.absentmotion.model.Pt>,
     val selected: Int,
-    val pivot: Boolean = false,
     val lines: List<Pair<Int, Int>> = emptyList(),
     val guide: List<app.absentmotion.model.Pt> = emptyList(),
     val pick: (Int) -> Unit = {},
@@ -358,6 +357,7 @@ class EditorState(
     var pointAdjust by mutableStateOf<PointAdjust?>(null)
 
     var layerPoints by mutableStateOf<LayerPoints?>(null)
+    var pivotEditing by mutableStateOf(false)
 
     var turner by mutableStateOf<((drag: Offset, twist: Float) -> Unit)?>(null)
 

@@ -112,7 +112,7 @@ public:
 
     virtual bool propertyNumbers(int64_t layerId, int effect, const std::string& name, double timeMs, float values[3]) = 0;
 
-    virtual bool layerMatrix(int64_t layerId, double timeMs, float m[18]) = 0;
+    virtual bool layerMatrix(int64_t layerId, double timeMs, float m[30]) = 0;
 
     virtual bool layerBounds(int64_t layerId, double timeMs, float ltrb[4]) = 0;
 

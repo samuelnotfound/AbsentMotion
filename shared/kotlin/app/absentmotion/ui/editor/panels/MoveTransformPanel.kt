@@ -63,7 +63,6 @@ import app.absentmotion.engine.SnapGuide
 import app.absentmotion.editor.centred
 import app.absentmotion.editor.chain
 import app.absentmotion.editor.place
-import app.absentmotion.editor.LayerPoints
 import app.absentmotion.editor.setPivot
 import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.PIVOT_LIMIT
@@ -628,60 +627,62 @@ internal fun pivotFrame(matrix: FloatArray, quad: FloatArray?): PivotFrame {
 
 @Composable
 private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
-    val at = layer.pivot
-    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing) {
+    val saved = layer.pivot
+    val spatial = layer.uses3D
+    val at = if (spatial) saved else floatArrayOf(saved[0], saved[1], 0f)
+    var activeAxis by remember(layer.id, spatial) { mutableIntStateOf(0) }
+    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode) {
         if (state.playing) return@produceState
         val m = state.engine.layerMatrix(layer.id, state.timeMs)
         value = m?.let { pivotFrame(it, state.engine.layerQuad(layer.id, state.timeMs)) }
     }
     val now by rememberUpdatedState(layer)
     val seen by rememberUpdatedState(frame)
-    SideEffect {
-        state.layerPoints = if (!layer.activeAt(state.sampleMs)) null else LayerPoints(listOf(Pt(at[0], at[1])), 0, pivot = true) { _, p -> state.setPivot(p.x, p.y, "pivot-drag") }
+    DisposableEffect(state) {
+        state.pivotEditing = true
+        onDispose { state.pivotEditing = false }
     }
-    DisposableEffect(Unit) { onDispose { state.layerPoints = null } }
     fun openKeypad(active: Int) {
-        val fields = listOf(KeypadField("X", at[0], min = -PIVOT_LIMIT, max = PIVOT_LIMIT), KeypadField("Y", at[1], min = -PIVOT_LIMIT, max = PIVOT_LIMIT))
-        state.keypad = KeypadRequest(fields, active) { v -> state.setPivot(v[0], v[1]) }
+        val axes = if (spatial) listOf(2, 0, 1) else listOf(0, 1)
+        val fields = axes.map { axis -> KeypadField("XYZ"[axis].toString(), at[axis], min = -PIVOT_LIMIT, max = PIVOT_LIMIT) }
+        state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
+            if (spatial) state.setPivot(v[1], v[2], z = v[0]) else state.setPivot(v[0], v[1])
+        }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
     val timing = remember { LongArray(2) }
     Box(
         Modifier.fillMaxSize().holdAndDoubleTap(timing, FlipSlop, onFlip).pointerInput(state) {
-            var origin = Pt(0f, 0f)
+            var origin = floatArrayOf(0f, 0f, 0f)
             var travel = Offset.Zero
             var scale = 1f
             fun done() { state.endGesture(); rulerTip(context) }
             detectDragGestures(
                 onDragStart = {
                     scale = if (timing.heldBeforeMoving(android.os.SystemClock.uptimeMillis(), viewConfiguration.longPressTimeoutMillis)) FINE_FACTOR else 1f
-                    origin = now.pivot.let { Pt(it[0], it[1]) }
+                    origin = now.pivot
                     travel = Offset.Zero
                 },
                 onDragEnd = ::done, onDragCancel = ::done,
             ) { change, drag ->
                 change.consume()
                 travel += drag / density * scale
-                val local = seen?.local(origin, Pt(travel.x, travel.y)) ?: return@detectDragGestures
-                state.setPivot(origin.x + local.x, origin.y + local.y, "pivot-pad")
+                if (activeAxis == 2 && spatial) {
+                    state.setPivot(origin[0], origin[1], "pivot-pad", z = origin[2] + travel.x)
+                } else {
+                    val local = seen?.local(Pt(origin[0], origin[1]), Pt(travel.x, travel.y)) ?: return@detectDragGestures
+                    state.setPivot(origin[0] + local.x, origin[1] + local.y, "pivot-pad")
+                }
             }
         },
     ) {
         TrackpadCorners()
         Column(Modifier.align(Alignment.Center).padding(bottom = 150.px), horizontalAlignment = Alignment.CenterHorizontally) {
-            TrackpadHint(stringResource(R.string.drag_here_to_move_the_pivot), Modifier)
+            TrackpadHint(stringResource(if (spatial && activeAxis == 2) R.string.drag_to_move_along_z else R.string.drag_here_to_move_the_pivot), Modifier)
             if (onFlip != null) FlipHint(stringResource(R.string.transform_double_tap_layer))
         }
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
-            Row(Modifier.width(354.px).height(70.px).clip(PanelShape).background(Am.Field)) {
-                ValueCell(formatFixed(at[0], 2), Am.Accent, Modifier.weight(1f), "X") { openKeypad(0) }
-                ValueCell(formatFixed(at[1], 2), Am.Accent, Modifier.weight(1f), "Y") { openKeypad(1) }
-            }
-            Row(Modifier.height(23.px)) {
-                Caption("X", Modifier.width(177.px).fillMaxHeight())
-                Caption("Y", Modifier.width(177.px).fillMaxHeight())
-            }
-        }
+        AxisFields(spatial, { formatFixed(at[it], 2) }, { if (activeAxis == it) Am.Accent else Am.OnDark },
+            { activeAxis = it }, ::openKeypad, Modifier.align(Alignment.TopCenter).padding(top = 17.px))
         val box = frame?.box
         val names = PivotCells.map { stringResource(it) }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.px)) {
