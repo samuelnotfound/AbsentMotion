@@ -155,7 +155,7 @@ fun EditorState.addEmptyGroup() {
     addAndSelect(scene.groupNode(attrs, emptyList(), attrs.getValue("endTime").toInt() - attrs.getValue("startTime").toInt()))
 }
 
-private fun EditorState.groupLayers(ids: Set<Long>, blend: String?, anchor: Pair<Float, Float>?, keep3D: Boolean) {
+fun EditorState.groupLayers(ids: Set<Long>, blend: String? = null, anchor: Pair<Float, Float>? = null, keep3D: Boolean = false) {
     val id = Layer.newId()
     val label = numbered(AppText.get(R.string.model_layer_group))
     edit { s -> s.grouped(ids, blend, id, label, sampleMs, keep3D).let { g -> anchor?.let { (x, y) -> g.withAnchorAt(id, x, y) } ?: g } }
