@@ -215,8 +215,6 @@ private fun SlideOver(open: Boolean, content: @Composable () -> Unit) {
 private fun PhoneEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: AddLibrary) {
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Am.TopBar).systemBarsPadding().displayCutoutPadding().imePadding()) {
             val available = maxHeight
-            val propertyDock = state.inlineProperty != null && state.showsLayerInspector
-            val dockHeight = if (propertyDock) minOf(PanelHeight, available * 0.32f) else 0.dp
             Column(Modifier.fillMaxSize()) {
                 EditorTopBar(state, onExit, Modifier.fillMaxWidth().height(42.dp).enterFade().tutorialGuard(any = true))
                 Box(Modifier.fillMaxWidth().weight(1f).tutorialTarget("preview")) {
@@ -233,19 +231,15 @@ private fun PhoneEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: 
                 }
                 val screen = LocalConfiguration.current
                 val wanted = if (isTablet(screen.smallestScreenWidthDp)) maxOf(280, screen.screenHeightDp * 2 / 5).dp else 280.dp
-                val lower = lowerPanelHeight(available - dockHeight, wanted)
-                val timelineHeight = if (propertyDock) lower else wanted
+                val lower = lowerPanelHeight(available, wanted)
                 val scroll = androidx.compose.foundation.rememberScrollState()
                 LaunchedEffect(scroll) { androidx.compose.runtime.snapshotFlow { scroll.maxValue }.collect { scroll.scrollTo(it) } }
                 Box(Modifier.fillMaxWidth().height(lower).enterFade().background(Am.TimelineBg).tutorialTarget("timeline")
-                    .verticalScroll(scroll, enabled = lower < timelineHeight)) {
-                    Box(Modifier.fillMaxWidth().height(timelineHeight)) {
-                        Timeline(state, Modifier.fillMaxSize(), inspectorOverlay = !propertyDock)
-                        if (!propertyDock) LowerPanels(state, addLibrary)
+                    .verticalScroll(scroll, enabled = lower < wanted)) {
+                    Box(Modifier.fillMaxWidth().height(wanted)) {
+                        Timeline(state, Modifier.fillMaxSize())
+                        LowerPanels(state, addLibrary)
                     }
-                }
-                if (propertyDock) Box(Modifier.fillMaxWidth().height(dockHeight).background(Am.Panel)) {
-                    LowerPanels(state, addLibrary, transitionHere = false)
                 }
             }
         }

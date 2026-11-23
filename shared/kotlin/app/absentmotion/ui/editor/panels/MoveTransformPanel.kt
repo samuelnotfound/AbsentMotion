@@ -109,11 +109,11 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     val spatial = layer.uses3D
     val focus = state.inlineComponent(PropRef.Location)
     var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
-    if (focus != null) SideEffect { state.inlineTransformAxis = activeAxis }
+    SideEffect { state.inlineTransformAxis = activeAxis }
     val depth = spatial && activeAxis == 2
     fun Layer.updatePosition(x: Float, y: Float, z: Float): Layer =
-        if (focus == null) withTransform("location", x, y, z) else withTransformAxes(PropRef.Location, x, y, z)
-    fun colour(which: Int) = if (if (rulers || focus != null) activeAxis == which else depth == (which == 2)) Am.Accent else Am.OnDark
+        withTransformAxes(PropRef.Location, x, y, z)
+    fun colour(which: Int) = if (activeAxis == which) Am.Accent else Am.OnDark
     val deep by rememberUpdatedState(depth)
     fun openKeypad(active: Int) {
         activeAxis = active

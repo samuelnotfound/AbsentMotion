@@ -493,8 +493,8 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && !(move && shown == ROTATE_TAB && turn != null)
     val known = if (!named) null else when {
         move -> if (selected.kind == "camera" && shown == SIZE_TAB) KeyTarget(app.absentmotion.model.CameraFov, "60.000000") else TransformTargets[shown].let { base ->
-            if (requestedTransform == base.ref && requestedAxis != null) {
-                val axis = state.inlineTransformAxis
+            if (base.ref == PropRef.Location || requestedTransform == base.ref && requestedAxis != null) {
+                val axis = if (base.ref == PropRef.Location && !layer.uses3D) state.inlineTransformAxis.coerceIn(0, 1) else state.inlineTransformAxis
                 KeyTarget(base.ref.copy(component = axis), base.default.split(',').getOrElse(axis) { "0" })
             } else base
         }
