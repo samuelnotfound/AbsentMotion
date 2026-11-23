@@ -31,7 +31,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Fixed
 
-- **Inline timeline**. Opening a disclosure hides the layer tools, and closing an inline graph returns to the timeline. The playhead stays above the tracks and keyframes are visible through the track labels. Drag along a row to scroll the timeline, or drag within a ruler to edit its value.
+- **Inline timeline**. Opening a disclosure hides the layer tools, and closing an inline graph returns to the timeline. Property names, values, buttons, and rulers align across rows. The playhead stays above the tracks and keyframes are visible through the track labels. Drag along a row to scroll the timeline, or drag within a ruler to edit its value.
 
 - **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
 - **3D selection** draws the anchor and pivot in the projected plane of the layer as it rotates.

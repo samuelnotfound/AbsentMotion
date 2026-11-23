@@ -241,15 +241,23 @@ fun EditorState.toggleKeyframe() {
     }
 }
 
-internal fun EditorState.withInlineGraph(id: Long, ref: PropRef, count: Int) {
+internal fun EditorState.withInlineGraph(id: Long, ref: PropRef, frames: List<Int>) {
     playing = false
     selectedId = id
     inlinePanelHidden = true
     panel = EditorPanel.Tools
     keyTarget = KeyTarget(ref, "")
+    val previous = frame
     if (easing == null) {
+        frames.sorted().zipWithNext()
+            .filter { (start, end) -> end - start > 1 }
+            .map { (start, end) -> start + (end - start) / 2 }
+            .minByOrNull { kotlin.math.abs(it - previous) }?.let { frame = it }
+    }
+    if (easing == null) {
+        if (frame != previous) frame = previous
         keyTarget = null
-        hintEasing(count)
+        hintEasing(frames.size)
     } else easingOpen = true
 }
 

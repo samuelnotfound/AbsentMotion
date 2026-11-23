@@ -32,7 +32,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.R
@@ -84,44 +86,47 @@ internal fun InlinePositionDetails(
     val sample = state.sampleMs
     val at = layer.at(sample, scene.fps)
     val canEdit = !state.lookOnly && !layer.locked && sample in layer.startTime..layer.endTime
-    Column(modifier) {
-        if (sections.isEmpty()) Row(Modifier.height(InlinePositionHeading).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.inline_no_keyframes), color = Am.OnDarkDim, fontSize = 11.sp)
-        }
-        for (section in sections) {
-            val shown = section.id !in open.collapsed
-            val toggle = { onChange(open.copy(collapsed = if (shown) open.collapsed + section.id else open.collapsed - section.id)) }
-            Row(Modifier.height(InlinePositionHeading).fillMaxWidth().inlineTap(toggle).padding(start = 14.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                PanelIcon(if (shown) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight, Am.OnDarkDim, size = 14.dp)
-                Text(section.label, Modifier.padding(start = 5.dp), color = Am.OnDark, fontSize = 11.sp)
+    BoxWithConstraints(modifier) {
+        val labelWidth = minOf(168.dp, maxWidth * 0.56f)
+        val valueWidth = minOf(58.dp, labelWidth * 0.39f)
+        val labelPx = with(LocalDensity.current) { labelWidth.toPx() }
+        Column(Modifier.fillMaxWidth()) {
+            if (sections.isEmpty()) Row(Modifier.height(InlinePositionHeading).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.inline_no_keyframes), color = Am.OnDarkDim, fontSize = 11.sp)
             }
-            if (!shown) continue
-            for (track in section.tracks) androidx.compose.runtime.key(track.ref) {
-                val expanded = track.ref in open.controls
-                val toggleControl = { onChange(open.copy(controls = if (expanded) open.controls - track.ref else open.controls + track.ref)) }
-                val frames = track.frames(scene, layer)
-                val linked = track.linked(layer)
-                val raw = at.element(track.ref)?.valueAt(at.t)
-                val value = raw?.toFloatOrNull()?.times(track.multiplier)
-                val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
-                BoxWithConstraints(Modifier.fillMaxWidth().height(InlinePositionAxisHeight)
-                    .background((if (expanded) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
-                    val labelWidth = minOf(155.dp, maxWidth * 0.54f)
-                    val labelPx = with(LocalDensity.current) { labelWidth.toPx() }
-                    InlinePositionKeys(state, layer, track, frames, !state.lookOnly && !layer.locked && !layer.timingLocked && !linked,
-                        Modifier.matchParentSize(), xOf, frameAt, labelPx, toggleControl)
-                    Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
-                        .semantics { onClick { toggleControl(); true } }.padding(start = 20.dp, end = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        PanelIcon(if (expanded) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight, Am.OnDarkDim, size = 14.dp)
-                        Text(track.label, Modifier.padding(start = 4.dp).weight(1f), color = Am.OnDark, maxLines = 1,
-                            fontSize = 11.sp, overflow = TextOverflow.Ellipsis)
-                        Text(display, Modifier.weight(0.67f, fill = false), color = Am.Accent, fontSize = 10.5.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+            for (section in sections) {
+                val shown = section.id !in open.collapsed
+                val toggle = { onChange(open.copy(collapsed = if (shown) open.collapsed + section.id else open.collapsed - section.id)) }
+                Row(Modifier.height(InlinePositionHeading).fillMaxWidth().inlineTap(toggle).padding(start = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    PanelIcon(if (shown) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight, Am.OnDarkDim, size = 14.dp)
+                    Text(section.label, Modifier.padding(start = 5.dp), color = Am.OnDark, fontSize = 11.sp)
                 }
-                if (expanded) InlineControls(state, layer, track, scene, frames, value, canEdit && !linked)
+                if (!shown) continue
+                for (track in section.tracks) androidx.compose.runtime.key(track.ref) {
+                    val expanded = track.ref in open.controls
+                    val toggleControl = { onChange(open.copy(controls = if (expanded) open.controls - track.ref else open.controls + track.ref)) }
+                    val frames = track.frames(scene, layer)
+                    val linked = track.linked(layer)
+                    val raw = at.element(track.ref)?.valueAt(at.t)
+                    val value = raw?.toFloatOrNull()?.times(track.multiplier)
+                    val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
+                    Box(Modifier.fillMaxWidth().height(InlinePositionAxisHeight)
+                        .background((if (expanded) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
+                        InlinePositionKeys(state, layer, track, frames, !state.lookOnly && !layer.locked && !layer.timingLocked && !linked,
+                            Modifier.matchParentSize(), xOf, frameAt, labelPx, toggleControl)
+                        Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
+                            .semantics { onClick { toggleControl(); true } }.padding(start = 22.dp, end = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            PanelIcon(if (expanded) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight, Am.OnDarkDim, size = 14.dp)
+                            Text(track.label, Modifier.padding(start = 4.dp).weight(1f), color = Am.OnDark, maxLines = 1,
+                                fontSize = 11.sp, overflow = TextOverflow.Ellipsis)
+                            Text(display, Modifier.width(valueWidth), color = Am.Accent, fontSize = 10.5.sp,
+                                textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (expanded) InlineControls(state, layer, track, scene, frames, value, canEdit && !linked, labelWidth)
+                }
             }
         }
     }
@@ -136,24 +141,28 @@ private fun Modifier.inlineTap(action: () -> Unit): Modifier = semantics { onCli
     }
 
 @Composable
-private fun InlineControls(state: EditorState, layer: Layer, track: InlineTrack, scene: Scene, frames: List<Int>, value: Float?, canEdit: Boolean) {
+private fun InlineControls(
+    state: EditorState, layer: Layer, track: InlineTrack, scene: Scene, frames: List<Int>, value: Float?, canEdit: Boolean, labelWidth: Dp,
+) {
     val ref = track.ref
     var pending by androidx.compose.runtime.remember(layer.id, ref) { androidx.compose.runtime.mutableStateOf<Float?>(null) }
-    Row(Modifier.height(InlinePositionControlHeight).fillMaxWidth().padding(start = 13.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        val here = state.frame in frames
-        InlinePositionButton(
-            if (here) PanelIcons.KeyframeRemove else PanelIcons.Keyframe,
-            stringResource(if (here) R.string.a11y_remove_keyframe else R.string.a11y_add_keyframe),
-            canEdit && !layer.timingLocked,
-        ) {
-            state.playing = false
-            state.edit { it.update(layer.id, state.sampleMs) { at ->
-                if (ref == SpeedRef) at.withSpeedKeyframeToggled(state.sampleMs, scene.fps)
-                else at.withKeyframeToggled(ref, at.element(ref)?.valueAt(at.t).orEmpty()).let { if (ref == FrameRef) it.withFrameHold() else it }
-            } }
-        }
-        InlinePositionButton(PanelIcons.Easing, stringResource(R.string.a11y_easing), canEdit) {
-            state.withInlineGraph(layer.id, ref, frames.size)
+    Row(Modifier.height(InlinePositionControlHeight).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.width(labelWidth).fillMaxHeight().padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            val here = state.frame in frames
+            InlinePositionButton(
+                if (here) PanelIcons.KeyframeRemove else PanelIcons.Keyframe,
+                stringResource(if (here) R.string.a11y_remove_keyframe else R.string.a11y_add_keyframe),
+                canEdit && !layer.timingLocked,
+            ) {
+                state.playing = false
+                state.edit { it.update(layer.id, state.sampleMs) { at ->
+                    if (ref == SpeedRef) at.withSpeedKeyframeToggled(state.sampleMs, scene.fps)
+                    else at.withKeyframeToggled(ref, at.element(ref)?.valueAt(at.t).orEmpty()).let { if (ref == FrameRef) it.withFrameHold() else it }
+                } }
+            }
+            InlinePositionButton(PanelIcons.Easing, stringResource(R.string.a11y_easing), canEdit) {
+                state.withInlineGraph(layer.id, ref, frames)
+            }
         }
         if (value != null && ref != SpeedRef) {
             val gesture = "inline-value-${layer.id}-$ref"
@@ -167,7 +176,7 @@ private fun InlineControls(state: EditorState, layer: Layer, track: InlineTrack,
                     if (ref == FrameRef) changed.withFrameHold() else changed
                 } }
             }, onEnd = { pending = null; state.endGesture() }, onStart = { pending = value; state.playing = false },
-                modifier = Modifier.width(135.dp).height(InlinePositionControlHeight), enabled = canEdit, reserveGesture = true)
+                modifier = Modifier.width(148.dp).height(InlinePositionControlHeight), enabled = canEdit, reserveGesture = true)
         }
     }
 }
