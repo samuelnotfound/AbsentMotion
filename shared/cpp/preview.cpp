@@ -16,8 +16,17 @@ static bool PreviewQuad(const Scene& scene, int64_t id, double time, float xy[8]
     for(int i=0;i<4;i++){xy[2*i]=q[i].fX;xy[2*i+1]=q[i].fY;}
     return true;
 }
-static void DrawLayerEdges(SkCanvas* canvas, const SkPoint q[4], float px) {
-    const SkPath outline = SkPath::Polygon({q, 4}, true);
+static SkPath PreviewOutline(const Scene& scene, const Layer& layer, double timeMs, const SkMatrix& toPreview, const SkPoint q[4]) {
+    if (layer.kind == "shape" || layer.kind == "drawing") {
+        const SceneScope scope(scene);
+        const float t = layer.localTime(timeMs);
+        const SkPath shape = Cropped(layer, t, ShapePath(layer, t));
+        if (!shape.isEmpty()) return shape.makeTransform(SkMatrix::Concat(toPreview, WorldMatrix(scene, layer, timeMs)));
+    }
+    return SkPath::Polygon({q, 4}, true);
+}
+
+static void DrawLayerEdges(SkCanvas* canvas, const SkPath& outline, float px) {
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setStyle(SkPaint::kStroke_Style);
@@ -29,7 +38,7 @@ static void DrawLayerEdges(SkCanvas* canvas, const SkPoint q[4], float px) {
     canvas->drawPath(outline, paint);
 }
 
-static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, int handles, float px) {
+static void DrawSelection(SkCanvas* canvas, const SkPath& outline, const SkPoint q[4], SkPoint anchor, int handles, float px) {
     SkPaint paint;
     paint.setAntiAlias(true);
     auto dot = [&](SkPoint at, SkColor color, float radius) {
@@ -37,7 +46,7 @@ static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, 
         canvas->drawCircle(at, radius * px, paint);
     };
     auto handle = [&](int i) { return i < 4 ? q[i] : (q[i - 4] + q[(i - 3) % 4]) * 0.5f; };
-    DrawLayerEdges(canvas, q, px);
+    DrawLayerEdges(canvas, outline, px);
     if (handles >= 0 && handles < 8) {
         const SkColor accent = SkColorSetRGB(0xff, 0x8f, 0x66);
         dot(handle(handles), SkColorSetA(accent, 0x40), 42.5f);
@@ -250,7 +259,8 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
             canvas->restore();
         }
         if (view.gridSpacing > 0) DrawGrid(canvas, canvas->getBaseLayerSize(), scene, scale, dx, dy, view.gridSpacing);
-        DrawCameraFrames(canvas, scene, timeMs, camera, selectedId, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
+        const SkMatrix toTarget = SkMatrix::Translate(dx, dy).preScale(scale, scale);
+        DrawCameraFrames(canvas, scene, timeMs, camera, selectedId, toTarget, px);
         float xy[8];
         const Layer* selected = selectedId != 0 ? scene.layer(selectedId) : nullptr;
         if (selected && (selected->kind == "camera" || CameraHidesLayer(scene.layers, *selected, timeMs))) selected = nullptr;
@@ -259,10 +269,11 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         };
         if (handles != -11 && handles < kPointEdit) {
             for (const int64_t id : view.ids) {
-                if (id == selectedId || !PreviewQuad(scene, id, timeMs, xy, &effects)) continue;
+                const Layer* marked = scene.layer(id);
+                if (!marked || id == selectedId || !PreviewQuad(scene, id, timeMs, xy, &effects)) continue;
                 SkPoint q[4];
                 toPreview(xy, q);
-                DrawLayerEdges(canvas, q, px);
+                DrawLayerEdges(canvas, PreviewOutline(scene, *marked, timeMs, toTarget, q), px);
             }
         }
         if (selected && handles == -2) {
@@ -270,7 +281,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
                 if (PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
                     SkPoint q[4];
                     toPreview(xy, q);
-                    DrawLayerEdges(canvas, q, px);
+                    DrawLayerEdges(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), px);
                 }
                 DrawMotionPath(canvas, scene, *selected, timeMs, scene.fps, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
             }
@@ -286,7 +297,8 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
             const float t = selected->localTime(timeMs);
             const SkPoint pivot = {selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0)};
             const SkPoint anchor = WorldMatrix(scene, *selected, timeMs).mapPoint(pivot);
-            DrawSelection(canvas, q, {anchor.fX * scale + dx, anchor.fY * scale + dy}, handles, px);
+            DrawSelection(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), q,
+                          {anchor.fX * scale + dx, anchor.fY * scale + dy}, handles, px);
         }
         DrawSnapGuides(canvas, canvas->getBaseLayerSize(), view.guides, scale, dx, dy, px);
 }
