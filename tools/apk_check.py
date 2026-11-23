@@ -139,11 +139,11 @@ def asset_packaging(path, compatible):
     return len(packs)
 
 
-def check(path, build_tools, unsigned, max_api, signer=None):
+def check(path, build_tools, unsigned, max_api, signer=None, package_id="app.absentmotion"):
     badging = run(build_tools / "aapt2", "dump", "badging", path)
     package = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
     minimum = re.search(r"^(?:sdkVersion|minSdkVersion):'(\d+)'", badging, re.M)
-    if not package or not minimum or package[1] != "app.absentmotion":
+    if not package or not minimum or package[1] != package_id:
         raise ValueError("missing or unexpected package/version/minimum Android metadata")
     api = int(minimum[1])
     if api not in (26, 33) or api > max_api:
@@ -176,6 +176,7 @@ def check(path, build_tools, unsigned, max_api, signer=None):
 def main():
     parser = argparse.ArgumentParser(description="Check release APK identity, signatures, ZIP packaging and 16 KB ELF alignment")
     parser.add_argument("apks", type=Path, nargs="+", help="APKs, or with --libraries .so files and folders of them")
+    parser.add_argument("--package-id", default="app.absentmotion", help="expected Android application ID")
     parser.add_argument("--unsigned", action="store_true")
     parser.add_argument("--max-api", type=int, default=37)
     parser.add_argument("--signer", help="expected signing certificate SHA-256 (default: RELEASE_SIGNER in UpdateSource.kt)")
@@ -198,7 +199,7 @@ def main():
         signer = None if args.unsigned or args.any_signer else (args.signer or release_signer()).lower()
         for path in args.apks:
             try:
-                identities.append(check(path, build_tools, args.unsigned, args.max_api, signer))
+                identities.append(check(path, build_tools, args.unsigned, args.max_api, signer, args.package_id))
             except (OSError, ValueError, zipfile.BadZipFile, struct.error) as error:
                 raise ValueError(f"{path.name}: {error}") from error
         if len(set(identities)) != 1:
