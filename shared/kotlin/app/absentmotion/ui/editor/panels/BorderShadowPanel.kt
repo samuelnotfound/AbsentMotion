@@ -110,9 +110,25 @@ private fun resetBorderShadow() {
 }
 
 @Composable
-internal fun BorderShadowLifetime(owner: Any, layerId: Long, panel: app.absentmotion.editor.EditorPanel) {
-    DisposableEffect(owner, layerId, panel) {
+internal fun BorderShadowLifetime(owner: Any, layerId: Long, panel: app.absentmotion.editor.EditorPanel, property: PropRef?) {
+    DisposableEffect(owner, layerId, panel, property) {
         resetBorderShadow()
+        if (panel == app.absentmotion.editor.EditorPanel.BorderShadow && property != null) {
+            val parent = property.name.substringBefore('/')
+            val field = property.name.substringAfterLast('/')
+            when (parent.substringBefore('[')) {
+                "path-stroke" -> strokeField = if (field == "color") 1 else 0
+                "border" -> {
+                    tab = 1
+                    openBorder = parent.substringAfter('[', "").substringBefore(']').toIntOrNull() ?: 0
+                    borderField = if (field == "color") 0 else 1
+                }
+                "shadow" -> {
+                    tab = 2
+                    shadowField = ShadowRefs.indexOf(property).coerceAtLeast(0)
+                }
+            }
+        }
         onDispose { resetBorderShadow() }
     }
 }

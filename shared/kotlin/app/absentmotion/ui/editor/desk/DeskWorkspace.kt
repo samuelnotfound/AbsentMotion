@@ -197,7 +197,9 @@ private fun DeskWorkspaceBody(state: EditorState, onExit: () -> Unit, library: A
             DeskDivider(false, DividerDrag({ timelineHeight.value }, { TimelineMinDp }, { maxHeight.value * .6f }, -1, timelineBounce) { timelineFraction = (it / maxHeight.value).coerceIn(.1f, .6f) })
             Timeline(state, Modifier.fillMaxWidth().height(timelineHeight).rubber(timelineBounce, false, 1f).tutorialTarget("timeline"))
         }
-        app.absentmotion.platform.BackHandler(!both && state.drawing !is PointMode && (soloLibrary || soloInspector)) { if (soloInspector) soloInspector = false else soloLibrary = false }
+        app.absentmotion.platform.BackHandler(!both && state.drawing !is PointMode && (soloLibrary || soloInspector)) {
+            if (state.inlineProperty != null) state.stepBack() else if (soloInspector) soloInspector = false else soloLibrary = false
+        }
         DeskDropGhost { rootOrigin }
         if (settings) DeskProject(state) { settings = false }
         if (state.effectBrowserOpen) DeskDialog(null, onDismiss = { state.effectBrowserOpen = false }) { app.absentmotion.ui.editor.effects.EffectBrowser(state) }
@@ -382,7 +384,6 @@ private fun DeskLayerArea(state: EditorState, modifier: Modifier) {
         Swap(
             when {
                 state.drawing is PointMode -> "points"
-                state.inlineGraphOpen -> "inlineGraph"
                 state.volumeOpen && state.panel == EditorPanel.Tools -> "volume" to state.easingOpen
                 state.panel == EditorPanel.Tools -> "tools"
                 else -> state.panel to state.easingOpen
@@ -396,7 +397,6 @@ private fun DeskLayerArea(state: EditorState, modifier: Modifier) {
                         Box(Modifier.fillMaxWidth().weight(1f)) { PointPanel(state, mode) }
                     }
                 }
-                state.inlineGraphOpen -> app.absentmotion.ui.editor.panels.EasingPanel(state, Modifier.fillMaxSize())
                 state.volumeOpen && state.panel == EditorPanel.Tools -> key(state.selectedId) { VolumePanel(state, Modifier.fillMaxSize()) }
                 state.panel == EditorPanel.Tools -> LayerTools(state, Modifier.fillMaxWidth().align(Alignment.TopCenter), side = true)
                 else -> LayerPanel(state, Modifier.fillMaxSize())

@@ -98,7 +98,12 @@ internal fun EffectsPanel(state: EditorState, modifier: Modifier) {
     val instance = layer.effects.getOrNull(index)
     val definition = instance?.let { catalog.find(it["id"] ?: "") }
     LaunchedEffect(instance == null) { if (instance == null && index >= 0) state.effectIndex = -1 }
-    var active by remember(layer.id, index, definition?.id) { mutableStateOf(definition?.params?.firstOrNull { it.kind != "color" && it.kind != "switch" && it.kind != "choice" && it.kind != "text" && definition.shown(it, instance, layer.t) }) }
+    val requested = state.inlineProperty?.takeIf { it.kind == PropRef.Kind.Effect && it.effectIndex == index }
+    var active by remember(layer.id, index, definition?.id, requested) {
+        mutableStateOf(definition?.params?.firstOrNull { it.id == requested?.name } ?: definition?.params?.firstOrNull {
+            it.kind !in setOf("color", "switch", "choice", "text") && definition.shown(it, instance, layer.t)
+        })
+    }
     LaunchedEffect(definition) { active = definition?.params?.firstOrNull { it.id == active?.id } }
     var menu by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf(false) }
@@ -249,7 +254,7 @@ private fun EffectHeader(state: EditorState, index: Int, effect: XmlNode, defini
     var menu by remember { mutableStateOf(false) }
     var help by remember { mutableStateOf(false) }
     var presets by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().height(37.dp).background(Am.CardHeader).deleteWhenHovered { state.editSelected { it.removeEffect(index) }; state.effectIndex = -1 }.clickable { state.effectIndex = -1 }.padding(start = 3.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(37.dp).background(Am.CardHeader).deleteWhenHovered { state.editSelected { it.removeEffect(index) }; state.effectIndex = -1 }.clickable { if (state.inlineProperty != null) state.stepBack() else state.effectIndex = -1 }.padding(start = 3.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(EffectIcons.Expanded, null, Modifier.padding(start = 8.dp).size(18.dp).alpha(0.9f), tint = Am.OnDark)
         if (effect["id"]?.startsWith(AddedEffectPrefix) == true) AddedEffectBadge(Modifier.padding(start = 6.dp))
         Text(definition?.name ?: effect["id"]?.substringAfterLast('.') ?: "", Modifier.weight(1f).padding(start = 6.dp, end = 4.dp), color = Am.OnDark, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)

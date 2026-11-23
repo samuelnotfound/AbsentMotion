@@ -1,6 +1,10 @@
 package app.absentmotion.editor
 
 import app.absentmotion.R
+import app.absentmotion.audio.GainRef
+import app.absentmotion.model.CameraFov
+import app.absentmotion.model.FrameRef
+import app.absentmotion.model.RemapRef
 import app.absentmotion.effects.EffectCatalog
 import app.absentmotion.i18n.AppText
 import app.absentmotion.model.KeyScope
@@ -20,8 +24,6 @@ internal data class InlineTrack(
     val label: String,
     val multiplier: Float = 1f,
     val unit: String = "",
-    val range: ClosedFloatingPointRange<Float>? = null,
-    val sensitivity: Float = 1f,
     val integer: Boolean = false,
 ) {
     fun frames(scene: Scene, layer: Layer): List<Int> = layer.keyframeTimes(KeyScope(ref)).map(scene::frameAt).distinct()
@@ -56,7 +58,7 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
     vector(PropRef.Pivot, AppText.get(R.string.a11y_tab_pivot), xyz, "0,0,0")
     vector(PropRef.Skew, AppText.get(R.string.a11y_tab_skew), "XY", "0,0", (180 / Math.PI).toFloat(), "°")
     if (layer.propertyElement(PropRef.Opacity)?.isKeyframed == true) {
-        transform += InlineTrack(PropRef.Opacity, AppText.get(R.string.layer_tool_opacity_blend), 100f, "%", 0f..100f)
+        transform += InlineTrack(PropRef.Opacity, AppText.get(R.string.layer_tool_opacity_blend), 100f, "%")
     }
     if (transform.isNotEmpty()) add(InlineSection("transform", AppText.get(R.string.layer_tool_transform), transform))
 
@@ -68,11 +70,7 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
             val parameter = definition?.params?.firstOrNull { it.id == name }
             val multiplier = if (parameter?.percent == true) 100f else 1f
             val unit = if (parameter?.percent == true) "%" else if (parameter?.kind == "angle") "°" else parameter?.unit.orEmpty()
-            val bounds = parameter?.let { (it.min * multiplier)..(it.max * multiplier) }
-                ?.takeIf { !it.isEmpty() && it.start.isFinite() && it.endInclusive.isFinite() }
-            val span = bounds?.let { it.endInclusive - it.start }
-            InlineTrack(PropRef.effect(index, name), parameter?.label ?: labelOf(name), multiplier, unit, bounds,
-                span?.takeIf { it in 0.0001f..6000f }?.div(120f) ?: 1f, parameter?.kind == "choice")
+            InlineTrack(PropRef.effect(index, name), parameter?.label ?: labelOf(name), multiplier, unit, parameter?.kind == "choice")
         }
         if (tracks.isNotEmpty()) add(InlineSection("effect-$index", definition?.name ?: labelOf(id.substringAfterLast('.')), tracks))
     }
@@ -84,7 +82,7 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
                 SpeedRef -> InlineTrack(ref, AppText.get(R.string.a11y_speed), unit = "×")
                 PropRef.FillColor -> InlineTrack(ref, AppText.get(R.string.layer_tool_fill_color))
                 else -> when (path) {
-                    "gain" -> InlineTrack(ref, AppText.get(R.string.volume_volume), 100f, "%", 0f..400f)
+                    "gain" -> InlineTrack(ref, AppText.get(R.string.volume_volume), 100f, "%")
                     "frame" -> InlineTrack(ref, labelOf(name), integer = true)
                     else -> InlineTrack(ref, labelOf(name))
                 }
@@ -121,3 +119,43 @@ private fun childPaths(node: XmlNode): List<Pair<XmlNode, String>> {
 
 private fun labelOf(name: String): String = name.replace(Regex("([a-z])([A-Z])"), "$1 $2")
     .replace('_', ' ').replaceFirstChar { it.titlecase() }
+
+internal fun inlineEditorPanel(layer: Layer, ref: PropRef): EditorPanel? = when (ref.kind) {
+    PropRef.Kind.Transform -> when (ref.copy(component = null)) {
+        PropRef.Opacity -> EditorPanel.Blending
+        PropRef.Location, PropRef.Rotation, PropRef.Tilt, PropRef.Scale, PropRef.Pivot, PropRef.Skew -> EditorPanel.MoveTransform
+        else -> null
+    }
+    PropRef.Kind.Effect -> EditorPanel.Effects
+    PropRef.Kind.Property -> when (layer.kind) {
+        "model" -> EditorPanel.Model
+        "light" -> EditorPanel.Light
+        else -> EditorPanel.EditShape
+    }
+    PropRef.Kind.Child -> when {
+        ref == GainRef -> EditorPanel.Tools
+        ref == FrameRef -> EditorPanel.Frame
+        ref == SpeedRef || ref == RemapRef -> EditorPanel.Speed
+        ref == PropRef.FillColor -> EditorPanel.ColorFill
+        ref == CameraFov || ref.name.startsWith("fog/") || ref.name.startsWith("focus-blur/") -> EditorPanel.Camera
+        ref.name.substringBefore('/').substringBefore('[') in setOf("shadow", "border", "path-stroke") -> EditorPanel.BorderShadow
+        else -> null
+    }
+}
+
+internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
+    if (lookOnly || layer.locked) return
+    val target = inlineEditorPanel(layer, ref) ?: return
+    endGesture()
+    playing = false
+    selectedId = layer.id
+    easingOpen = false
+    keypad = null
+    keyTarget = null
+    inlinePanelHidden = true
+    inlineProperty = ref
+    inlineTransformAxis = ref.component ?: if (ref == PropRef.Rotation) 2 else 0
+    volumeOpen = ref == GainRef
+    effectIndex = if (target == EditorPanel.Effects) ref.effectIndex else -1
+    panel = target
+}
