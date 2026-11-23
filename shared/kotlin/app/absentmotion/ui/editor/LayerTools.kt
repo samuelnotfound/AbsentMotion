@@ -559,7 +559,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
             Box(cell) { DeskTip(tip, Modifier.fillMaxSize()) { Box(
                 Modifier.fillMaxSize().then(if (usable) Modifier.combinedClickable(
                     press, null, role = androidx.compose.ui.semantics.Role.Tab,
-                    onLongClick = if (i == 0 && canPivot) { { tab = 0; pivotMode = true } } else null,
+                    onDoubleClick = if (i == 0 && canPivot) { { tab = 0; pivotMode = true } } else null,
                 ) { tab = i; if (i == 0) pivotMode = false } else Modifier.dimmed())
                     .semantics(mergeDescendants = true) { this.selected = tab == i }.padding(start = 10.px, end = 11.px, top = 5.px, bottom = 5.px),
             ) {
