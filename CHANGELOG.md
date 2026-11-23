@@ -31,6 +31,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
 - **3D selection** draws the anchor and pivot in the projected plane of the layer as it rotates.
+- **Move pad** holds nearly straight drags on one axis and snaps layer edges to the canvas guides.
 - **Pre-render** starts from the Pre-render button and stays inside the work area. Resizing the area keeps valid cached frames for the next pre-render.
 
 ## [5.2.3] - 2026-11-21

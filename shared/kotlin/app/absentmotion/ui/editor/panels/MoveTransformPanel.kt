@@ -140,12 +140,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             var origin = now.location
             var travel = Offset.Zero
             var shown = Offset.Zero
+            var straight = TrackpadAlignment()
             var scale = 1f
             fun done() { state.snapGuides = emptyList(); state.endGesture(); rulerTip(context) }
             detectDragGestures(
                 onDragStart = {
                     scale = if (timing.heldBeforeMoving(android.os.SystemClock.uptimeMillis(), viewConfiguration.longPressTimeoutMillis)) FINE_FACTOR else 1f
-                    axes = if (state.playing) SnapAxis(emptyList()) to SnapAxis(emptyList()) else start(); origin = now.location; travel = Offset.Zero; shown = Offset.Zero
+                    axes = if (state.playing) SnapAxis(emptyList()) to SnapAxis(emptyList()) else start()
+                    origin = now.location; travel = Offset.Zero; shown = Offset.Zero; straight = TrackpadAlignment()
                     state.snapGuides = if (deep || state.playing) emptyList() else axes.first.guidesAt(0f) + axes.second.guidesAt(0f)
                 },
                 onDragEnd = ::done, onDragCancel = ::done,
@@ -157,11 +159,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                     return@detectDragGestures
                 }
                 travel += drag / density * scale
-                val snapped = if (state.playing) travel else Offset(axes.first.map(travel.x), axes.second.map(travel.y))
+                val aligned = if (state.playing) travel else straight.constrain(travel)
+                val snapped = if (state.playing) aligned else Offset(
+                    if (aligned.x == 0f) 0f else axes.first.map(aligned.x),
+                    if (aligned.y == 0f) 0f else axes.second.map(aligned.y),
+                )
                 val step = snapped - shown
                 shown = snapped
-                val guides = if (state.playing) emptyList() else (if (step.x == 0f) axes.first.guidesAt(snapped.x) else emptyList()) +
-                    (if (step.y == 0f) axes.second.guidesAt(snapped.y) else emptyList())
+                val guides = if (state.playing) emptyList() else axes.first.guidesAt(snapped.x) + axes.second.guidesAt(snapped.y)
                 if (guides.any { it !in state.snapGuides }) tick(HapticFeedbackType.SegmentTick)
                 state.snapGuides = if (state.playing) emptyList() else guides
                 if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.withTransform("location", origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
@@ -280,7 +285,7 @@ internal fun Scene.snapAxesFor(layer: Layer, timeMs: Int, mine: FloatArray?, oth
     val parent = chain(layer).getOrNull(1)?.let { place(it, timeMs) }
     val tilted = layer.uses3D && chain(layer).drop(1).takeWhile { it.uses3D }.any { up -> up.at(timeMs, fps).tilt.any { it % 360f != 0f } }
     if (parent != null && (parent.rot % 360f != 0f || tilted)) return SnapAxis(emptyList()) to SnapAxis(emptyList())
-    return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), mine, others, parent?.sx ?: 1f, parent?.sy ?: 1f)
+    return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), mine, others, parent?.sx ?: 1f, parent?.sy ?: 1f, canvasEdges = true)
 }
 
 internal class SnapScene(val id: Long, val mine: FloatArray?, val others: List<SnapOther>)
@@ -299,9 +304,20 @@ internal fun Scene.previewSnapAxes(layer: Layer, timeMs: Int, from: SnapScene, t
     return snapAxes(width.toFloat(), height.toFloat(), floatArrayOf(world.x, world.y), from.mine, from.others, 1f, 1f, threshold)
 }
 
-internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatArray?, others: List<SnapOther>, sx: Float, sy: Float, threshold: Float = 25f): Pair<SnapAxis, SnapAxis> {
+internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatArray?, others: List<SnapOther>, sx: Float, sy: Float, threshold: Float = 25f, canvasEdges: Boolean = false): Pair<SnapAxis, SnapAxis> {
     val xs = arrayListOf(Snap((width / 2 - at[0]) / sx, SnapGuide(true, width / 2, true)))
     val ys = arrayListOf(Snap((height / 2 - at[1]) / sy, SnapGuide(false, height / 2, true)))
+    if (canvasEdges && mine != null) {
+        for ((axis, extent) in listOf(width, height).withIndex()) {
+            val from = mine[axis]
+            val to = mine[axis + 2]
+            val unit = if (axis == 0) sx else sy
+            val stops = if (axis == 0) xs else ys
+            stops += Snap(-from / unit, SnapGuide(axis == 0, 0f, true))
+            stops += Snap((extent - to) / unit, SnapGuide(axis == 0, extent, true))
+            stops += Snap((extent - from - to) / (2f * unit), SnapGuide(axis == 0, extent / 2, true))
+        }
+    }
     for (o in others) {
         xs += Snap((o.x - at[0]) / sx, SnapGuide(true, o.x, false))
         ys += Snap((o.y - at[1]) / sy, SnapGuide(false, o.y, false))
@@ -312,6 +328,28 @@ internal fun snapAxes(width: Float, height: Float, at: FloatArray, mine: FloatAr
         }
     }
     return SnapAxis(xs, threshold) to SnapAxis(ys, threshold)
+}
+
+internal class TrackpadAlignment {
+    private var direction = 0
+
+    fun constrain(point: Offset): Offset {
+        val x = abs(point.x)
+        val y = abs(point.y)
+        if (direction == 0 && maxOf(x, y) >= 6f) {
+            direction = when {
+                y <= x * 0.20f -> 1
+                x <= y * 0.20f -> 2
+                else -> -1
+            }
+        }
+        if (direction == 1 && y > maxOf(10f, x * 0.25f) || direction == 2 && x > maxOf(10f, y * 0.25f)) direction = -1
+        return when (direction) {
+            1 -> Offset(point.x, 0f)
+            2 -> Offset(0f, point.y)
+            else -> point
+        }
+    }
 }
 
 internal class SnapAxis(snaps: List<Snap>, private val threshold: Float = 25f) {
