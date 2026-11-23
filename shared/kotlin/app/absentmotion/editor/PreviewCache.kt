@@ -43,8 +43,10 @@ import kotlinx.coroutines.delay
 private const val MIB = 1L shl 20
 private const val MAX_BUDGET = 256 * MIB
 private const val MAX_DISK_BUDGET = 1024 * MIB
+private const val MAX_BACKGROUND_DISK_BUDGET = 256 * MIB
 private const val DISK_RESERVE = 1024 * MIB
 private const val CACHE_PREFIX = "preview-cache-"
+private const val SPILL_PREFIX = "preview-spill-"
 private const val MAX_SIDE = 1920
 private const val ESTIMATE_PER_MILLE = 150L
 private const val QUALITY = 85
@@ -102,11 +104,21 @@ fun flattenOnChecker(rgba: ByteArray, width: Int, height: Int, cell: Float): Boo
     return translucent
 }
 
-class FrameStore(private val start: Int, val budget: Long, private val file: java.io.File? = null, val raw: Boolean = false) : java.io.Closeable {
-    private data class Record(val data: ByteArray?, val offset: Long, val size: Int)
+class FrameStore(
+    private val start: Int,
+    val budget: Long,
+    private val file: java.io.File? = null,
+    val raw: Boolean = false,
+    private val spill: java.io.File? = null,
+    private val memoryBudget: Long = budget,
+) : java.io.Closeable {
+    private data class Record(val data: ByteArray?, val offset: Long, val size: Int, val saved: java.io.File? = null)
     private val records = java.util.TreeMap<Int, Record>()
     private val disk = file?.let { java.io.RandomAccessFile(it, "rw").apply { setLength(0) } }
     private var end = 0L
+    private var spillId = 0L
+    private var memoryBytes = 0L
+    private var diskBytes = 0L
     private var closed = false
     @Volatile var bytes = 0L
         private set
@@ -115,6 +127,7 @@ class FrameStore(private val start: Int, val budget: Long, private val file: jav
     val first: Int get() = synchronized(this) { if (records.isEmpty()) start else records.firstKey() }
     val last: Int get() = synchronized(this) { records.lastKeyOrNull() ?: start - 1 }
     val onDisk: Boolean get() = disk != null
+    val hasSpill: Boolean get() = spill != null
 
     @Synchronized fun add(frame: ByteArray): Boolean = put(last + 1, frame)
 
@@ -123,25 +136,45 @@ class FrameStore(private val start: Int, val budget: Long, private val file: jav
 
     @Synchronized fun put(index: Int, frame: ByteArray): Boolean {
         if (closed || index < 0 || bytes - (records[index]?.size ?: 0) + frame.size > budget) return false
+        val previous = records[index]
         val target = disk
         val offset = end
+        val keepInMemory = target == null && (spill == null || memoryBytes - (previous?.data?.size ?: 0) + frame.size <= memoryBudget)
+        val saved = if (target == null && !keepInMemory) {
+            if (diskBytes + frame.size > budget - memoryBudget) return false
+            val path = java.io.File(spill, "${spillId++}.frame")
+            try { path.writeBytes(frame) } catch (_: java.io.IOException) {
+                if (!path.delete()) diskBytes += path.length()
+                return false
+            }
+            diskBytes += frame.size
+            path
+        } else null
         if (target != null) {
             try { target.seek(offset); target.write(frame) }
             catch (_: java.io.IOException) { return false }
             end += frame.size
         }
-        bytes -= records[index]?.size ?: 0
-        records[index] = Record(if (target == null) frame else null, offset, frame.size)
+        previous?.let(::release)
+        val record = Record(frame.takeIf { keepInMemory }, offset, frame.size, saved)
+        if (keepInMemory) memoryBytes += frame.size
+        records[index] = record
         bytes += frame.size
         count = records.size
         return true
+    }
+
+    private fun release(record: Record) {
+        bytes -= record.size
+        if (record.data != null) memoryBytes -= record.size
+        if (record.saved?.delete() == true) diskBytes -= record.size
     }
 
     @Synchronized fun removeWhere(remove: (Int) -> Boolean) {
         val iterator = records.entries.iterator()
         while (iterator.hasNext()) {
             val record = iterator.next()
-            if (remove(record.key)) { bytes -= record.value.size; iterator.remove() }
+            if (remove(record.key)) { release(record.value); iterator.remove() }
         }
         count = records.size
     }
@@ -151,16 +184,17 @@ class FrameStore(private val start: Int, val budget: Long, private val file: jav
         fun distance(f: Int) = if (f >= at) (f - at).toLong() else 2L * (at - f)
         val victim = if (distance(records.firstKey()) >= distance(records.lastKey())) records.firstKey() else records.lastKey()
         if (distance(victim) <= distance(frame)) return false
-        bytes -= records.remove(victim)!!.size
+        release(records.remove(victim)!!)
         count = records.size
         return true
     }
 
-    @Synchronized fun runs(): List<IntRange> {
+    @Synchronized fun runs(onDisk: Boolean? = null): List<IntRange> {
         val out = ArrayList<IntRange>()
         var start = -1
         var end = -2
-        for (k in records.keys) {
+        for ((k, record) in records) {
+            if (onDisk != null && (record.data == null) != onDisk) continue
             if (k != end + 1) { if (start >= 0) out += start..end; start = k }
             end = k
         }
@@ -170,12 +204,14 @@ class FrameStore(private val start: Int, val budget: Long, private val file: jav
 
     @Synchronized operator fun contains(frame: Int): Boolean = !closed && records.containsKey(frame)
 
+    @Synchronized fun inMemory(frame: Int): Boolean = records[frame]?.data != null
+
     @Synchronized operator fun get(frame: Int): ByteArray? {
         if (closed) return null
         val record = records[frame] ?: return null
         record.data?.let { return it }
         return try {
-            ByteArray(record.size).also { disk!!.seek(record.offset); disk.readFully(it) }
+            record.saved?.readBytes() ?: ByteArray(record.size).also { disk!!.seek(record.offset); disk.readFully(it) }
         } catch (_: java.io.IOException) { null }
     }
 
@@ -183,10 +219,12 @@ class FrameStore(private val start: Int, val budget: Long, private val file: jav
         if (closed) return
         closed = true
         runCatching { disk?.close() }
+        records.values.forEach(::release)
         records.clear()
         bytes = 0L
         count = 0
         file?.delete()
+        spill?.delete()
     }
 
     private fun <K, V> java.util.TreeMap<K, V>.lastKeyOrNull(): K? = if (isEmpty()) null else lastKey()
@@ -339,11 +377,10 @@ object PreviewCache {
         val now = System.nanoTime()
         if (force || now - revisedNs > 100_000_000L) { revisedNs = now; revision++ }
     }
-    fun runs(): List<IntRange> = if (!paused && (automatic || phase == Phase.Ready)) store?.runs().orEmpty() else emptyList()
-    fun runsFor(state: EditorState): List<IntRange> =
-        if (key?.let { cacheBarShows(it, keyOf(state), automatic && phase != Phase.Rendering) } == true) {
+    fun runsFor(state: EditorState, onDisk: Boolean): List<IntRange> =
+        if (!paused && (automatic || phase == Phase.Ready) && key?.let { cacheBarShows(it, keyOf(state), automatic && phase != Phase.Rendering) } == true) {
             val area = state.scene.workArea
-            runs().map { it.inside(area) }.filterNot { it.isEmpty() }
+            store?.runs(onDisk).orEmpty().map { it.inside(area) }.filterNot { it.isEmpty() }
         } else emptyList()
     var fit by mutableFloatStateOf(0f)
     var checkerCell by mutableFloatStateOf(25f)
@@ -351,6 +388,8 @@ object PreviewCache {
         private set
     private var preparedCell = 0f
     private var slowUntilNs = 0L
+    private val cleanup = CoroutineScope(Dispatchers.IO)
+    private var checkedSpill = false
     @Volatile private var interactionNs = 0L
     fun interaction() { interactionNs = System.nanoTime() }
     val idleMs: Long get() = if (PlatformFeatures.desktop) 1_000L else 2_000L
@@ -363,7 +402,11 @@ object PreviewCache {
         val dirty = withContext(Dispatchers.Default) { previewDirtyRanges(previous.scene, next.scene) }
         currentCoroutineContext().ensureActive()
         if (key !== previous) return
-        store?.removeWhere { frame -> dirty.any { frame in it } || frame > next.scene.lastFrame }
+        val previousStore = store
+        if (dirty.isNotEmpty() || next.scene.lastFrame < previous.scene.lastFrame) {
+            withContext(Dispatchers.IO) { previousStore?.removeWhere { frame -> dirty.any { frame in it } || frame > next.scene.lastFrame } }
+        }
+        if (key !== previous) return
         if (dirty.isNotEmpty()) player?.drop()
         key = next
         revise(force = true)
@@ -381,12 +424,24 @@ object PreviewCache {
             storeSize == (width to height) && preparedCell == cell
         if (extendingManual && (renderedArea == area || store?.countIn(area) == area.frameCount)) return
         if (!extendingManual && (!automatic || previous == null || previous.copy(scene = next.scene) != next || player?.width != width || player?.height != height || preparedCell != cell)) {
-            clear()
+            val allocation = generation
             val manager = context.applicationContext.getSystemService(ActivityManager::class.java)
             val raw = PlatformFeatures.desktop
             val budget = if (raw) rawStoreBudget(Runtime.getRuntime().maxMemory())
                 else storeBudget(previewCacheBudget(manager?.memoryClass ?: 128, manager?.isLowRamDevice == true, Tier.compatible), width, height)
-            store = FrameStore(0, budget, raw = raw)
+            val folder = context.applicationContext.cacheDir
+            val spillBudget = withContext(Dispatchers.IO) {
+                if (!checkedSpill) folder.listFiles { entry -> entry.name.startsWith(SPILL_PREFIX) }?.forEach { entry ->
+                    entry.listFiles { frame -> frame.isFile && frame.name.endsWith(".frame") }?.forEach { it.delete() }
+                    entry.delete()
+                }
+                diskBudget(folder.usableSpace).coerceAtMost(MAX_BACKGROUND_DISK_BUDGET)
+            }
+            checkedSpill = true
+            if (generation != allocation || phase == Phase.Rendering || !accept()) return
+            clear()
+            val spill = if (spillBudget > 0) java.io.File(folder, SPILL_PREFIX + System.nanoTime()).takeIf { it.mkdir() } else null
+            store = FrameStore(0, budget + (if (spill == null) 0 else spillBudget), raw = raw, spill = spill, memoryBudget = budget)
             player = FramePlayer(store!!, width, height)
             automatic = true
             preparedCell = cell
@@ -424,11 +479,16 @@ object PreviewCache {
                 if (!current()) return
                 val stored = withContext(Dispatchers.Default) { if (encoder == null) pixels.also { flattenOnChecker(it, width, height, cell) } else encoder.encode(pixels, cell, true) } ?: return
                 if (!current()) return
-                while (!built.put(frame, stored)) {
-                    if (extendingManual || !built.evictFarther(at, frame)) { revise(force = true); return }
+                val saved = withContext(Dispatchers.IO) {
+                    while (current()) {
+                        if (built.put(frame, stored)) return@withContext true
+                        if (extendingManual || !built.evictFarther(at, frame)) break
+                    }
+                    false
                 }
-                revise()
-                if (encoder == null) continue
+                revise(force = !saved)
+                if (!saved) return
+                if (encoder == null && built.inMemory(frame)) continue
                 val elapsed = System.nanoTime() - started
                 delay((elapsed / 500_000L).coerceIn(30L, 1_000L))
             }
@@ -659,8 +719,9 @@ object PreviewCache {
         memoryStopped = false
         job?.cancel()
         job = null
-        store?.close()
+        val previousStore = store
         store = null
+        if (previousStore?.hasSpill == true) cleanup.launch { previousStore.close() } else previousStore?.close()
         key = null
         paused = false
         renderedArea = null
