@@ -1542,6 +1542,8 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
         return;
     }
     const auto at = [&](double u) { return std::clamp(timeMs + lead - open * (1 - u), (double)l.startTime, (double)l.endTime); };
+    const auto toLinear = shutter.layerSetting ? SkColorFilters::SRGBToLinearGamma() : nullptr;
+    if (shutter.layerSetting) composite.setColorFilter(SkColorFilters::LinearToSRGBGamma());
     if (shutter.layerSetting && l.kind != "model") {
         const SkMatrix device = canvas->getTotalMatrix();
         const SkMatrix reference = SiblingMatrix(siblings, l, timeMs);
@@ -1565,6 +1567,7 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
             SkPaint add;
             add.setBlendMode(SkBlendMode::kPlus);
             add.setAlphaf(1.0f / shutter.samples);
+            add.setColorFilter(toLinear);
             for (const SkMatrix& warp : samples) {
                 canvas->saveLayer(nullptr, &add);
                 canvas->resetMatrix();
@@ -1595,7 +1598,8 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
             while (i + same < samples && (steady || at((i + same + 0.5) / samples) == when)) same++;
             const float weight = (float)same / samples;
             const float scale[20] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, weight, 0};
-            add.setColorFilter(SkColorFilters::Matrix(scale));
+            const auto weightFilter = SkColorFilters::Matrix(scale);
+            add.setColorFilter(toLinear ? SkColorFilters::Compose(weightFilter, toLinear) : weightFilter);
             add.setImageFilter(SmearFilter(gap(i, i + same)));
             canvas->saveLayer(nullptr, &add);
             DrawOne(canvas, siblings, l, when, pictures, sample);
@@ -1629,7 +1633,8 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     add.setBlendMode(SkBlendMode::kPlus);
     for (const auto& [r, share, move] : taken) {
         const float scale[20] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, share, 0};
-        add.setColorFilter(SkColorFilters::Matrix(scale));
+        const auto weightFilter = SkColorFilters::Matrix(scale);
+        add.setColorFilter(toLinear ? SkColorFilters::Compose(weightFilter, toLinear) : weightFilter);
         add.setImageFilter(SmearFilter(move));
         const SkRect spread = r.bounds.makeOutset(move.length(), move.length());
         canvas->saveLayer(bounded ? &spread : nullptr, &add);
