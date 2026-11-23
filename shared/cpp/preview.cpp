@@ -167,6 +167,7 @@ static void DrawCameraFrames(SkCanvas* canvas, const Scene& scene, double timeMs
     for (const Layer& l : scene.layers) {
         if (l.kind != "camera" || !l.activeAt(timeMs)) continue;
         const bool selected = l.id == selectedId;
+        const SkPoint at = toTarget.mapPoint(CameraEye(scene.layers, l, scene.width, scene.height, timeMs));
         SkPoint q[4];
         if (!(seenThrough && &l == active) && CameraFrame(scene.layers, l, scene.width, scene.height, timeMs, q)) {
             toTarget.mapPoints(q);
@@ -178,13 +179,16 @@ static void DrawCameraFrames(SkCanvas* canvas, const Scene& scene, double timeMs
                 stroke(box, line, 1.5f);
             }
             if (!l.camera.orthographic) {
-                SkPathBuilder cross;
-                cross.moveTo(q[0]).lineTo(q[2]).moveTo(q[1]).lineTo(q[3]);
-                stroke(cross.detach(), line, 1.5f);
+                SkPathBuilder rays;
+                if (EditorCameraOn() && at.isFinite()) {
+                    for (const auto corner : q) rays.moveTo(at).lineTo(corner);
+                } else {
+                    rays.moveTo(q[0]).lineTo(q[2]).moveTo(q[1]).lineTo(q[3]);
+                }
+                stroke(rays.detach(), line, 1.5f);
             }
         }
-        if (selected) {
-            const SkPoint at = toTarget.mapPoint(EffectivePlacement(scene.layers, l, timeMs).location);
+        if ((selected || EditorCameraOn()) && at.isFinite()) {
             paint.setStyle(SkPaint::kFill_Style);
             paint.setColor(SK_ColorWHITE);
             canvas->drawCircle(at, 5.5f * px, paint);
@@ -219,8 +223,9 @@ static void DrawSnapGuides(SkCanvas* canvas, const SkISize& size, const std::vec
 
 void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, double timeMs,
     float scale, float dx, float dy, uint32_t background, int64_t selectedId, int handles,
-    const PreviewOptions& view, bool camera, const MediaPictures& pictures, const LayerEffects& effects) {
+    const PreviewOptions& view, bool camera, EditorCamera editor, const MediaPictures& pictures, const LayerEffects& effects) {
     SetCameraView(camera);
+    SetEditorCamera(editor);
     Scene soloed;
     const Scene* shown = &scene;
     if (view.solo != 0 && !view.ids.empty()) {
@@ -236,7 +241,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
 
         canvas->clear(background);
         const float px = view.refPx > 0 ? view.refPx : width / 1080.0f;
-        const bool world = ActiveCamera(scene.layers, timeMs) != nullptr;
+        const bool world = !editor && ActiveCamera(scene.layers, timeMs) != nullptr;
         auto drawScene = [&](SkCanvas* target, const LayerEffects* fx) {
             if (world) DrawWorld(target, *shown, timeMs, pictures, fx);
             else DrawScene(target, *shown, timeMs, pictures, fx);

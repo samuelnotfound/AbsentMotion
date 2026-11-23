@@ -1408,6 +1408,15 @@
     <string name="camerapanel_blur_strength">Blur Strength</string>
     <string name="camerapanel_near">Near</string>
     <string name="camerapanel_far">Far</string>
+    <string name="viewer_viewpoint">Viewer angle</string>
+    <string name="viewer_scene">Scene</string>
+    <string name="viewer_active_camera">Active camera</string>
+    <string name="viewer_front">Front</string>
+    <string name="viewer_right">Right</string>
+    <string name="viewer_top">Top</string>
+    <string name="viewer_custom">Custom %1$d</string>
+    <string name="viewer_orbit">Orbit</string>
+    <string name="viewer_end_orbit">Done orbiting</string>
     <string name="camerapanel_tab_camera_view">Camera View</string>
     <string name="camerapanel_focus_blur">Focus Blur</string>
     <string name="camerapanel_fog">Fog</string>

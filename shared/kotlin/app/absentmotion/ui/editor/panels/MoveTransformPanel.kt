@@ -631,7 +631,7 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
     val spatial = layer.uses3D
     val at = if (spatial) saved else floatArrayOf(saved[0], saved[1], 0f)
     var activeAxis by remember(layer.id, spatial) { mutableIntStateOf(0) }
-    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode) {
+    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode, state.editorCamera) {
         if (state.playing) return@produceState
         val m = state.engine.layerMatrix(layer.id, state.timeMs)
         value = m?.let { pivotFrame(it, state.engine.layerQuad(layer.id, state.timeMs)) }

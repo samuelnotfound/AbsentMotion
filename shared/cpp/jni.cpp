@@ -254,6 +254,10 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetCameraView)(JNIEnv*, jclass, jlong engine
     engineOf(engine)->setCameraView(on);
 }
 
+JNIEXPORT void JNICALL JNI_FN(nativeSetEditorCamera)(JNIEnv*, jclass, jlong engine, jint mode, jfloat yaw, jfloat pitch) {
+    engineOf(engine)->setEditorCamera({mode, yaw, pitch});
+}
+
 JNIEXPORT void JNICALL JNI_FN(nativeSetAccurateBlur)(JNIEnv*, jclass, jlong engine, jboolean on) {
     engineOf(engine)->setAccurateBlur(on);
 }

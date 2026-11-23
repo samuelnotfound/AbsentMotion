@@ -434,6 +434,7 @@ class EngineThread(private val background: Int, private val context: Context? = 
             if (!syncVideo(mediaScene, v.timeMs, exact = false)) mediaScope.launch { delay(8); requestRender() }
             val native = engine()
             native.setCameraView(v.camera)
+            native.setEditorCamera(v.editorCamera)
             native.setAccurateBlur(v.accurateBlur)
             val target = targets[nextTarget]?.takeIf { it.width == w && it.height == h } ?: org.jetbrains.skia.Bitmap().also {
                 it.allocPixels(org.jetbrains.skia.ImageInfo(w, h, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL, org.jetbrains.skia.ColorSpace.sRGB))
@@ -471,7 +472,15 @@ class EngineThread(private val background: Int, private val context: Context? = 
     }
 
     private suspend fun <T> query(timeMs: Int, block: (NativeEngine) -> T): T = captureLock.withLock {
-        withContext(dispatcher) { applyPending(timeMs); block(engine()) }
+        withContext(dispatcher) {
+            applyPending(timeMs)
+            val native = engine()
+            synchronized(this@EngineThread) { view }?.let {
+                native.setCameraView(it.camera)
+                native.setEditorCamera(it.editorCamera)
+            }
+            block(native)
+        }
     }
 
     suspend fun layerQuad(layerId: Long, timeMs: Int): FloatArray? = query(timeMs) { it.layerQuad(layerId, timeMs.toDouble()) }

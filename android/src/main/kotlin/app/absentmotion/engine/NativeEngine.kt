@@ -66,6 +66,8 @@ class NativeEngine(internal val backend: Backend) : AutoCloseable {
     )
 
     fun setCameraView(on: Boolean) = nativeSetCameraView(handle, on)
+    fun setEditorCamera(camera: EditorCamera?) =
+        nativeSetEditorCamera(handle, if (camera == null) 0 else if (camera.orthographic) 2 else 1, camera?.yaw ?: 0f, camera?.pitch ?: 0f)
 
     fun setAccurateBlur(on: Boolean) = nativeSetAccurateBlur(handle, on)
 
@@ -165,6 +167,7 @@ class NativeEngine(internal val backend: Backend) : AutoCloseable {
             guides: FloatArray, refPx: Float,
         ): Int
         @JvmStatic private external fun nativeSetCameraView(engine: Long, on: Boolean)
+        @JvmStatic private external fun nativeSetEditorCamera(engine: Long, mode: Int, yaw: Float, pitch: Float)
         @JvmStatic private external fun nativeSetAccurateBlur(engine: Long, on: Boolean)
         @JvmStatic private external fun nativeRenderFrame(
             engine: Long, target: Long, timeMs: Double, background: Int, presentTimeNs: Long,
