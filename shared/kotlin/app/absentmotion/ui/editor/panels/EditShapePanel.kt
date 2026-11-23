@@ -67,11 +67,12 @@ import kotlin.math.roundToInt
 internal fun EditShapePanel(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
     val all = ShapeCatalog.paramsFor(layer)
     if (all.isEmpty()) return
-    var open by remember(layer.id) { mutableStateOf(false) }
+    val requested = state.inlineProperty?.takeIf { it.kind == PropRef.Kind.Property }?.name
+    var open by remember(layer.id, requested) { mutableStateOf(all.any { it.prop == requested && it.advanced }) }
     val basic = all.filter { !it.advanced }
     val extras = all.filter { it.advanced }
     val params = basic + if (open) extras else emptyList()
-    var activeRow by remember(layer.id) { mutableIntStateOf(0) }
+    var activeRow by remember(layer.id, requested) { mutableIntStateOf(params.indexOfFirst { it.prop == requested }.coerceAtLeast(0)) }
     val activeParam = params.getOrNull(activeRow)?.takeIf { it.kind != Kind.Toggle }
     SideEffect { state.keyTarget = activeParam?.let { KeyTarget(PropRef.shape(it.prop), layer.propText(it.prop) ?: it.default, it.kind.type) } }
     Column(modifier.deskVerticalScroll()) {

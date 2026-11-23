@@ -123,10 +123,10 @@ import androidx.compose.ui.res.stringResource
 import app.absentmotion.R
 import app.absentmotion.ui.HoldName
 
-internal val EditorState.livePanel get() = if (selectedId == null || inlinePanelHidden) EditorPanel.Tools else panel
+internal val EditorState.livePanel get() = if (showsLayerInspector) panel else EditorPanel.Tools
 
 private val EditorState.gizmoProperty: PropRef?
-    get() = keyTarget?.ref?.takeIf {
+    get() = keyTarget?.ref?.copy(component = null)?.takeIf {
         livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen
     }
 
@@ -166,7 +166,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
         state.livePanel == EditorPanel.Crop -> HIDDEN
         gesture != IDLE -> gesture
         editingPivot && !state.playing -> PIVOT_ONLY
-        state.livePanel == EditorPanel.MoveTransform && state.keyTarget?.ref == PropRef.Location -> -2
+        state.livePanel == EditorPanel.MoveTransform && state.keyTarget?.ref?.copy(component = null) == PropRef.Location -> -2
         state.livePanel == EditorPanel.Effects -> 8
         state.livePanel != EditorPanel.Tools -> -1
         else -> 8

@@ -196,6 +196,7 @@ class EditorState(
             selection = value
             if (inlinePanelHidden) {
                 inlinePanelHidden = false
+                inlineProperty = null
                 easingOpen = false
                 keyTarget = null
             }
@@ -379,14 +380,17 @@ class EditorState(
     val sampleMs: Int get() = scene.frameTime(frame)
 
     var inlinePanelHidden by mutableStateOf(false)
-    val inlineGraphOpen get() = inlinePanelHidden && easingOpen
-    val showsLayerInspector get() = selectedId != null && (!inlinePanelHidden || inlineGraphOpen)
+    var timelineDetailsOpen by mutableStateOf(false)
+    var inlineProperty by mutableStateOf<PropRef?>(null)
+        internal set
+    var inlineTransformAxis by mutableIntStateOf(0)
+    val showsLayerInspector get() = selectedId != null && (!inlinePanelHidden || inlineProperty != null)
     internal var inlineKeyframes: (() -> List<Int>)? = null
 
     var keyTarget by mutableStateOf<KeyTarget?>(null)
 
     val keyScope: KeyScope?
-        get() = if (inlinePanelHidden && !inlineGraphOpen) null else keyTarget?.let { KeyScope(it.ref) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
+        get() = if (inlinePanelHidden && inlineProperty == null) null else keyTarget?.let { KeyScope(it.ref) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
 
     var snapGuides by mutableStateOf<List<SnapGuide>>(emptyList())
 

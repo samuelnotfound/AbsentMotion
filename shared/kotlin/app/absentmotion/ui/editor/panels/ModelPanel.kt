@@ -30,7 +30,8 @@ private val ModelParams = listOf(
 
 @Composable
 internal fun ModelPanel(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
-    var active by remember { mutableStateOf(ModelParams[0].first) }
+    val requested = state.inlineProperty?.takeIf { it.kind == PropRef.Kind.Property }?.name
+    var active by remember(requested) { mutableStateOf(ModelParams.firstOrNull { it.first.id == requested }?.first ?: ModelParams[0].first) }
     SideEffect { state.keyTarget = KeyTarget(PropRef.shape(active.id), active.default) }
     Column(modifier.deskVerticalScroll()) {
         if (!deskLayout) MixPiecesRow(state, layer)

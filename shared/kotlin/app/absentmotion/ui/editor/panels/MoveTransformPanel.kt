@@ -7,7 +7,6 @@ import app.absentmotion.ui.editor.deskSp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -60,17 +59,18 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.KeypadField
+import app.absentmotion.editor.KeyTarget
 import app.absentmotion.editor.KeypadRequest
 import app.absentmotion.engine.SnapGuide
 import app.absentmotion.editor.centred
 import app.absentmotion.editor.chain
 import app.absentmotion.editor.place
 import app.absentmotion.editor.setPivot
-import app.absentmotion.editor.toggleLayer3D
 import app.absentmotion.editor.PIVOT_LIMIT
 import app.absentmotion.editor.map
 import app.absentmotion.model.Pt
 import app.absentmotion.model.Layer
+import app.absentmotion.model.PropRef
 import app.absentmotion.model.Scene
 import app.absentmotion.ui.editor.ChromeIcons
 import app.absentmotion.ui.editor.PanelIcons
@@ -100,13 +100,20 @@ internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn
 
 private val transformAxisOrder = listOf(0, 1, 2)
 
+private fun EditorState.inlineComponent(ref: PropRef): Int? =
+    inlineProperty?.takeIf { it.copy(component = null) == ref }?.component
+
 @Composable
 private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?, rulers: Boolean) {
     val at = layer.location
     val spatial = layer.uses3D
-    var activeAxis by remember(layer.id, spatial) { mutableIntStateOf(0) }
+    val focus = state.inlineComponent(PropRef.Location)
+    var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
+    if (focus != null) SideEffect { state.inlineTransformAxis = activeAxis }
     val depth = spatial && activeAxis == 2
-    fun colour(which: Int) = if (if (rulers) activeAxis == which else depth == (which == 2)) Am.Accent else Am.OnDark
+    fun Layer.updatePosition(x: Float, y: Float, z: Float): Layer =
+        if (focus == null) withTransform("location", x, y, z) else withTransformAxes(PropRef.Location, x, y, z)
+    fun colour(which: Int) = if (if (rulers || focus != null) activeAxis == which else depth == (which == 2)) Am.Accent else Am.OnDark
     val deep by rememberUpdatedState(depth)
     fun openKeypad(active: Int) {
         activeAxis = active
@@ -114,8 +121,8 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
         val fields = axes.map { KeypadField("XYZ"[it].toString(), at[it]) }
         state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
             state.editSelected {
-                if (spatial) it.withTransform("location", v[0], v[1], v[2])
-                else it.withTransform("location", v[0], v[1], it.location[2])
+                if (spatial) it.updatePosition(v[0], v[1], v[2])
+                else it.updatePosition(v[0], v[1], it.location[2])
             }
         }
     }
@@ -155,7 +162,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 change.consume()
                 if (deep) {
                     travel += drag / density * scale
-                    state.editSelected(key = "move-z") { l -> l.withTransform("location", origin[0], origin[1], origin[2] - travel.y) }
+                    state.editSelected(key = "move-z") { l -> l.updatePosition(origin[0], origin[1], origin[2] - travel.y) }
                     return@detectDragGestures
                 }
                 travel += drag / density * scale
@@ -169,7 +176,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 val guides = if (state.playing) emptyList() else axes.first.guidesAt(snapped.x) + axes.second.guidesAt(snapped.y)
                 if (guides.any { it !in state.snapGuides }) tick(HapticFeedbackType.SegmentTick)
                 state.snapGuides = if (state.playing) emptyList() else guides
-                if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.withTransform("location", origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
+                if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.updatePosition(origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
             }
         }),
     ) {
@@ -179,14 +186,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
-                        l.withTransform("location", v[0], v[1], v[2])
+                        l.updatePosition(v[0], v[1], v[2])
                     }
                 },
                 onReset = { which ->
                     state.editSelected { l ->
                         val home = state.scene.centred(l, state.sampleMs).location
                         val v = l.location.copyOf().also { it[which] = home[which] }
-                        l.withTransform("location", v[0], v[1], v[2])
+                        l.updatePosition(v[0], v[1], v[2])
                     }
                 },
             )
@@ -199,43 +206,8 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 }
             }
         }
-        TransformAxisHeader(state, layer, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
+        AxisFields(layer.uses3D, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
             Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
-    }
-}
-
-@Composable
-private fun LayerDimensionButton(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
-    if (!layer.canToggle3D) return
-    val enabled = !layer.locked && !state.lookOnly
-    val label = stringResource(R.string.three_d_layer)
-    val tint = when {
-        !enabled -> Am.OnDarkDim
-        layer.uses3D -> Am.Accent
-        else -> Am.OnDark
-    }
-    Row(
-        modifier.height(70.px).clip(PanelShape).background(Am.Field)
-            .toggleable(layer.uses3D, enabled = enabled, role = Role.Button, onValueChange = { state.toggleLayer3D(layer.id) })
-            .semantics { contentDescription = label }.padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PanelIcon(ChromeIcons.ObjectTab, tint, size = 15.dp)
-        Text("3D", Modifier.padding(start = 4.dp), color = tint, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun TransformAxisHeader(
-    state: EditorState, layer: Layer, value: (Int) -> String, colour: (Int) -> Color,
-    onSelect: (Int) -> Unit, onType: (Int) -> Unit, modifier: Modifier, depthVisible: Boolean = layer.uses3D,
-) {
-    Row(modifier, verticalAlignment = Alignment.Top) {
-        AxisFields(layer.uses3D, value, colour, onSelect, onType, depthVisible = depthVisible)
-        if (layer.canToggle3D) {
-            Spacer(Modifier.width(20.px))
-            LayerDimensionButton(state, layer)
-        }
     }
 }
 
@@ -421,7 +393,6 @@ private fun RotationTab(state: EditorState, layer: Layer) {
         onDelta = { delta -> state.editSelected(key = "rotate") { l -> l.withRotation(l.rotation + delta) } },
         onReset = { state.editSelected { it.withRotation(0f) } },
     ) {
-        LayerDimensionButton(state, layer, Modifier.align(Alignment.TopEnd).padding(top = 17.px, end = 20.px))
         Box(
             Modifier.align(Alignment.Center).height(140.px).widthIn(min = 267.px).clip(PanelShape).background(Am.Field).typeOnDoubleTap {
                 state.keypad = KeypadRequest(listOf(KeypadField(ROTATION_LABEL, angle, "\u00B0")), 0) { v ->
@@ -532,15 +503,19 @@ internal fun TransformSummary(state: EditorState, layer: Layer, modifier: Modifi
 @Composable
 private fun SizeTab(state: EditorState, layer: Layer) {
     val linked = layer.scaleLinked
-    var active by remember { mutableIntStateOf(0) }
     val (measured, box) = layerBox(state, layer)
     val upright = measured?.sides?.upright == true
+    val focus = state.inlineComponent(PropRef.Scale)
+    var active by remember(layer.id, focus, upright) { mutableIntStateOf(if (upright && focus != null) 1 - focus else focus ?: 0) }
+    if (focus != null) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
     val (boxW, boxH) = box ?: (0f to 0f)
+    fun Layer.updateScale(x: Float, y: Float): Layer =
+        if (focus == null) withTransform("scale", x, y) else withTransformAxes(PropRef.Scale, x, y)
 
     fun stretch(factor: Float, isWidth: Boolean, key: Any? = null) = state.editSelected(key) { l ->
         val s = l.scale
         val first = isWidth != upright
-        l.withTransform("scale", if (first || linked) s[0] * factor else s[0], if (!first || linked) s[1] * factor else s[1])
+        l.updateScale(if (first || linked) s[0] * factor else s[0], if (!first || linked) s[1] * factor else s[1])
     }
     val drag = remember { floatArrayOf(1f, 1f, 0f) }
     fun resize(isWidth: Boolean, key: Any) = state.editSelected(key) { l ->
@@ -549,7 +524,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
         val factor = RulerMath.scale(ref, drag[2]) / ref.coerceAtLeast(1e-4f)
         val fromZero = if (ref < 1e-4f) (drag[2] * 0.01f).coerceAtLeast(0f) else null
         val s = l.scale
-        l.withTransform("scale", if (first || linked) fromZero ?: (drag[0] * factor) else s[0], if (!first || linked) fromZero ?: (drag[1] * factor) else s[1])
+        l.updateScale(if (first || linked) fromZero ?: (drag[0] * factor) else s[0], if (!first || linked) fromZero ?: (drag[1] * factor) else s[1])
     }
     val widthLabel = stringResource(R.string.transform_width)
     val heightLabel = stringResource(R.string.transform_height)
@@ -602,7 +577,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
                     onReset = {
                         state.editSelected { l ->
                             val s = l.scale
-                            l.withTransform("scale", if (linked || which == 0) 1f else s[0], if (linked || which == 1) 1f else s[1])
+                            l.updateScale(if (linked || which == 0) 1f else s[0], if (linked || which == 1) 1f else s[1])
                         }
                     },
                 )
@@ -613,7 +588,9 @@ private fun SizeTab(state: EditorState, layer: Layer) {
 
 @Composable
 private fun SkewTab(state: EditorState, layer: Layer) {
-    var active by remember { mutableIntStateOf(0) }
+    val focus = state.inlineComponent(PropRef.Skew)
+    var active by remember(layer.id, focus) { mutableIntStateOf(focus ?: 0) }
+    if (focus != null) SideEffect { state.inlineTransformAxis = active }
     val skew = layer.skew
     val xSkew = stringResource(R.string.transform_x_skew)
     val ySkew = stringResource(R.string.transform_y_skew)
@@ -686,7 +663,9 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
     val saved = layer.pivot
     val spatial = layer.uses3D
     val at = if (spatial) saved else floatArrayOf(saved[0], saved[1], 0f)
-    var activeAxis by remember(layer.id, spatial) { mutableIntStateOf(0) }
+    val focus = state.inlineComponent(PropRef.Pivot)
+    var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
+    if (focus != null) SideEffect { state.inlineTransformAxis = activeAxis }
     val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode, state.editorCamera) {
         if (state.playing) return@produceState
         val m = state.engine.layerMatrix(layer.id, state.timeMs)
@@ -779,31 +758,37 @@ private fun FlipHint(text: String) {
 
 @Composable
 private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
-    var axis by remember(layer.id) { mutableIntStateOf(2) }
-    SideEffect { state.keyTarget = turn.target(axis) }
+    val focus = if (turn.effect < 0) state.inlineProperty?.takeIf {
+        it.copy(component = null) == PropRef.Tilt || it == PropRef.Rotation
+    } else null
+    var axis by remember(layer.id, focus) { mutableIntStateOf(focus?.component ?: 2) }
+    SideEffect {
+        state.keyTarget = if (focus != null && axis < 2) KeyTarget(PropRef.Tilt.copy(component = axis), "0")
+            else turn.target(axis)
+    }
     TurnHook(state, turn)
     val values = turn.values(layer)
     fun openKeypad(which: Int) {
         axis = which
         val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
         state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
-            state.editSelected { turn.withValues(it, v.toFloatArray()) }
+            state.editSelected { turn.withValues(it, v.toFloatArray(), independent = focus != null) }
         }
     }
-    fun colour(which: Int) = if (turn.linked(which, axis)) Am.Accent else Am.OnDark
+    fun colour(which: Int) = if (if (focus != null) which == axis else turn.linked(which, axis)) Am.Accent else Am.OnDark
     fun drag(which: Int, amount: Float) {
         state.editSelected(key = "axis-$which") { l ->
             val v = turn.values(l)
             v[which] += amount
-            turn.withValues(l, v)
+            turn.withValues(l, v, independent = focus != null)
         }
     }
     fun reset(which: Int) {
-        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
+        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v, independent = focus != null) } }
     }
     Box(Modifier.fillMaxSize()) {
         TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
-        TransformAxisHeader(state, layer, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
+        AxisFields(layer.uses3D, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
             Modifier.align(Alignment.TopCenter).padding(top = 17.px))
     }
 }

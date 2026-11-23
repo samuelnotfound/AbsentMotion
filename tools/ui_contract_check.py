@@ -156,7 +156,7 @@ class UiContracts(unittest.TestCase):
         self.assertLess(text.index('if (fromMs > layer.endTime || toMs < layer.startTime) return null'), text.index('produceState('))
 
     def test_camera_selection_resets_transform_tabs(self):
-        self.assertIn('var tab by remember(selected.kind)', source('ui/editor/LayerTools.kt'))
+        self.assertIn('var tab by remember(selected.id, requested)', source('ui/editor/LayerTools.kt'))
 
     def test_animation_button_floats_over_the_preview_in_both_layouts(self):
         tools = source('ui/editor/LayerTools.kt')
@@ -220,17 +220,19 @@ class UiContracts(unittest.TestCase):
         self.assertIn(turn, text)
         self.assertLess(text.index(turn), text.index('moved && state.selectedId != null && !(canvasGesture && fingers > 1)'))
         tools = source('ui/editor/LayerTools.kt')
-        self.assertIn('if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null', tools)
+        self.assertIn('val turn = if (move && selected.uses3D)', tools)
+        self.assertIn('else turnFor(selected, catalog, shown, threeD = true)', tools)
         panel = source('ui/editor/panels/MoveTransformPanel.kt')
         self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)', panel)
         self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])
         axes = panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0]
         self.assertIn('TurnHook(state, turn)', axes)
         self.assertIn('TransformRulers(state,', axes)
-        self.assertIn('TransformAxisHeader(state, layer,', axes)
-        header = panel.split('private fun TransformAxisHeader', 1)[1].split('\n@Composable', 1)[0]
-        self.assertIn('AxisFields(layer.uses3D,', header)
-        self.assertIn('LayerDimensionButton(state, layer)', header)
+        self.assertIn('AxisFields(layer.uses3D,', axes)
+        self.assertNotIn('LayerDimensionButton', panel)
+        timeline = source('ui/editor/Timeline.kt')
+        self.assertIn('ChromeIcons.ObjectTab, if (layer.uses3D) Layer3DColor', timeline)
+        self.assertIn('state.toggleLayer3D(hit.id)', timeline)
 
     def test_media_search_opens_from_a_square_over_the_grid(self):
         text = source('ui/editor/MediaTab.kt')

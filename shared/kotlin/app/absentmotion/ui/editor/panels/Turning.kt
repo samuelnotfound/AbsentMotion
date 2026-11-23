@@ -59,11 +59,13 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
         return FloatArray(3) { (node?.effectProperty(axes[it].id)?.valueAt(layer.t) ?: axes[it].default).finiteFloat() ?: 0f }
     }
 
-    fun withValues(layer: Layer, next: FloatArray): Layer {
+    fun withValues(layer: Layer, next: FloatArray, independent: Boolean = false): Layer {
         val old = values(layer)
         val changed = BooleanArray(3) { abs(next[it] - old[it]) >= 1e-4f }
         if (effect < 0) {
-            val tilted = if (changed[0] || changed[1]) layer.withTilt(next[0], next[1]) else layer
+            val tilted = if (changed[0] || changed[1]) {
+                if (independent) layer.withTransformAxes(PropRef.Tilt, next[0], next[1]) else layer.withTilt(next[0], next[1])
+            } else layer
             return if (changed[2]) tilted.withRotation(next[2]) else tilted
         }
         if (effect !in layer.effects.indices) return layer
@@ -74,10 +76,10 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
         }
     }
 
-    fun turned(layer: Layer, drag: Offset, twist: Float): Layer {
+    fun turned(layer: Layer, drag: Offset, twist: Float, independent: Boolean = false): Layer {
         val now = values(layer)
         val step = turnStep(drag.x, drag.y, twist, now[2])
-        return withValues(layer, FloatArray(3) { now[it] + step[it] })
+        return withValues(layer, FloatArray(3) { now[it] + step[it] }, independent)
     }
 
     fun reset(layer: Layer): Layer {
@@ -127,7 +129,10 @@ internal fun turnStep(dx: Float, dy: Float, twist: Float, z: Float): FloatArray 
 @Composable
 internal fun TurnHook(state: EditorState, turn: Turn) {
     DisposableEffect(state, turn) {
-        val mine: (Offset, Float) -> Unit = { drag, twist -> state.editSelected("turn") { turn.turned(it, drag, twist) } }
+        val mine: (Offset, Float) -> Unit = { drag, twist ->
+            val focus = state.inlineProperty?.copy(component = null)
+            state.editSelected("turn") { turn.turned(it, drag, twist, focus == PropRef.Rotation || focus == PropRef.Tilt) }
+        }
         state.turner = mine
         onDispose { if (state.turner === mine) state.turner = null }
     }
