@@ -139,7 +139,9 @@ internal fun CachedFrame(state: EditorState, usable: Boolean, live: LiveHandoff,
     val player = PreviewCache.player
     if (!usable || player == null) return
     LaunchedEffect(player) {
-        snapshotFlow { state.frame to state.playing }.collect { (frame, playing) -> if (PreviewCache.covers(frame)) player.want(frame, playing) }
+        snapshotFlow { (state.frame to state.playing).takeIf { PreviewCache.covers(it.first) } }.collect { wanted ->
+            wanted?.let { (frame, playing) -> player.want(frame, playing) }
+        }
     }
     val rendered by state.engine.rendered.collectAsState()
     val frame = state.frame
