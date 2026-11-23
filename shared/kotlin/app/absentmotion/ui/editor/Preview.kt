@@ -81,6 +81,7 @@ import app.absentmotion.editor.place
 import app.absentmotion.editor.withWorldLocation
 import app.absentmotion.editor.movedTogether
 import app.absentmotion.editor.setCrop
+import app.absentmotion.editor.setPivot
 import app.absentmotion.model.cropBox
 import app.absentmotion.model.cropIndex
 import app.absentmotion.model.cropRatio
@@ -152,10 +153,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
 
     var gesture by remember { mutableIntStateOf(IDLE) }
     var tapGeneration by remember { mutableIntStateOf(0) }
+    val editingPivot = state.pivotEditing && state.livePanel == EditorPanel.MoveTransform
     val handles = when {
         state.drawing != null -> state.drawing!!.handlesCode
         state.livePanel == EditorPanel.Crop -> HIDDEN
         gesture != IDLE -> gesture
+        editingPivot && !state.playing -> PIVOT_ONLY
         state.livePanel == EditorPanel.MoveTransform && state.keyTarget?.ref == PropRef.Location -> -2
         state.livePanel == EditorPanel.Effects -> 8
         state.livePanel != EditorPanel.Tools -> -1
@@ -202,6 +205,8 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var quad by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var plane by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var world by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
+    var pivotProjection by remember { mutableStateOf<PivotProjection?>(null) }
+    var pivotSnaps by remember { mutableStateOf(emptySet<Int>()) }
     var quadFor by remember { mutableStateOf<Any?>(null) }
     val cropping = state.livePanel == EditorPanel.Crop
     val shownChange = state.previewChange
@@ -211,6 +216,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             quad = null
             plane = null
             world = null
+            pivotProjection = null
         }
         if (cropping && shownChange == null) return@LaunchedEffect
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
@@ -219,6 +225,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             val matrices = state.selectedId?.let { state.engine.layerMatrix(it, timeMs) }
             plane = matrices?.copyOfRange(9, 18)
             world = matrices?.copyOfRange(0, 9)
+            pivotProjection = if (quad == null) null else matrices?.let { PivotProjection.from(it) }
         }
     }
 
@@ -363,6 +370,15 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     fun inLayer(at: Offset): Pt? = worldView?.inverseMap(((at - currentOffset) / currentScale).let { Pt(it.x, it.y) })
                     val adjustBox = if (adjusting != null && worldView != null) world?.let { pivotFrame(it, frameQuad).box } else null
                     val gradientMode = startLayer != null && startQuad != null && !state.panZoomMode && state.livePanel == EditorPanel.ColorFill && startLayer.fillType == "gradient"
+                    val pivot = startLayer?.let { layer -> if (layer.uses3D) layer.pivot else layer.pivot.copyOf().also { it[2] = 0f } }
+                    val pivotDrag = if (state.pivotEditing && state.livePanel == EditorPanel.MoveTransform && !state.playing &&
+                        !state.panZoomMode && !state.lookOnly && startLayer?.locked == false && pivot != null) {
+                        pivotProjection?.let { project ->
+                            val box = world?.let { pivotFrame(it, frameQuad).box }
+                            PivotDrag(project, pivot, box, currentScale, currentOffset, startLayer.uses3D, density)
+                        }
+                    } else null
+                    val pivotGrab = pivotDrag?.hit(down.position)
                     val pointGrab = if (gradientMode) -1 else points?.points?.indices?.mapNotNull { i -> onScreen(points.points[i])?.let { i to (it - down.position).getDistance() } }
                         ?.filter { it.second < 24.dp.toPx() }?.minByOrNull { it.second }?.first ?: -1
                     val grabOffset = if (pointGrab >= 0) (onScreen(points!!.points[pointGrab]) ?: down.position) - down.position else Offset.Zero
@@ -382,7 +398,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val grab = if (handle >= 10 && startLayer != null && startQuad != null) startLayer.gradient.let { g ->
                         boxPoint(startQuad, if (handle == 10) g.x0 else g.x1, if (handle == 10) g.y0 else g.y1) - down.position
                     } else Offset.Zero
-                    val startPivot = startLayer?.pivot?.let { onScreen(Pt(it[0], it[1])) }
+                    val startPivot = pivot?.let { pivotProjection?.project(it)?.let { point -> point * currentScale + currentOffset } }
                     val snapAxes = snapScene?.takeIf { startLayer != null && it.id == startLayer.id && plane.isFlat() && !state.playing && startLayer.kind != "camera" && turning == null }
                         ?.let { state.scene.previewSnapAxes(startLayer!!, state.sampleMs, it, SnapReach.toPx() / currentScale) }
                     var snapping = snapAxes != null
@@ -424,6 +440,15 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     state.edit(MULTI_KEY) { multiFrom.movedTogether(multi, ms, 0f, 0f, multiZoom, multiShift.x, multiShift.y) }
                                 }
                             }
+                        } else if (moved && pivotGrab != null && pivotDrag != null) {
+                            if (fingers == 1) {
+                                pivotDrag.move(pivotGrab, position - down.position)?.let { (value, snaps) ->
+                                    if (snaps.any { it !in pivotSnaps }) tick(HapticFeedbackType.SegmentTick)
+                                    pivotSnaps = snaps
+                                    state.setPivot(value[0], value[1], PIVOT_DRAG, value[2])
+                                }
+                            }
+                            event.changes.forEach { it.consume() }
                         } else if (moved && pointGrab >= 0 && points != null && fingers == 1) {
                             gesture = HIDDEN
                             inLayer(position + grabOffset)?.let { points.move(pointGrab, it) }
@@ -552,14 +577,15 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val tapped = if (!moved && pointGrab < 0 && fingers == 1 && points?.tap != null && startQuad != null) {
                         inLayer(down.position)?.takeIf { v -> points.source(v).let(::onScreen)?.let { inside(startQuad, it) } == true }
                     } else null
+                    if (pivotGrab != null) pivotSnaps = emptySet()
                     if (cancelled) {
                         if (moved) {
-                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", MULTI_KEY).forEach { state.cancelGesture(it) }
+                            listOf<Any>("preview-gesture", "preview-handle", "gradient-handle", "text-wrap", "crop-drag", "turn", PIVOT_DRAG, MULTI_KEY).forEach { state.cancelGesture(it) }
                         }
                         state.endGesture()
                     } else if (moved) {
                         state.endGesture()
-                    } else if (pointGrab >= 0) {
+                    } else if (pointGrab >= 0 || pivotGrab != null) {
                         state.endGesture()
                     } else if (tapped != null) {
                         points?.tap?.invoke(tapped)
@@ -594,6 +620,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
         CropOverlay(state, quad.takeUnless { state.playing }, scale, Offset(dx, dy))
         CropAutoView(state, quad.takeUnless { state.playing }, size, with(LocalDensity.current) { reserveEnd.toPx() }, touching)
         state.layerPoints?.let { points -> world?.takeUnless { state.playing }?.let { LayerPointsOverlay(points, it, scale, Offset(dx, dy)) } }
+        if (editingPivot && !state.playing && !state.panZoomMode && !state.lookOnly) {
+            state.selected?.takeIf { !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }?.let { layer ->
+                val at = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
+                pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.uses3D, pivotSnaps) }
+            }
+        }
         if (editingText) Canvas(Modifier.fillMaxSize()) {
             val q = frame ?: return@Canvas
             val points = List(4) { Offset(q[2 * it] * scale + dx, q[2 * it + 1] * scale + dy) }
@@ -667,6 +699,7 @@ private val FlatPlane = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
 internal fun FloatArray?.isFlat(): Boolean = this == null || size == 9 && indices.all { abs(this[it] - FlatPlane[it]) < 1e-3f }
 private const val IDLE = -10
 private const val HIDDEN = -11
+private const val PIVOT_ONLY = -3
 
 private fun handlesOf(corners: List<Offset>): List<Offset> = corners + List(4) { (corners[it] + corners[(it + 1) % 4]) / 2f }
 
@@ -779,18 +812,10 @@ private fun LayerPointsOverlay(points: LayerPoints, world: FloatArray, scale: Fl
         shown.forEachIndexed { i, at ->
             if (at == null) return@forEachIndexed
             val chosen = i == points.selected
-            if (points.pivot) {
-                val r = 9.dp.toPx()
-                drawCircle(Color.Black.copy(alpha = 0.5f), r + line, at, style = androidx.compose.ui.graphics.drawscope.Stroke(line * 3))
-                drawCircle(Color.White, r, at, style = androidx.compose.ui.graphics.drawscope.Stroke(line * 1.5f))
-                for (d in listOf(Offset(1f, 0f), Offset(-1f, 0f), Offset(0f, 1f), Offset(0f, -1f))) drawLine(Color.White, at + d * (r * 0.45f), at + d * (r * 1.6f), line * 1.5f)
-                drawCircle(Am.Accent, 2.5.dp.toPx(), at)
-            } else {
-                val r = (if (chosen) 8 else 6).dp.toPx()
-                drawCircle(Color.Black.copy(alpha = 0.55f), r + 1.5.dp.toPx(), at)
-                drawCircle(if (chosen) Am.Accent else Am.Gold, r, at)
-                drawCircle(Color.White, r * 0.35f, at)
-            }
+            val r = (if (chosen) 8 else 6).dp.toPx()
+            drawCircle(Color.Black.copy(alpha = 0.55f), r + 1.5.dp.toPx(), at)
+            drawCircle(if (chosen) Am.Accent else Am.Gold, r, at)
+            drawCircle(Color.White, r * 0.35f, at)
         }
     }
 }

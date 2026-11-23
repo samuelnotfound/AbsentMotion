@@ -212,6 +212,7 @@ struct Placement {
     SkPoint location, pivot, scale;
     float rotation, z;
     SkM44 tilt, space, turn;
+    float pivotZ = 0;
 };
 
 struct Light {
@@ -319,6 +320,8 @@ bool SeenFlat(const Layer& layer, double timeMs, depth::Flat* flat);
 void SplitSeen(std::vector<Layer>* seen, double timeMs);
 float DepthPerPixel(const Layer& layer, double timeMs);
 SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs);
+SkM44 LayerPivotMatrix(const Scene& scene, const Layer& layer, double timeMs);
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]);
 int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks);
 SkRect SelectionBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);
 SkRect DrawnBounds(const Layer& layer, double timeMs, const SkMatrix& matrix);

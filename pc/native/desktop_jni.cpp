@@ -578,10 +578,9 @@ JNIEXPORT jfloatArray JNICALL JNI(layerMatrix)(JNIEnv* e, jobject, jlong h, jlon
     am::SetCameraView(d->cameraView);
     const auto* layer = d->scene.layer(id);
     if (!layer) return nullptr;
-    float m[18];
-    am::WorldMatrix(d->scene, *layer, t).get9(m);
-    am::PlaneMatrix(d->scene.layers, *layer, d->scene.width, d->scene.height, t).get9(m + 9);
-    return floats(e, m, 18);
+    float m[30];
+    am::LayerMatrices(d->scene, *layer, t, m);
+    return floats(e, m, 30);
 }
 JNIEXPORT jfloatArray JNICALL JNI(layerBounds)(JNIEnv* e, jobject, jlong h, jlong id, jdouble t) {
     Desktop* d = ptr(h);
