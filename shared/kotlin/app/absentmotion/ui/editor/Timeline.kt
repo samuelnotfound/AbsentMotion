@@ -305,7 +305,7 @@ private class TimelineStyles(font: androidx.compose.ui.text.font.FontFamily?) {
 }
 
 @Composable
-fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
+fun Timeline(state: EditorState, modifier: Modifier = Modifier, inspectorOverlay: Boolean = true) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -318,6 +318,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
     }
     view.wide = wide
     view.rail = LocalRail.current
+    view.inspectorOverlay = inspectorOverlay
     val measurer = rememberTextMeasurer(cacheSize = if (deskLayout) 128 else 64)
     val font = androidx.compose.material3.LocalTextStyle.current.fontFamily
     val styles = remember(Am.palette, font) { TimelineStyles(font) }
@@ -343,6 +344,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
     val effectCatalog by state.engine.effects.collectAsState()
     SideEffect { view.catalog = effectCatalog }
     LaunchedEffect(view, state.groupPath) { view.clearInlinePositions() }
+    LaunchedEffect(view, state.inlineProperty, view.size) { view.revealInlineTrack() }
     LaunchedEffect(view) {
         snapshotFlow { view.layers.map { it.id }.toSet() }.collect(view::retainInlinePositions)
     }
@@ -561,7 +563,7 @@ private fun InlineRows(view: TimelineView) {
             key(layer.id) {
                 InlinePositionDetails(view.state, layer, view.inlineSections(layer),
                     Modifier.offset { IntOffset(0, (top - view.rulerH).roundToInt()) }.fillMaxWidth(),
-                    xOf = view::inlineKeyX, frameAt = view::inlineFrameAt)
+                    xOf = view::inlineKeyX, frameAt = view::inlineFrameAt, selection = view.inlineKeySelection)
             }
         }
     }
@@ -754,6 +756,7 @@ private const val MOVE_EDIT = "clip-move"
 private class TimelineView(val state: EditorState, density: Density, private val scope: CoroutineScope) {
     var wide = false
     var rail = false
+    var inspectorOverlay = true
     private val scale = density.density
     private val Dp.px get() = value * scale
     private val decay = splineBasedDecay<Float>(density)
@@ -765,11 +768,15 @@ private class TimelineView(val state: EditorState, density: Density, private val
     val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
     val inlineDisclosureLeft: Float get() = headerWidth - DisclosureZone.px
     private var inlinePositions by mutableStateOf<Set<Long>>(emptySet())
+    val inlineKeySelection = InlineKeySelection()
     val hasInlinePositions: Boolean get() = inlinePositions.isNotEmpty()
 
     var catalog by mutableStateOf(EffectCatalog())
     private val sections by derivedStateOf {
-        layers.filter { it.id in inlinePositions }.associate { it.id to inlineTrackSections(it, catalog) }
+        layers.filter { it.id in inlinePositions }.associate {
+            val active = state.inlineProperty.takeIf { _ -> it.id == state.selectedId }
+            it.id to inlineTrackSections(it, catalog, active)
+        }
     }
 
     fun inlinePosition(layer: Layer): Boolean = layer.id in inlinePositions
@@ -779,6 +786,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun toggleInlinePosition(id: Long) {
         val layer = state.scene.layer(id) ?: return
         inlinePositions = if (id in inlinePositions) inlinePositions - id else inlinePositions + id
+        inlineKeySelection.retain(inlinePositions)
         state.timelineDetailsOpen = hasInlinePositions
         state.endGesture()
         if (!layer.locked) {
@@ -794,6 +802,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     fun retainInlinePositions(layers: Set<Long>) {
         inlinePositions = inlinePositions intersect layers
+        inlineKeySelection.retain(inlinePositions)
         state.timelineDetailsOpen = hasInlinePositions
     }
 
@@ -1110,7 +1119,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun resizeHeader(x: Float) { headerDp = (x / scale).coerceIn(120f, 320f); DeskTimelineControls.headerDp = headerDp; refit() }
     fun nearHeaderEdge(x: Float) = x <= headerWidth && x >= headerWidth - 5.dp.px
 
-    private val covered: Boolean get() = !wide && !deskLayout && state.showsLayerInspector
+    private val covered: Boolean get() = inspectorOverlay && !wide && !deskLayout && state.showsLayerInspector
 
     private val multiBar: Float get() = if (MultiSelect.active && !deskLayout && !rail) MultiBarHeight.px else 0f
 
@@ -1223,6 +1232,17 @@ private class TimelineView(val state: EditorState, density: Density, private val
         return rulerLabels.getOrPut(frame) { DeskRuler.label(frame, fps, major) }
     }
 
+    fun revealInlineTrack() {
+        val ref = state.inlineProperty ?: return
+        val layer = state.selectedId?.let(state.scene::layer) ?: return
+        val row = rowOf(layer.id) ?: return
+        val track = inlineTrackOffset(inlineSections(layer), ref) ?: return
+        val top = rowTop(row) + rowH + track.px
+        val bottom = top + inlineTrackHeight.px
+        if (top < rulerH) scrollPx = scroll - (rulerH - top)
+        else if (bottom > rowsEnd) scrollPx = scroll + (bottom - rowsEnd)
+    }
+
     private var scrollBeforeSelect: Float? = null
 
     fun revealSelected() {
@@ -1312,7 +1332,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
             is Hit.Bar -> select(hit.id, toggle = true)
             Hit.Readout -> state.toggleBookmark()
             Hit.Empty, Hit.Ruler, is Hit.Row -> state.clearSelection()
-            Hit.Corner, Hit.InlineBody, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
+            Hit.InlineBody -> inlineKeySelection.clear()
+            Hit.Corner, is Hit.Grip, is Hit.Handle, is Hit.WorkAreaEdge -> Unit
         }
     }
 
@@ -1928,7 +1949,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    is Hit.Inline, is Hit.Cube, Hit.Readout -> view.tap(h)
+                    is Hit.Inline, is Hit.Cube, Hit.InlineBody, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }

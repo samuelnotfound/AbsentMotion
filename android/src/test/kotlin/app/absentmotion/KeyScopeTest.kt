@@ -1,6 +1,9 @@
 package app.absentmotion
 
 import app.absentmotion.editor.EditorPanel
+import app.absentmotion.editor.InlineKey
+import app.absentmotion.editor.InlineKeyMove
+import app.absentmotion.editor.inlineNavigationStops
 import app.absentmotion.editor.inlineEditorPanel
 import app.absentmotion.editor.navigationStops
 import app.absentmotion.model.KeyScope
@@ -40,6 +43,23 @@ class KeyScopeTest {
 
     private fun Layer.frames(scope: KeyScope? = null) = keyframeTimes(scope).map { scene.frameAt(it) }
     private fun Layer.keys(ref: PropRef) = keyframes(ref).map { scene.frameAt(timeOf(it.t)) }
+
+    @Test fun expandedTracksKeepBothWorkAreaEdgesInTheTransport() {
+        val area = scene.withWorkArea(12, 42)
+        assertEquals(listOf(0, 10, 12, 30, 42, 45, 60), area.inlineNavigationStops(listOf(10, 30, 45)))
+        assertEquals(listOf(0, 60), scene.inlineNavigationStops(emptyList()))
+    }
+
+    @Test fun movingSelectedTracksTogetherStopsBeforeAnUnselectedKey() {
+        val base = scene.layers.single()
+        val picked = setOf(InlineKey(base.id, radius, 10), InlineKey(base.id, alpha, 10), InlineKey(base.id, alpha, 50))
+        val (moved, selection) = InlineKeyMove(scene, picked).apply(scene, 28)
+        val layer = moved.layers.single()
+        assertEquals(listOf(19, 30), layer.keys(radius))
+        assertEquals(listOf(19, 59), layer.keys(alpha))
+        assertEquals(listOf(10, 20), layer.keys(tiles))
+        assertEquals(setOf(InlineKey(base.id, radius, 19), InlineKey(base.id, alpha, 19), InlineKey(base.id, alpha, 59)), selection)
+    }
 
     @Test fun timelinePropertiesOpenTheirNativeEditors() {
         val shape = layer()

@@ -18,6 +18,7 @@ import app.absentmotion.model.axisTrack
 import app.absentmotion.model.effects
 import app.absentmotion.model.isKeyframed
 import app.absentmotion.model.keyframes
+import app.absentmotion.model.withKeyframesMoved
 
 internal data class InlineTrack(
     val ref: PropRef,
@@ -35,29 +36,30 @@ internal data class InlineTrack(
 
 internal data class InlineSection(val id: String, val label: String, val tracks: List<InlineTrack>)
 
-internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<InlineSection> = buildList {
+internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: PropRef? = null): List<InlineSection> = buildList {
     val transform = mutableListOf<InlineTrack>()
     fun vector(ref: PropRef, title: String, axes: String, defaults: String, multiplier: Float = 1f, unit: String = "") {
         val node = layer.propertyElement(ref) ?: return
         for ((index, letter) in axes.withIndex()) {
             val explicit = node.axis(index)
             val axis = explicit ?: node.axisTrack(index, defaults)
-            if (!axis.isKeyframed) continue
-            if (letter == 'Z' && explicit == null && axis.keyframes.map { it.v.toFloatOrNull() }.distinct().size < 2) continue
-            transform += InlineTrack(ref.copy(component = index), "$letter $title", multiplier, unit)
+            val property = ref.copy(component = index)
+            if (active != property && (!axis.isKeyframed ||
+                    letter == 'Z' && explicit == null && axis.keyframes.map { it.v.toFloatOrNull() }.distinct().size < 2)) continue
+            transform += InlineTrack(property, "$letter $title", multiplier, unit)
         }
     }
     val xyz = if (layer.uses3D) "XYZ" else "XY"
     val rotate = AppText.get(R.string.a11y_tab_rotate)
     vector(PropRef.Location, AppText.get(R.string.panel_position), xyz, "0,0,0")
-    if (layer.propertyElement(PropRef.Rotation)?.isKeyframed == true) {
+    if (active == PropRef.Rotation || layer.propertyElement(PropRef.Rotation)?.isKeyframed == true) {
         transform += InlineTrack(PropRef.Rotation, if (layer.uses3D) "Z $rotate" else rotate, -1f, "°")
     }
     if (layer.uses3D) vector(PropRef.Tilt, rotate, "XY", "0,0", unit = "°")
     vector(PropRef.Scale, AppText.get(R.string.panel_size), "XY", "1,1", 100f, "%")
     vector(PropRef.Pivot, AppText.get(R.string.a11y_tab_pivot), xyz, "0,0,0")
     vector(PropRef.Skew, AppText.get(R.string.a11y_tab_skew), "XY", "0,0", (180 / Math.PI).toFloat(), "°")
-    if (layer.propertyElement(PropRef.Opacity)?.isKeyframed == true) {
+    if (active == PropRef.Opacity || layer.propertyElement(PropRef.Opacity)?.isKeyframed == true) {
         transform += InlineTrack(PropRef.Opacity, AppText.get(R.string.layer_tool_opacity_blend), 100f, "%")
     }
     if (transform.isNotEmpty()) add(InlineSection("transform", AppText.get(R.string.layer_tool_transform), transform))
@@ -66,7 +68,8 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
         val id = effect["id"] ?: continue
         val definition = catalog.find(id)
         val tracks = effect.children.mapNotNull { property ->
-            val name = property["name"]?.takeIf { property.name == "property" && property.isKeyframed } ?: return@mapNotNull null
+            val name = property["name"]?.takeIf { property.name == "property" } ?: return@mapNotNull null
+            if (!property.isKeyframed && active != PropRef.effect(index, name)) return@mapNotNull null
             val parameter = definition?.params?.firstOrNull { it.id == name }
             val multiplier = if (parameter?.percent == true) 100f else 1f
             val unit = if (parameter?.percent == true) "%" else if (parameter?.kind == "angle") "°" else parameter?.unit.orEmpty()
@@ -76,8 +79,8 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
     }
 
     fun collect(node: XmlNode, path: String, name: String, tracks: MutableList<InlineTrack>) {
-        if (node.isKeyframed) {
-            val ref = PropRef(PropRef.Kind.Child, path)
+        val ref = PropRef(PropRef.Kind.Child, path)
+        if (node.isKeyframed || active == ref) {
             val track = when (ref) {
                 SpeedRef -> InlineTrack(ref, AppText.get(R.string.a11y_speed), unit = "×")
                 PropRef.FillColor -> InlineTrack(ref, AppText.get(R.string.layer_tool_fill_color))
@@ -95,7 +98,10 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog): List<Inl
     for ((node, path) in childPaths(layer.node)) {
         when (node.name) {
             "transform", "effect", "scene" -> Unit
-            "property" -> if (node.isKeyframed) node["name"]?.let { properties += InlineTrack(PropRef.shape(it), labelOf(it)) }
+            "property" -> node["name"]?.let {
+                val ref = PropRef.shape(it)
+                if (node.isKeyframed || active == ref) properties += InlineTrack(ref, labelOf(it))
+            }
             else -> {
                 val tracks = mutableListOf<InlineTrack>()
                 collect(node, path, node.name, tracks)
@@ -148,7 +154,11 @@ internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
     val target = inlineEditorPanel(layer, ref) ?: return
     endGesture()
     playing = false
+    addOpen = false
     selectedId = layer.id
+    if (sampleMs !in layer.startTime..layer.endTime) {
+        stepTo(frame.coerceIn(scene.frameAt(layer.startTime), scene.frameAt(layer.endTime)))
+    }
     easingOpen = false
     keypad = null
     keyTarget = null
@@ -158,4 +168,55 @@ internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
     volumeOpen = ref == GainRef
     effectIndex = if (target == EditorPanel.Effects) ref.effectIndex else -1
     panel = target
+}
+
+internal data class InlineKey(val layerId: Long, val ref: PropRef, val frame: Int)
+
+internal class InlineKeyMove(private val source: Scene, private val keys: Set<InlineKey>) {
+    private val tracks = keys.groupBy { it.layerId to it.ref }
+    private val limits = bounds()
+
+    private fun bounds(): IntRange {
+        var low = Int.MIN_VALUE
+        var high = Int.MAX_VALUE
+        for ((track, picked) in tracks) {
+            val layer = source.layer(track.first)?.takeUnless { it.locked || it.timingLocked } ?: return 0..0
+            val frames = picked.map { it.frame }.toSet()
+            val current = layer.keyframeTimes(KeyScope(track.second)).map(source::frameAt).distinct()
+            if (!current.containsAll(frames)) return 0..0
+            val remaining = current.filterNot { it in frames }
+            val start = source.frameAt(layer.startTime)
+            val end = source.frameAt(layer.endTime)
+            for (frame in frames) {
+                val before = remaining.lastOrNull { it < frame }?.plus(1) ?: start
+                val after = remaining.firstOrNull { it > frame }?.minus(1) ?: end
+                low = maxOf(low, before - frame)
+                high = minOf(high, after - frame)
+            }
+        }
+        return if (low <= 0 && high >= 0 && tracks.isNotEmpty()) low..high else 0..0
+    }
+
+    fun apply(scene: Scene, requested: Int): Pair<Scene, Set<InlineKey>> {
+        val delta = requested.coerceIn(limits)
+        var result = scene
+        for ((id, layerTracks) in tracks.entries.groupBy { it.key.first }) {
+            val layer = source.layer(id) ?: continue
+            var updated = layer
+            if (delta != 0) for ((track, picked) in layerTracks) {
+                val frames = picked.map { it.frame }.sorted().let { if (delta > 0) it.asReversed() else it }
+                val scope = KeyScope(track.second)
+                val before = updated.keyframeTimes(scope).size
+                for (frame in frames) updated = updated.withKeyframesMoved(frame, frame + delta, source, scope)
+                if (updated.keyframeTimes(scope).size != before) return apply(scene, 0)
+            }
+            result = result.update(id) { updated }
+        }
+        val moved = keys.mapTo(mutableSetOf()) { key ->
+            val tracked = result.layer(key.layerId)?.keyframeTimes(KeyScope(key.ref))?.map(result::frameAt).orEmpty()
+            val frame = (key.frame + delta).takeIf { it in tracked } ?: tracked.minByOrNull { kotlin.math.abs(it - (key.frame + delta)) } ?: key.frame
+            key.copy(frame = frame)
+        }
+        return result to moved
+    }
 }
