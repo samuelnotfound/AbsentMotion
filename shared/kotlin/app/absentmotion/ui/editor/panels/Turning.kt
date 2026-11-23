@@ -49,6 +49,9 @@ import app.absentmotion.ui.editor.TILT_TAB
 import app.absentmotion.ui.editor.TransformTargets
 import app.absentmotion.ui.theme.Am
 import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.round
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -126,6 +129,40 @@ internal fun turnStep(dx: Float, dy: Float, twist: Float, z: Float): FloatArray 
     return floatArrayOf(-(dx * s + dy * c) * TURN_PER_DP, (dx * c - dy * s) * TURN_PER_DP, -twist)
 }
 
+internal fun localRotation(values: FloatArray, axis: Int, radians: Float): FloatArray {
+    if (abs(radians) < 1e-7f) return values.copyOf()
+    val (x, y, z) = values.map { -Math.toRadians(it.toDouble()) }
+    val (cx, cy, cz) = listOf(cos(x), cos(y), cos(z))
+    val (sx, sy, sz) = listOf(sin(x), sin(y), sin(z))
+    val matrix = doubleArrayOf(
+        cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx,
+        sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx,
+        -sy, cy * sx, cy * cx,
+    )
+    val a = (axis + 1) % 3
+    val b = (axis + 2) % 3
+    val c = cos(radians.toDouble())
+    val s = sin(radians.toDouble())
+    for (row in 0..2) {
+        val i = row * 3 + a
+        val j = row * 3 + b
+        val old = matrix[i]
+        matrix[i] = old * c + matrix[j] * s
+        matrix[j] = -old * s + matrix[j] * c
+    }
+    val tilt = asin((-matrix[6]).coerceIn(-1.0, 1.0))
+    val pole = abs(cos(tilt)) < 1e-6
+    val roll = if (pole) atan2(-matrix[1], matrix[4]) else atan2(matrix[3], matrix[0])
+    val pitch = if (pole) 0.0 else atan2(matrix[7], matrix[8])
+    fun closest(a: Double, b: Double, c: Double) = listOf(a, b, c).mapIndexed { i, r ->
+        val degrees = -Math.toDegrees(r)
+        (degrees + round((values[i] - degrees) / 360.0) * 360.0).toFloat()
+    }
+    return listOf(closest(pitch, tilt, roll), closest(pitch + Math.PI, Math.PI - tilt, roll + Math.PI))
+        .minBy { angles -> angles.indices.sumOf { abs(angles[it] - values[it]).toDouble() } }
+        .mapIndexed { i, angle -> if (abs(angle - values[i]) < 1e-4f) values[i] else angle }.toFloatArray()
+}
+
 @Composable
 internal fun TurnHook(state: EditorState, turn: Turn) {
     DisposableEffect(state, turn) {
@@ -133,8 +170,17 @@ internal fun TurnHook(state: EditorState, turn: Turn) {
             val focus = state.inlineProperty?.copy(component = null)
             state.editSelected("turn") { turn.turned(it, drag, twist, focus == PropRef.Rotation || focus == PropRef.Tilt) }
         }
+        val rotate: ((Layer, Int, Float) -> FloatArray)? = if (turn.effect < 0) { layer, axis, angle ->
+            localRotation(turn.values(layer), axis, angle)
+        } else null
         state.turner = mine
-        onDispose { if (state.turner === mine) state.turner = null }
+        state.rotateInLayerSpace = rotate
+        onDispose {
+            if (state.turner === mine) {
+                state.turner = null
+                state.rotateInLayerSpace = null
+            }
+        }
     }
 }
 

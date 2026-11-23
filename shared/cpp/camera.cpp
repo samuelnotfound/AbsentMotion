@@ -231,23 +231,29 @@ SkM44 LayerPivotMatrix(const Scene& scene, const Layer& layer, double timeMs) {
         * SkM44::Translate(-p.pivot.fX, -p.pivot.fY, -p.pivotZ);
 }
 
-SkM44 LayerLocationMatrix(const Scene& scene, const Layer& layer, double timeMs) {
+void LayerGizmoMatrices(const Scene& scene, const Layer& layer, double timeMs, float out[25]) {
     const Layer* camera = gCameraView ? ActiveCamera(scene.layers, timeMs) : nullptr;
-    const View v = SelectView(scene.layers, camera, scene.width, scene.height, timeMs, EditorCameraOn());
+    const View view = SelectView(scene.layers, camera, scene.width, scene.height, timeMs, EditorCameraOn());
     const Placement placed = EffectivePlacement(scene.layers, layer, timeMs);
-    Placement anchor{};
-    anchor.location = placed.location;
-    anchor.z = placed.z;
-    SkM44 axes;
-    if (const Layer* parent = scene.layer(layer.parent); parent && parent->spatial()) {
+    const SkM44 projection = Space(view, placed);
+    constexpr float radians = 3.14159265f / 180;
+    const SkM44 basis = SkM44::Rotate({0, 0, 1}, placed.rotation * radians) * placed.tilt;
+    SkM44 parentBasis;
+    if (const Layer* parent = scene.layer(layer.parent); parent && parent->id != layer.id) {
         const Placement p = EffectivePlacement(scene.layers, *parent, timeMs);
-        axes = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * p.tilt * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
-    } else if (parent) {
-        const Placement p = EffectivePlacement(scene.layers, *parent, timeMs);
-        axes = SkM44::Rotate({0, 0, 1}, p.rotation * 3.14159265f / 180) * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
+        parentBasis = SkM44::Rotate({0, 0, 1}, p.rotation * radians)
+            * (parent->spatial() ? p.tilt : SkM44()) * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
     }
-    const float t = layer.localTime(timeMs);
-    return Space(v, anchor) * axes * SkM44::Translate(-layer.location.get(0, t, 0), -layer.location.get(1, t, 0), -layer.location.get(2, t, 0));
+    SkM44 inverse;
+    const bool movable = parentBasis.invert(&inverse);
+    const SkM44 position = inverse * basis;
+    int i = 0;
+    for (int row = 0; row < 4; ++row) {
+        for (int col = 0; col < 4; ++col) out[i++] = projection.rc(row, col);
+    }
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) out[i++] = movable ? position.rc(row, col) : 0;
+    }
 }
 
 void SetCameraView(bool on) {

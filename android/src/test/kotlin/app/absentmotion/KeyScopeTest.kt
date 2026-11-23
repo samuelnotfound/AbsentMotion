@@ -44,6 +44,27 @@ class KeyScopeTest {
     private fun Layer.frames(scope: KeyScope? = null) = keyframeTimes(scope).map { scene.frameAt(it) }
     private fun Layer.keys(ref: PropRef) = keyframes(ref).map { scene.frameAt(timeOf(it.t)) }
 
+    @Test fun viewerRotationUsesTheLayerAxesAfterItHasTurned() {
+        val initial = floatArrayOf(0f, 0f, 90f)
+        val result = app.absentmotion.ui.editor.panels.localRotation(initial, 0, (Math.PI / 4).toFloat())
+        assertEquals(-45f, result[0], 0.0001f)
+        assertEquals(0f, result[1], 0.0001f)
+        assertEquals(90f, result[2], 0.0001f)
+    }
+
+    @Test fun spatialProjectionKeepsDirectionsAndTheDepthOfTheLayerFace() {
+        val projection = app.absentmotion.ui.editor.SpatialGizmoProjection(
+            floatArrayOf(0f, -2f, 0f, 100f, 2f, 0f, 0f, 80f, 0f, 0f, 1f, 100f, 0f, 0f, 0f, 1f),
+            floatArrayOf(0f, -1f, 0f, 1f, 0f, 0f, 0f, 0f, 1f),
+        )
+        val point = projection.point(floatArrayOf(10f, 0f, 20f))!!
+        assertEquals(100f, point.at.x, 0.0001f)
+        assertEquals(100f, point.at.y, 0.0001f)
+        assertEquals(120f, point.depth, 0.0001f)
+        assertEquals(100f, projection.layerDepth(point.at, 0f)!!, 0.0001f)
+        assertEquals(10f, projection.positionDelta(0, 10f)[1], 0.0001f)
+    }
+
     @Test fun expandedTracksKeepBothWorkAreaEdgesInTheTransport() {
         val area = scene.withWorkArea(12, 42)
         assertEquals(listOf(0, 10, 12, 30, 42, 45, 60), area.inlineNavigationStops(listOf(10, 30, 45)))

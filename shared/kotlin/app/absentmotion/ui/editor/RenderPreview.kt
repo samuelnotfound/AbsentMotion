@@ -218,7 +218,7 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
     }
 }
 
-private fun selectionMatrix(m: FloatArray): Matrix = Matrix(floatArrayOf(
+internal fun selectionMatrix(m: FloatArray): Matrix = Matrix(floatArrayOf(
     m[0], m[3], 0f, m[6],
     m[1], m[4], 0f, m[7],
     0f, 0f, 1f, 0f,

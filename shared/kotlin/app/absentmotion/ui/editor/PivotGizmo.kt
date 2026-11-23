@@ -60,9 +60,6 @@ internal class PivotProjection(private val m: FloatArray) {
     companion object {
         fun from(matrices: FloatArray): PivotProjection? =
             if (matrices.size >= 30) PivotProjection(matrices.copyOfRange(18, 30)) else null
-
-        fun location(matrices: FloatArray): PivotProjection? =
-            if (matrices.size >= 42) PivotProjection(matrices.copyOfRange(30, 42)) else null
     }
 }
 

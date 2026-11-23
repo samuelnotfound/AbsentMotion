@@ -52,6 +52,8 @@ import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -214,29 +216,41 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var plane by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var world by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
     var pivotProjection by remember { mutableStateOf<PivotProjection?>(null) }
-    var locationProjection by remember { mutableStateOf<PivotProjection?>(null) }
+    var spatialProjection by remember { mutableStateOf<SpatialGizmoProjection?>(null) }
+    var gizmoContour by remember { mutableStateOf<Path?>(null) }
+    val showSpatialControls = state.gizmoProperty != null && state.selected?.uses3D == true
     var pivotSnaps by remember { mutableStateOf(emptySet<Int>()) }
     var quadFor by remember { mutableStateOf<Any?>(null) }
     val cropping = state.livePanel == EditorPanel.Crop
     val shownChange = state.previewChange
-    LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange) {
+    LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange, showSpatialControls) {
         if (quadFor != Triple(state.selectedId, cropping, shownChange)) {
             quadFor = Triple(state.selectedId, cropping, shownChange)
             quad = null
             plane = null
             world = null
             pivotProjection = null
-            locationProjection = null
+            spatialProjection = null
+            gizmoContour = null
         }
         if (cropping && shownChange == null) return@LaunchedEffect
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
             if (timeMs == null) return@collectLatest
-            quad = state.selectedId?.let { state.engine.layerQuad(it, timeMs) }
-            val matrices = state.selectedId?.let { state.engine.layerMatrix(it, timeMs) }
+            val id = state.selectedId
+            val corners = id?.let { state.engine.layerQuad(it, timeMs) }
+            val matrices = id?.let { state.engine.layerMatrix(it, timeMs) }
+            val contour = id?.let { layerId ->
+                if (corners == null || matrices == null || !showSpatialControls || scene.layer(layerId)?.kind != "shape") return@let null
+                state.engine.layerOutline(layerId, timeMs)?.let { svg ->
+                    runCatching { PathParser().parsePathString(svg).toPath().apply { transform(selectionMatrix(matrices)) } }.getOrNull()
+                }
+            }
+            quad = corners
             plane = matrices?.copyOfRange(9, 18)
             world = matrices?.copyOfRange(0, 9)
             pivotProjection = if (quad == null) null else matrices?.let(PivotProjection::from)
-            locationProjection = if (quad == null) null else matrices?.let(PivotProjection::location)
+            spatialProjection = if (corners == null) null else matrices?.let(SpatialGizmoProjection::from)
+            gizmoContour = contour
         }
     }
 
@@ -397,26 +411,37 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val pivotGrab = pivotDrag?.hit(down.position)
                     val gizmoLayer = startLayer?.takeIf { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
                     val gizmoProperty = state.gizmoProperty
-                    val resizing = gizmoProperty == PropRef.Scale
-                    val positionAxes = when (gizmoProperty) {
-                        PropRef.Location -> gizmoLayer?.let { layer ->
-                            locationProjection?.let { PivotDrag(it, layer.location, null, currentScale, currentOffset, true, density) }
-                        }
-                        PropRef.Scale -> gizmoLayer?.let { layer ->
-                            pivotProjection?.let { PivotDrag(it, layer.pivot, null, currentScale, currentOffset, true, density) }
-                        }
-                        else -> null
-                    }
-                    val axisControl = gizmoLayer?.let { layer ->
-                        positionAxes?.let { axes ->
-                            axes.hit(down.position)?.takeIf { it >= 0 && (!resizing || it < 2) }?.let { Triple(layer, axes, it) }
+                    val spatial = if (gizmoProperty == null) null else gizmoLayer?.let { layer ->
+                        spatialProjection?.let {
+                            layer to SpatialGizmo(it, currentScale, currentOffset, density, -layer.pivot[2])
                         }
                     }
-                    val orbCentre = if (gizmoProperty != null && turning != null) gizmoLayer?.let { layer ->
-                        pivotProjection?.project(layer.pivot)?.let { it * currentScale + currentOffset }
+                    val moveControl = if (gizmoProperty == PropRef.Location) spatial?.let { (layer, control) ->
+                        control.axisHit(down.position)?.let { Triple(layer, control, it) }
                     } else null
-                    val orbRadius = (orbCentre?.let { (down.position - it).getDistance() } ?: 0f) / density
-                    val onOrbRim = orbRadius in (ORBIT_RADIUS_DP - 6f)..(ORBIT_RADIUS_DP + 10f)
+                    val scaleControl = if (gizmoProperty == PropRef.Scale) gizmoLayer?.let { layer ->
+                        pivotProjection?.let {
+                            val axes = PivotDrag(it, layer.pivot, null, currentScale, currentOffset, true, density)
+                            axes.hit(down.position)?.takeIf { it in 0..1 }?.let { axis -> Triple(layer, axes, axis) }
+                        }
+                    } else null
+                    val rotate = state.rotateInLayerSpace
+                    val rotateRing: ((Offset) -> Unit)? = if (rotate == null) null else spatial?.let { (layer, control) ->
+                        control.ringHit(down.position)?.let { ring ->
+                            var angle = ring.angle
+                            val update: (Offset) -> Unit = { point ->
+                                control.ringAngle(point, ring.copy(angle = angle))?.let { next ->
+                                    angle = next
+                                    val angles = rotate(layer, ring.axis, next - ring.angle)
+                                    state.editSelected(TRANSFORM_GIZMO) { current ->
+                                        val tilted = current.withTransformAxes(PropRef.Tilt, angles[0], angles[1])
+                                        if (abs(current.rotation - angles[2]) < 1e-4f) tilted else tilted.withRotation(angles[2])
+                                    }
+                                }
+                            }
+                            update
+                        }
+                    }
                     val pointGrab = if (gradientMode) -1 else points?.points?.indices?.mapNotNull { i -> onScreen(points.points[i])?.let { i to (it - down.position).getDistance() } }
                         ?.filter { it.second < 24.dp.toPx() }?.minByOrNull { it.second }?.first ?: -1
                     val grabOffset = if (pointGrab >= 0) (onScreen(points!!.points[pointGrab]) ?: down.position) - down.position else Offset.Zero
@@ -478,27 +503,29 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     state.edit(MULTI_KEY) { multiFrom.movedTogether(multi, ms, 0f, 0f, multiZoom, multiShift.x, multiShift.y) }
                                 }
                             }
-                        } else if (moved && axisControl != null) {
-                            val (gizmo, axes, axisGrab) = axisControl
+                        } else if (moved && moveControl != null) {
+                            val (layer, control, axis) = moveControl
                             if (fingers == 1) {
-                                val travel = position - down.position
-                                if (resizing) {
-                                    val axis = axes.axisDirection(axisGrab) ?: continue
-                                    val distance = travel.x * axis.x + travel.y * axis.y
-                                    val factor = (1f + distance / 36.dp.toPx()).coerceIn(0.01f, 100f)
-                                    val before = gizmo.scale
-                                    val x = if (gizmo.scaleLinked || axisGrab == 0) grownScale(before[0], factor) else before[0]
-                                    val y = if (gizmo.scaleLinked || axisGrab == 1) grownScale(before[1], factor) else before[1]
-                                    state.editSelected(TRANSFORM_GIZMO) { it.withTransform("scale", x, y) }
-                                } else {
-                                    axes.move(axisGrab, travel)?.let { (value, _) ->
-                                        state.editSelected(TRANSFORM_GIZMO) { layer ->
-                                            val next = layer.location.copyOf()
-                                            next[axisGrab] = value[axisGrab]
-                                            layer.withTransform("location", *next)
-                                        }
+                                val change = control.move(axis, position - down.position)
+                                if (change.all(Float::isFinite)) {
+                                    val before = layer.location
+                                    state.editSelected(TRANSFORM_GIZMO) {
+                                        it.withTransformAxes(PropRef.Location, before[0] + change[0], before[1] + change[1], before[2] + change[2])
                                     }
                                 }
+                            }
+                            event.changes.forEach { it.consume() }
+                        } else if (moved && scaleControl != null) {
+                            val (layer, scaleAxes, scaleAxis) = scaleControl
+                            if (fingers == 1) {
+                                val axis = scaleAxes.axisDirection(scaleAxis) ?: continue
+                                val travel = position - down.position
+                                val distance = travel.x * axis.x + travel.y * axis.y
+                                val factor = (1f + distance / 36.dp.toPx()).coerceIn(0.01f, 100f)
+                                val before = layer.scale
+                                val x = if (layer.scaleLinked || scaleAxis == 0) grownScale(before[0], factor) else before[0]
+                                val y = if (layer.scaleLinked || scaleAxis == 1) grownScale(before[1], factor) else before[1]
+                                state.editSelected(TRANSFORM_GIZMO) { it.withTransform("scale", x, y) }
                             }
                             event.changes.forEach { it.consume() }
                         } else if (moved && pivotGrab != null) {
@@ -588,8 +615,8 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                             }
                         } else if (moved && turning != null && !(canvasGesture && fingers > 1)) {
                             gesture = HIDDEN
-                            if (fingers == 1 && onOrbRim && orbCentre != null) {
-                                turning(Offset.Zero, -handleTurn(position - pan - held - orbCentre, position - orbCentre))
+                            if (fingers == 1 && rotateRing != null) {
+                                rotateRing(position)
                             } else {
                                 turning(if (fingers > 1) Offset.Zero else (pan + held) / density, if (fingers > 1) event.calculateRotation() else 0f)
                             }
@@ -650,7 +677,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                         state.endGesture()
                     } else if (moved) {
                         state.endGesture()
-                    } else if (pointGrab >= 0 || pivotGrab != null || axisControl != null || orbRadius in 1f..(ORBIT_RADIUS_DP + 10f)) {
+                    } else if (pointGrab >= 0 || pivotGrab != null || moveControl != null || scaleControl != null || rotateRing != null) {
                         state.endGesture()
                     } else if (tapped != null) {
                         points?.tap?.invoke(tapped)
@@ -707,9 +734,15 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             if (layer != null) {
                 val offset = Offset(dx, dy)
                 when {
-                    state.turner != null -> pivotProjection?.let { LayerRotationOrb(it, layer.pivot, scale, offset) }
-                    property == PropRef.Location -> locationProjection?.let { TransformAxes(it, layer.location, scale, offset, resize = false) }
-                    property == PropRef.Scale -> pivotProjection?.let { TransformAxes(it, layer.pivot, scale, offset, resize = true) }
+                    state.rotateInLayerSpace != null || property == PropRef.Location -> spatialProjection?.let { projection ->
+                        val rotate = state.rotateInLayerSpace != null
+                        Canvas(Modifier.fillMaxSize()) {
+                            val control = SpatialGizmo(projection, scale, offset, density, -layer.pivot[2])
+                            val surface = gizmoSurface(gizmoContour, quad, scale, offset)
+                            if (rotate) control.drawRings(this, surface) else control.drawArms(this, surface)
+                        }
+                    }
+                    property == PropRef.Scale -> pivotProjection?.let { ScaleAxes(it, layer.pivot, scale, offset) }
                     else -> Unit
                 }
             }
@@ -865,6 +898,23 @@ internal suspend fun EditorState.tapTarget(x: Float, y: Float): Long {
         if (inside(List(4) { Offset(quad[2 * it], quad[2 * it + 1]) }, Offset(x, y))) return layer.id
     }
     return 0L
+}
+
+private fun gizmoSurface(contour: Path?, quad: FloatArray?, scale: Float, offset: Offset): Path? {
+    val shape = contour ?: quad?.let { corners ->
+        Path().apply {
+            moveTo(corners[0], corners[1])
+            for (i in 1..3) lineTo(corners[2 * i], corners[2 * i + 1])
+            close()
+        }
+    } ?: return null
+    val toScreen = androidx.compose.ui.graphics.Matrix(floatArrayOf(
+        scale, 0f, 0f, 0f,
+        0f, scale, 0f, 0f,
+        0f, 0f, 1f, 0f,
+        offset.x, offset.y, 0f, 1f,
+    ))
+    return Path().apply { addPath(shape); transform(toScreen) }
 }
 
 private fun inside(quad: List<Offset>, at: Offset): Boolean {
