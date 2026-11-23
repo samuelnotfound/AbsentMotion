@@ -26,6 +26,7 @@ internal data class InlineTrack(
     val multiplier: Float = 1f,
     val unit: String = "",
     val integer: Boolean = false,
+    val default: String? = null,
 ) {
     fun frames(scene: Scene, layer: Layer): List<Int> = layer.keyframeTimes(KeyScope(ref)).map(scene::frameAt).distinct()
 
@@ -36,7 +37,7 @@ internal data class InlineTrack(
 
 internal data class InlineSection(val id: String, val label: String, val tracks: List<InlineTrack>)
 
-internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: PropRef? = null): List<InlineSection> = buildList {
+internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: PropRef? = null, effectControls: Boolean = false): List<InlineSection> = buildList {
     val transform = mutableListOf<InlineTrack>()
     fun vector(ref: PropRef, title: String, axes: String, defaults: String, multiplier: Float = 1f, unit: String = "") {
         val node = layer.propertyElement(ref) ?: return
@@ -67,13 +68,17 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: P
     for ((index, effect) in layer.effects.withIndex()) {
         val id = effect["id"] ?: continue
         val definition = catalog.find(id)
-        val tracks = effect.children.mapNotNull { property ->
+        val keyed = effect.children.mapNotNull { property ->
             val name = property["name"]?.takeIf { property.name == "property" } ?: return@mapNotNull null
-            if (!property.isKeyframed && active != PropRef.effect(index, name)) return@mapNotNull null
+            name.takeIf { property.isKeyframed || active == PropRef.effect(index, name) }
+        }
+        val names = if (effectControls) (definition?.params?.map { it.id }.orEmpty() + keyed).distinct() else keyed
+        val tracks = names.map { name ->
             val parameter = definition?.params?.firstOrNull { it.id == name }
             val multiplier = if (parameter?.percent == true) 100f else 1f
             val unit = if (parameter?.percent == true) "%" else if (parameter?.kind == "angle") "°" else parameter?.unit.orEmpty()
-            InlineTrack(PropRef.effect(index, name), parameter?.label ?: labelOf(name), multiplier, unit, parameter?.kind == "choice")
+            InlineTrack(PropRef.effect(index, name), parameter?.label ?: labelOf(name), multiplier, unit,
+                parameter?.kind == "choice", parameter?.missingDefault)
         }
         if (tracks.isNotEmpty()) add(InlineSection("effect-$index", definition?.name ?: labelOf(id.substringAfterLast('.')), tracks))
     }

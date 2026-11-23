@@ -75,11 +75,14 @@ fun EditorState.stepBack(): Boolean {
         selectedId == null -> if (inGroup) exitGroup() else return false
         easingOpen -> easingOpen = false
         inlineProperty != null -> {
+            val returnDepth = inlineGroupReturnDepth
+            inlineGroupReturnDepth = null
             inlineProperty = null
             panel = EditorPanel.Tools
             effectIndex = -1
             volumeOpen = false
             keyTarget = null
+            returnDepth?.let(::exitTo)
         }
         panel == EditorPanel.Effects && effectIndex >= 0 -> effectIndex = -1
         panel != EditorPanel.Tools -> panel = EditorPanel.Tools
