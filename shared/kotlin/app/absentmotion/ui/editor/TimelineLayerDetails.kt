@@ -13,6 +13,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,7 +54,7 @@ import app.absentmotion.ui.theme.Am
 import kotlin.math.roundToInt
 
 internal fun Layer.hasTimelineDetails(): Boolean =
-    keyframeTimes().isNotEmpty() || keyframes(SpeedRef).isNotEmpty()
+    isPlainGroup || keyframeTimes().isNotEmpty() || keyframes(SpeedRef).isNotEmpty()
 
 private fun Layer.animatedProperties(): List<PropRef> = buildList {
     fun walk(parent: XmlNode, prefix: String) {
@@ -134,6 +135,12 @@ private fun TimelineDetailLayer(
         )
         if (property == ref) {
             TimelinePropertyTools(state, layer, owner, groups, ref, label, canEdit, Modifier.padding(start = indent + 20.dp), onDismiss)
+        }
+    }
+    if (layer.isPlainGroup) {
+        val path = groups + layer.id
+        for (child in layer.nested?.layers.orEmpty().asReversed()) key(child.id) {
+            TimelineDetailLayer(state, child, path, catalog, onScope = {}, onDismiss = onDismiss)
         }
     }
 }
