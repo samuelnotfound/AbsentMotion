@@ -153,7 +153,6 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var gesture by remember { mutableIntStateOf(IDLE) }
     var tapGeneration by remember { mutableIntStateOf(0) }
     val handles = when {
-        state.playing -> HIDDEN
         state.drawing != null -> state.drawing!!.handlesCode
         state.livePanel == EditorPanel.Crop -> HIDDEN
         gesture != IDLE -> gesture
