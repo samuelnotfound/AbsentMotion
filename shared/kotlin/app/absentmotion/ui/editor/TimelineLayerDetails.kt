@@ -47,6 +47,7 @@ import app.absentmotion.model.nestedHostTime
 import app.absentmotion.model.nestedTime
 import app.absentmotion.model.shownName
 import app.absentmotion.model.valueAt
+import app.absentmotion.model.withKeyframesMoved
 import app.absentmotion.model.withSpeedKeyframeToggled
 import app.absentmotion.ui.editor.panels.PanelIcon
 import app.absentmotion.ui.theme.Am
@@ -234,6 +235,23 @@ private fun TimelinePropertyTools(
                     }
                 }
             }) { Text(raw, color = Am.Accent, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+    if (onKey && editable && !member.timingLocked) {
+        val first = owner.firstShownFrame(member.startTime)
+        val last = owner.lastShownFrame(member.endTime)
+        TextButton(modifier = modifier, onClick = {
+            onDismiss()
+            val at = state.sampleMs
+            state.keypad = KeypadRequest(listOf(KeypadField(label, frame.toFloat(), min = first.toFloat(), max = last.toFloat())), 0) { values ->
+                val destination = values[0].roundToInt().coerceIn(first, last)
+                editTimelineLayer(state, groups, layer.id, at) { scene, item, _ ->
+                    item.withKeyframesMoved(frame, destination, scene, KeyScope(ref))
+                }
+                seek(destination)
+            }
+        }) {
+            Text(TimelineMath.timecode(frame, owner.fps), color = Am.Accent, fontSize = 11.sp)
         }
     }
 }
