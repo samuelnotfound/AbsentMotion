@@ -11,18 +11,21 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 ### Added
 
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
-- **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Grouping leaves artwork beyond the group bounds visible.
+- **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
 
 ### Changed
 
-- **Move & Transform** shows 3D position and rotation controls in Z, X, Y order. Flat layers have X and Y position controls and the circular rotation dial.
-- **Layer tools** place the 3D toggle beside the trim controls. Volume and mute are in the tools grid.
+- **Move & Transform** shows 3D position and rotation in Z, X, Y order. Switch between rulers and the classic move pad or rotation dial. Hold the Move tab to open Pivot.
+- **Layer tools** show 3D as text, and the timeline thumbnail toggles 3D with a cube and check. Volume and mute are beside the trim tools.
+- **Timeline** skip buttons stop at work-area edges and bookmarks. Green preview marks show frames in memory and blue marks show frames stored on disk.
+- **Selection** outlines show the projected bounds of every selected layer.
 - **Group layers** use orange bars in the timeline.
 
 ### Fixed
 
-- **2D compositing** follows timeline order and ignores saved depth, tilt, and 3D effects while the layer's 3D toggle is off. Active camera views hide flat layers.
-- **Pre-render** stays inside the work area and uses the editor's camera view. Resizing the work area keeps valid cached frames. The next pre-render fills the missing frames.
+- **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers.
+- **3D selection** projects the anchor from the layer's pivot as it rotates.
+- **Pre-render** stays inside the work area and uses the editor's camera view. Resizing the work area keeps valid cached frames. Automatic preview fills missing frames during idle time and looks ahead during buffered playback when there is time to render more.
 
 ## [5.2.3] - 2026-11-21
 
