@@ -10,33 +10,31 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Added
 
-- **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
-- **Inline keyframes**. Open a layer's chevron to see keyed properties from Transform, effects, and other controls. Several rulers can stay open together, with keyframe and easing buttons on the left. Position axes can be keyed and moved independently.
-- **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
-- **Viewer angles**. Pick a Front, Right, or Top view from the preview controls, or orbit in one of three custom views. Custom angles stay in the editor and leave the project camera and export unchanged.
-- **3D viewer controls**. Drag colored axes on Move or Size, and use the rotation orb to turn a layer directly in the viewer.
-- **3D pivots**. Edit Z, X, and Y in Pivot, or drag the anchor and its axes in the viewer. The pivot snaps to layer edges, the center, and zero depth.
+- **Timeline work area**. Drag the ruler handles to set the playback range. The handles use the active theme's accent. Green marks show frames in memory and blue marks show frames on disk.
+- **Timeline keyframe tracks**. Expand a layer to see the Transform and effect properties that have keyframes. Connected lines group the tracks, and a divider marks the end of each expanded layer. Tap a property to open its editor, then press Back to return to the expanded timeline. Position and rotation axes can have independent keys.
+- **3D viewer controls**. Drag the Move or Size handles, turn a layer with the rotation orb, or adjust its three-axis pivot in the viewer. The pivot follows the layer's rotation and snaps to layer edges, the center, and zero depth.
+- **Viewer angles**. Use the active camera, choose Front, Right, or Top, or orbit in one of three custom views. The custom views apply only to the editor. Camera layers support move and rotation gestures.
+- **Group dimension**. Keep depth inside an editable group or flatten the group to 2D. Groups made entirely from flat layers skip the prompt, and artwork can extend past the group bounds.
 
 ### Changed
 
-- **Move & Transform** orders the fields X, Y, Z and opens Position with the move pad by default. Tap the selected Move tab to switch between the rulers and the move pad. Both work on flat layers, with Z visible and disabled. Double-tap Move or Pivot to switch between them. Position and Rotation keep the compact 3D button.
-- **Layer tools** show Trim or Extend depending on where the playhead is. Extend and Move to Playhead have distinct icons. Volume and mute are beside the trim tools.
-- **Timeline** skip buttons visit visible inline keyframes when tracks are open. Otherwise they stop at work-area edges and bookmarks. The work area uses ruler handles in the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk. The layer sidebar uses the original eye, lock and thumbnail layout.
-- **Selection** outlines trace shapes and stay visible during playback. Transform handles still use the projected bounds.
-- **Group layers** use orange bars in the timeline. Null layers use gray.
+- **Layer sidebar**. Visibility, lock, the 3D cube, the thumbnail, and the disclosure each have a fixed column. Every layer shows its 3D status. The cube turns orange on 3D layers and toggles 3D where supported.
+- **Timeline navigation**. The skip buttons visit the keys on expanded tracks. With the tracks closed, they stop at bookmarks and work-area boundaries. Clip bars show faint, read-only marks for the keys being edited.
+- **Move & Transform**. Displays X, Y, Z in that order and opens Position with the move pad by default. Tap Move again to switch between the pad and the rulers. The app remembers that choice. Double-tap Move or Pivot to switch between them. On flat layers, Z is visible and disabled.
+- **Layer tools**. Trim and Extend are offered according to the playhead position. Volume and Mute sit beside the trim tools. Group bars are orange and null bars are gray.
 
 ### Removed
 
-- The **Pre-rendered** badge during preview playback.
+- The **Background Preview** setting and automatic preview rendering. Start **Pre-render** from the work area to render it manually.
+- The **Pre-rendered** playback badge and the 3D toggles from the transform panels. The 3D cube is in the layer sidebar.
+- The inline rulers, keyframe buttons, and graph buttons from the expanded timeline. The existing property editors provide those controls.
 
 ### Fixed
 
-- **Inline timeline**. Opening a disclosure hides the layer tools, and closing an inline graph returns to the timeline. Property names, values, buttons, and rulers align across rows. The playhead stays above the tracks and keyframes are visible through the track labels. Drag along a row to scroll the timeline, or drag within a ruler to edit its value.
-
-- **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
-- **3D selection** draws the anchor and pivot in the projected plane of the layer as it rotates.
-- **Move pad** holds nearly straight drags on one axis and snaps layer edges to the canvas guides.
-- **Pre-render** starts from the Pre-render button and stays inside the work area. Resizing the area keeps valid cached frames for the next pre-render.
+- **Preview caching**. Changing the work area keeps valid frames and renders only the missing frames on the next pre-render.
+- **Timeline visibility**. The playhead stays above expanded tracks, and the transition shortcut is hidden while any layer is expanded.
+- **2D compositing**. Flat layers follow timeline order. 3D effects still render on them as part of the flat layer. The active camera view hides flat layers. Older XML projects keep their saved Z movement and X/Y rotation. Turn on 3D for a layer to apply those values.
+- **Selection and movement**. Selection outlines follow shape contours and stay visible during playback. The move pad holds nearly straight drags on one axis and snaps edges to the canvas guides.
 
 ## [5.2.3] - 2026-11-21
 
