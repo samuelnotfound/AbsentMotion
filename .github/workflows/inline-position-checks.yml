@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           clang++ -std=c++20 -fno-rtti -fsyntax-only -Ithird_party/skia -Ishared/cpp \
-            shared/cpp/camera.cpp shared/cpp/model.cpp shared/cpp/styles.cpp shared/cpp/preview.cpp
+            shared/cpp/scene.cpp shared/cpp/camera.cpp shared/cpp/model.cpp shared/cpp/styles.cpp shared/cpp/preview.cpp
 
   android-compile:
     runs-on: ubuntu-latest
@@ -84,4 +84,4 @@ jobs:
           rm -rf third_party/whisper.cpp/models third_party/whisper.cpp/examples third_party/whisper.cpp/bindings third_party/ncnn/examples third_party/ncnn/benchmark third_party/ncnn/python third_party/ncnn/images
           echo 'org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64' >> gradle.properties
       - name: Check trackpad snapping on Android
-        run: ./gradlew :app:testFossDebugUnitTest --tests app.absentmotion.ui.editor.TrackpadAlignmentTest --no-daemon
+        run: ./gradlew :app:testFossDebugUnitTest --tests app.absentmotion.ui.editor.TrackpadAlignmentTest --tests app.absentmotion.KeyScopeTest --no-daemon
