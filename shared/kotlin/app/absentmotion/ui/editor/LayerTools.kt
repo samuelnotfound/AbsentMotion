@@ -77,6 +77,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import app.absentmotion.ai.AiAction
 import app.absentmotion.ai.reverseMark
 import app.absentmotion.ui.editor.effects.AiProgressDialog
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
@@ -547,12 +548,14 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
         val names = listOf(R.string.a11y_tab_move, R.string.a11y_tab_rotate, R.string.panel_size, R.string.a11y_tab_tilt, R.string.a11y_tab_skew, R.string.a11y_tab_pivot)
         val icons = listOf(PanelIcons.TabMove, PanelIcons.TabRotate, PanelIcons.TabSize, PanelIcons.TabTilt, PanelIcons.TabSkew, PanelIcons.TabPivot)
         transformTabs(state.settings.basicTransform, desk).forEach { i ->
-            val icon = if (i == 0 && shown == PIVOT_TAB) icons[PIVOT_TAB] else icons[i]
+            val index = if (i == 0 && shown == PIVOT_TAB) PIVOT_TAB else i
+            val icon = icons[index]
+            val name = stringResource(names[index])
             val usable = i <= SIZE_TAB || selected.kind != "camera" || (i == TILT_TAB && state.scene.depthOrder)
             val tip = if (!deskLayout) "" else when (i) {
                 SIZE_TAB -> deskShortcut(R.string.panel_size, "${DeskAlt}${stringResource(R.string.desk_scroll_key)}")
                 ROTATE_TAB -> deskShortcut(R.string.a11y_tab_rotate, "${DeskShift}${DeskAlt}${stringResource(R.string.desk_scroll_key)}")
-                else -> ""
+                else -> name
             }
             val press = remember { MutableInteractionSource() }
             Box(cell) { DeskTip(tip, Modifier.fillMaxSize()) { Box(
@@ -560,20 +563,13 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
                     press, null, role = androidx.compose.ui.semantics.Role.Tab,
                     onDoubleClick = if (i == 0 && canPivot) { { tab = 0; pivotMode = true } } else null,
                 ) { tab = i; if (i == 0) pivotMode = false } else Modifier.dimmed())
-                    .semantics(mergeDescendants = true) { this.selected = tab == i }.padding(start = 10.px, end = 11.px, top = 5.px, bottom = 5.px),
+                    .semantics(mergeDescendants = true) { this.selected = tab == i; contentDescription = name }.padding(start = 10.px, end = 11.px, top = 5.px, bottom = 5.px),
             ) {
-                Column(
+                Box(
                     Modifier.fillMaxSize().pressShape(press, PanelShape).fadeBackground(tab == i, PanelDark),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    val tint = if (tab == i) Am.Accent else Am.OnDark
-                    PanelIcon(icon, tint, size = 17.dp)
-                    Text(
-                        stringResource(names[if (i == 0 && shown == PIVOT_TAB) PIVOT_TAB else i]), Modifier.fillMaxWidth().padding(horizontal = 2.dp), color = animatedColor(tint), maxLines = 1, softWrap = false,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = if (deskLayout) 14.sp else 9.sp,
-                        fontSize = if (deskLayout) 12.sp else androidx.compose.ui.unit.TextUnit.Unspecified,
-                        autoSize = if (deskLayout) null else androidx.compose.foundation.text.TextAutoSize.StepBased(6.sp, 9.sp, 0.5.sp),
-                    )
+                    PanelIcon(icon, if (tab == i) Am.Accent else Am.OnDark, size = 17.dp)
                 }
             } } }
         }
