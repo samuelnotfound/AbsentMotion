@@ -16,9 +16,8 @@ static bool PreviewQuad(const Scene& scene, int64_t id, double time, float xy[8]
     for(int i=0;i<4;i++){xy[2*i]=q[i].fX;xy[2*i+1]=q[i].fY;}
     return true;
 }
-static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], int handles, float px) {
+static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, int handles, float px) {
     const SkPath outline = SkPath::Polygon({q, 4}, true);
-    const SkPoint centre = (q[0] + q[2]) * 0.5f;
     SkPaint paint;
     paint.setAntiAlias(true);
     auto stroke = [&](SkColor color, float width) {
@@ -43,7 +42,7 @@ static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], int handles, flo
         stroke(SK_ColorWHITE, 5.3f);
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setStrokeWidth(1.1f * px);
-        dot(centre, SkColorSetRGB(0x80, 0x80, 0x80), 3.4f);
+        if (std::isfinite(anchor.fX) && std::isfinite(anchor.fY)) dot(anchor, SkColorSetRGB(0x80, 0x80, 0x80), 3.4f);
         paint.setStyle(SkPaint::kFill_Style);
         for (int i = 0; i < 8 && handles == 8; i++) {
             dot(handle(i), SK_ColorBLACK, 15.5f);
@@ -263,7 +262,11 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         } else if (selected && PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
             SkPoint q[4];
             for (int i = 0; i < 4; i++) q[i] = {xy[2 * i] * scale + dx, xy[2 * i + 1] * scale + dy};
-            DrawSelection(canvas, q, handles, px);
+            const SceneScope scope(scene);
+            const float t = selected->localTime(timeMs);
+            const SkPoint pivot = {selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0)};
+            const SkPoint anchor = WorldMatrix(scene, *selected, timeMs).mapPoint(pivot);
+            DrawSelection(canvas, q, {anchor.fX * scale + dx, anchor.fY * scale + dy}, handles, px);
         }
         DrawSnapGuides(canvas, canvas->getBaseLayerSize(), view.guides, scale, dx, dy, px);
 }
