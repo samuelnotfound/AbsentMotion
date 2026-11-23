@@ -61,6 +61,12 @@ static void DrawAnchor(SkCanvas* canvas, const SkM44& matrix, const SkV3& pivot,
             connected = true;
         }
     }
+    for (const SkVector& dir : {SkVector{1, 0}, SkVector{-1, 0}, SkVector{0, 1}, SkVector{0, -1}}) {
+        const float reach = dir.fX > 0 ? 1.65f : 1.28f;
+        const SkPoint a = project(radius * dir.fX * 0.75f, radius * dir.fY * 0.75f);
+        const SkPoint b = project(radius * dir.fX * reach, radius * dir.fY * reach);
+        if (a.isFinite() && b.isFinite()) ring.moveTo(a).lineTo(b);
+    }
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setStyle(SkPaint::kStroke_Style);
@@ -312,6 +318,12 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
                 DrawLayerEdges(canvas, PreviewOutline(scene, *marked, timeMs, toTarget, q), px);
             }
         }
+        const auto drawAnchor = [&](const Layer& layer) {
+            const SceneScope scope(scene);
+            const float t = layer.localTime(timeMs);
+            const SkV3 pivot{layer.pivot.get(0, t, 0), layer.pivot.get(1, t, 0), layer.spatial() ? layer.pivot.get(2, t, 0) : 0};
+            DrawAnchor(canvas, LayerPivotMatrix(scene, layer, timeMs), pivot, toTarget, px);
+        };
         if (selected && handles == -2) {
             if (selected->activeAt(timeMs)) {
                 if (PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
@@ -319,7 +331,8 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
                     toPreview(xy, q);
                     DrawLayerEdges(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), px);
                 }
-                DrawMotionPath(canvas, scene, *selected, timeMs, scene.fps, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
+                DrawMotionPath(canvas, scene, *selected, timeMs, scene.fps, toTarget, px);
+                drawAnchor(*selected);
             }
         } else if (selected && handles >= kPointEdit) {
             if (selected->activeAt(timeMs)) {
@@ -329,14 +342,8 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         } else if (selected && PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
             SkPoint q[4];
             toPreview(xy, q);
-            const SceneScope scope(scene);
-            const float t = selected->localTime(timeMs);
             DrawSelection(canvas, PreviewOutline(scene, *selected, timeMs, toTarget, q), q, handles, px);
-            if (handles != -3 && (handles < 0 || handles >= 8)) {
-                const SkV3 pivot{selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0),
-                                selected->spatial() ? selected->pivot.get(2, t, 0) : 0};
-                DrawAnchor(canvas, LayerPivotMatrix(scene, *selected, timeMs), pivot, toTarget, px);
-            }
+            if (handles != -3 && (handles < 0 || handles >= 8)) drawAnchor(*selected);
         }
         DrawSnapGuides(canvas, canvas->getBaseLayerSize(), view.guides, scale, dx, dy, px);
 }

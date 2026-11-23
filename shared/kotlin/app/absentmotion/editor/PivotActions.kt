@@ -328,11 +328,12 @@ private fun Layer.withLocationShift(scene: Scene, plan: Plan, hat: Hat?, pick: (
 
 private class PivotEdit(val layer: Layer, val hat: Hat?, val dx: Float, val dy: Float, val dz: Float)
 
-private fun Layer.withPivotKey(x: Float, y: Float, z: Float): PivotEdit? {
+private fun Layer.withPivotKey(x: Float, y: Float, depth: Float?): PivotEdit? {
     val transform = node.child("transform") ?: XmlNode("transform")
     val pivot = transform.child("pivot")
     if (pivot?.isKeyframed != true) {
         val old = this.pivot
+        val z = depth ?: old[2]
         if (old[0] == x && old[1] == y && old[2] == z) return null
         return PivotEdit(withValue(PropRef.Pivot, formatFloats(floatArrayOf(x, y, z))), null, x - old[0], y - old[1], z - old[2])
     }
@@ -348,6 +349,7 @@ private fun Layer.withPivotKey(x: Float, y: Float, z: Float): PivotEdit? {
         j = keys.indexOfFirst { abs(it.t - t) < 1e-6f }
     }
     val old = floats(keys[j].v, zeros)
+    val z = depth ?: old[2]
     if (old[0] == x && old[1] == y && old[2] == z && keys.size == pivot.keyframes.size) return null
     keys = keys.toMutableList().also { it[j] = it[j].copy(v = formatFloats(floatArrayOf(x, y, z))) }
     return PivotEdit(copy(node = node.withChild("transform", transform.withChild("pivot", pivot.withKeyframes(keys)))), Hat(keys, j), x - old[0], y - old[1], z - old[2])
@@ -415,7 +417,7 @@ internal fun Scene.withPivotMoved(id: Long, timeMs: Int, x: Float, y: Float, see
     val layer = layer(id) ?: return this
     if (!x.isFinite() || !y.isFinite() || z?.isFinite() == false) return this
     val at = layer.at(timeMs, fps)
-    val depth = if (at.uses3D && z != null) z.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT) else at.pivot[2]
+    val depth = z?.takeIf { at.uses3D }?.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT)
     val edit = at.withPivotKey(x.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT), y.coerceIn(-PIVOT_LIMIT, PIVOT_LIMIT), depth) ?: return this
     if (edit.dx == 0f && edit.dy == 0f && edit.dz == 0f) return update(id) { Layer(edit.layer.node) }
     val kids = layers.filter { it.id != id && it.node["parent"]?.toLongOrNull() == id }
