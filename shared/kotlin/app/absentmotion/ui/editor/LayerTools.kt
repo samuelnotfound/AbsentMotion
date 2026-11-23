@@ -186,11 +186,11 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
                 }
             }
             Spacer(Modifier.width(17.px))
-            val spatial = still?.uses3D == true
-            SmallTool(ThreeDLayer.icon, stringResource(ThreeDLayer.label), Modifier.width(183.px).semantics { selected = spatial }, ToolShape,
-                enabled = kind in setOf("shape", "text", "drawing", "embedScene", "nullobj"), active = spatial) {
-                state.editSelected { it.copy(node = it.node.with("threeD", if (spatial) null else "true")) }
-            }
+            val sound = still?.let { it.kind == "audio" || it.mediaFill?.video == true } == true
+            val silent by remember(state) { derivedStateOf { (state.selected?.gain ?: 1f) <= 0f } }
+            val muted = !sound || silent
+            SmallTool(if (muted) PanelIcons.AudioMuted else AudioIcons.Speaker, stringResource(R.string.volume_volume), Modifier.width(183.px).tutorialTarget("tool_volume"), ToolShape,
+                enabled = sound, iconSize = if (muted) 24.dp else 32.dp) { state.volumeOpen = true }
         }
         Spacer(Modifier.height(28.px))
         if (kind == "camera" && moving) state.selectedId?.let { CameraMovesSheet(state, it) { moving = false } }
@@ -246,7 +246,9 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
         val more = listOfNotNull(
             if (kind == "shape" && still.isShapeTemplate == true) Tile(EditPoints) { state.requestPoints(enter = true) } else null,
             if (kind == "shape" && drawn && still.let(ShapeCatalog::paramsFor).orEmpty().isNotEmpty()) Tile(EditShape) { state.panel = EditorPanel.EditShape } else null,
-            if (kind == "audio" || video) Tile(if ((state.selected?.gain ?: 1f) <= 0f) MutedVolumeTool else VolumeTool) { state.volumeOpen = true } else null,
+            if (kind in setOf("shape", "text", "drawing", "embedScene", "nullobj")) Tile(ThreeDLayer, active = still?.uses3D == true) {
+                state.editSelected { it.copy(node = it.node.with("threeD", if (it.uses3D) null else "true")) }
+            } else null,
             if (still?.canCrop == true) Tile(Crop) { state.openCrop() } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && still?.mediaFill != null) Tile(AiTools) { openEffectBrowser(state, "ai") } else null,
             if (app.absentmotion.platform.PlatformFeatures.ai && video) Tile(CaptionTools) { state.playing = false; captions = true } else null,
@@ -352,7 +354,6 @@ private fun TileRows(rows: List<List<Tile>>, columns: Int?) {
                 val target = when (tile.tool) {
                     MoveTransform -> "tool_transform"
                     Effects -> "tool_effects"
-                    VolumeTool, MutedVolumeTool -> "tool_volume"
                     else -> null
                 }
                 ToolButton(tile.tool, Modifier.weight(1f).tutorialTarget(target), tile.enabled, tile.active, tile.onLongClick, tile.menu, tile.onClick)
@@ -395,8 +396,6 @@ private val CameraMoves = Tool(R.string.camera_moves, PanelIcons.Animate, 19.4f)
 private val ModelOptions = Tool(R.string.layer_tool_model_options, PanelIcons.TabTilt, 19.4f)
 private val LightOptions = Tool(R.string.light_options, PanelIcons.Brightness, 19.4f)
 private val ThreeDLayer = Tool(R.string.three_d_layer, PanelIcons.TabTilt, 19.4f)
-private val VolumeTool = Tool(R.string.volume_volume, AudioIcons.Speaker, 19.4f)
-private val MutedVolumeTool = Tool(R.string.volume_volume, PanelIcons.AudioMuted, 19.4f)
 private val Presets = Tool(R.string.presets, PanelIcons.Star, 19.4f)
 private val Effects = Tool(R.string.layer_tool_effects, PanelIcons.Effects, 19.6f)
 private val Crop = Tool(R.string.layer_tool_crop, PanelIcons.Crop, 18.1f)
