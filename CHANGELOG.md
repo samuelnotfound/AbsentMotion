@@ -12,13 +12,14 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **Timeline work area**. Drag the start and end handles in the ruler to choose the playback range. Green marks show the frames ready for preview.
 - **Group dimension**. Choose Keep 3D to preserve depth inside an editable group or Flatten to 2D to draw it as one layer. Groups made entirely from flat layers skip the prompt. Grouping leaves artwork beyond the group bounds visible.
+- **Timeline layer details**. Open the chevron beside a layer to find animated properties and edit their keys. Expand groups in the same menu to edit child visibility, basic transforms, and keyframes.
 
 ### Changed
 
-- **Move & Transform** shows 3D position and rotation in Z, X, Y order. Switch between rulers and the classic move pad or rotation dial. Double-tap the Move tab to open Pivot.
-- **Layer tools** show 3D as text, and the timeline thumbnail toggles 3D with a cube and check. Volume and mute are beside the trim tools.
+- **Move & Transform** uses the same Z, X, Y field layout for 3D Position and Rotation. Position has the 3D switch and remembers its ruler or move-pad setting. 3D Rotation uses rulers. Double-tap the Move tab to open Pivot.
+- **Layer tools** include separate buttons to trim and extend either end. Volume and mute are beside the trim tools.
 - **Timeline** skip buttons stop at work-area edges and bookmarks. The work area uses the active theme's accent color. Green preview marks show frames in memory and blue marks show frames stored on disk.
-- **Selection** outlines show the projected bounds of every selected layer.
+- **Selection** outlines trace shapes and stay visible during playback. Transform handles still use the projected bounds.
 - **Group layers** use orange bars in the timeline.
 
 ### Removed
@@ -29,7 +30,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 - **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
 - **3D selection** projects the anchor from the layer's pivot as it rotates.
-- **Pre-render** stays inside the work area and uses the editor's camera view. Resizing the work area keeps valid cached frames. Automatic preview fills missing frames during idle time and looks ahead during buffered playback when there is time to render more.
+- **Pre-render** starts from the Pre-render button and stays inside the work area. Resizing the area keeps valid cached frames for the next pre-render.
 
 ## [5.2.3] - 2026-11-21
 
