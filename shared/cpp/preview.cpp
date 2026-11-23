@@ -16,17 +16,22 @@ static bool PreviewQuad(const Scene& scene, int64_t id, double time, float xy[8]
     for(int i=0;i<4;i++){xy[2*i]=q[i].fX;xy[2*i+1]=q[i].fY;}
     return true;
 }
-static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, int handles, float px) {
+static void DrawLayerEdges(SkCanvas* canvas, const SkPoint q[4], float px) {
     const SkPath outline = SkPath::Polygon({q, 4}, true);
     SkPaint paint;
     paint.setAntiAlias(true);
-    auto stroke = [&](SkColor color, float width) {
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(width * px);
-        paint.setColor(color);
-        canvas->drawPath(outline, paint);
-        paint.setStyle(SkPaint::kFill_Style);
-    };
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(4.5f * px);
+    paint.setColor(SkColorSetARGB(0xb0, 0x00, 0x00, 0x00));
+    canvas->drawPath(outline, paint);
+    paint.setStrokeWidth(2.7f * px);
+    paint.setColor(SkColorSetRGB(0xff, 0x9d, 0x79));
+    canvas->drawPath(outline, paint);
+}
+
+static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, int handles, float px) {
+    SkPaint paint;
+    paint.setAntiAlias(true);
     auto dot = [&](SkPoint at, SkColor color, float radius) {
         paint.setColor(color);
         canvas->drawCircle(at, radius * px, paint);
@@ -38,8 +43,7 @@ static void DrawSelection(SkCanvas* canvas, const SkPoint q[4], SkPoint anchor, 
         dot(handle(handles), SK_ColorBLACK, 18.5f);
         dot(handle(handles), accent, 15.5f);
     } else {
-        stroke(SK_ColorBLACK, 7.3f);
-        stroke(SK_ColorWHITE, 5.3f);
+        DrawLayerEdges(canvas, q, px);
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setStrokeWidth(1.1f * px);
         if (std::isfinite(anchor.fX) && std::isfinite(anchor.fY)) dot(anchor, SkColorSetRGB(0x80, 0x80, 0x80), 3.4f);
@@ -250,8 +254,24 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         float xy[8];
         const Layer* selected = selectedId != 0 ? scene.layer(selectedId) : nullptr;
         if (selected && (selected->kind == "camera" || CameraHidesLayer(scene.layers, *selected, timeMs))) selected = nullptr;
+        const auto toPreview = [&](const float points[8], SkPoint q[4]) {
+            for (int i = 0; i < 4; i++) q[i] = {points[2 * i] * scale + dx, points[2 * i + 1] * scale + dy};
+        };
+        if (handles != -11 && handles < kPointEdit) {
+            for (const int64_t id : view.ids) {
+                if (id == selectedId || !PreviewQuad(scene, id, timeMs, xy, &effects)) continue;
+                SkPoint q[4];
+                toPreview(xy, q);
+                DrawLayerEdges(canvas, q, px);
+            }
+        }
         if (selected && handles == -2) {
             if (selected->activeAt(timeMs)) {
+                if (PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
+                    SkPoint q[4];
+                    toPreview(xy, q);
+                    DrawLayerEdges(canvas, q, px);
+                }
                 DrawMotionPath(canvas, scene, *selected, timeMs, scene.fps, SkMatrix::Translate(dx, dy).preScale(scale, scale), px);
             }
         } else if (selected && handles >= kPointEdit) {
@@ -261,7 +281,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
             }
         } else if (selected && PreviewQuad(scene, selectedId, timeMs, xy, &effects)) {
             SkPoint q[4];
-            for (int i = 0; i < 4; i++) q[i] = {xy[2 * i] * scale + dx, xy[2 * i + 1] * scale + dy};
+            toPreview(xy, q);
             const SceneScope scope(scene);
             const float t = selected->localTime(timeMs);
             const SkPoint pivot = {selected->pivot.get(0, t, 0), selected->pivot.get(1, t, 0)};
