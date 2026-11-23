@@ -167,15 +167,20 @@ private fun EditorState.groupLayers(ids: Set<Long>, blend: String?, anchor: Pair
 
 suspend fun EditorState.groupLayersCentred(ids: Set<Long>, blend: String? = null) {
     val before = scene
-    val members = before.layers.filter { it.id in ids && it.kind != "camera" }.map { it.id }.toSet()
+    val members = before.layers.filter { it.id in ids && it.kind != "camera" }
     if (members.isEmpty()) return
+    val memberIds = members.map { it.id }.toSet()
     val at = sampleMs
-    val boxes = members.mapNotNull { engine.layerBounds(it, at) }
+    val boxes = members.mapNotNull { engine.layerBounds(it.id, at) }
     if (scene.node !== before.node) return
     val anchor = if (boxes.isEmpty()) null else ((boxes.minOf { it[0] } + boxes.maxOf { it[2] }) / 2f) to ((boxes.minOf { it[1] } + boxes.maxOf { it[3] }) / 2f)
     playing = false
-    groupAsk = { keep3D ->
-        if (scene.node === before.node) groupLayers(members, blend, anchor, keep3D)
+    if (members.any { it.uses3D }) {
+        groupAsk = { keep3D ->
+            if (scene.node === before.node) groupLayers(memberIds, blend, anchor, keep3D)
+        }
+    } else {
+        groupLayers(memberIds, blend, anchor, keep3D = false)
     }
 }
 
