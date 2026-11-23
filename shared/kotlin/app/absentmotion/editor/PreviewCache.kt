@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import app.absentmotion.platform.PlatformFeatures
 import app.absentmotion.platform.rawFrameImage
 import app.absentmotion.platform.releaseFrameImage
 import androidx.compose.runtime.mutableStateOf
@@ -37,17 +36,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.delay
 
 private const val MIB = 1L shl 20
 private const val MAX_BUDGET = 256 * MIB
 private const val MAX_DISK_BUDGET = 1024 * MIB
-private const val MAX_BACKGROUND_DISK_BUDGET = 256 * MIB
 private const val DISK_RESERVE = 1024 * MIB
 private const val CACHE_PREFIX = "preview-cache-"
-private const val SPILL_PREFIX = "preview-spill-"
 private const val MAX_SIDE = 1920
 private const val ESTIMATE_PER_MILLE = 150L
 private const val QUALITY = 85
@@ -59,8 +53,6 @@ fun previewCacheBudget(memoryClassMb: Int, lowRam: Boolean, compatible: Boolean)
     val percent = when { lowRam -> 8; compatible -> 12; else -> 15 }
     return minOf(MAX_BUDGET, memoryClassMb.coerceAtLeast(16) * MIB * percent / 100)
 }
-
-fun rawStoreBudget(heapMax: Long): Long = minOf(4096 * MIB, heapMax * 2 / 5)
 
 fun storeBudget(budget: Long, width: Int, height: Int): Long = maxOf(budget / 4, budget - POOL * 4L * width * height)
 
@@ -392,147 +384,15 @@ object PreviewCache {
         if (force || now - revisedNs > 100_000_000L) { revisedNs = now; revision++ }
     }
     fun runsFor(state: EditorState, onDisk: Boolean): List<IntRange> =
-        if (!paused && (automatic || phase == Phase.Ready) && key?.let { cacheBarShows(it, keyOf(state), automatic && phase != Phase.Rendering) } == true) {
+        if (!paused && phase == Phase.Ready && key?.let { cacheBarShows(it, keyOf(state), catchingUp = false) } == true) {
             val area = state.scene.workArea
             store?.runs(onDisk).orEmpty().map { it.inside(area) }.filterNot { it.isEmpty() }
         } else emptyList()
     var fit by mutableFloatStateOf(0f)
     var checkerCell by mutableFloatStateOf(25f)
-    var automatic = false
-        private set
     private var preparedCell = 0f
-    private var slowUntilNs = 0L
     private val cleanup = CoroutineScope(Dispatchers.IO)
     private val main by lazy { Handler(Looper.getMainLooper()) }
-    private var checkedSpill = false
-    @Volatile private var interactionNs = 0L
-    fun interaction() { interactionNs = System.nanoTime() }
-    val idleMs: Long get() = if (PlatformFeatures.desktop) 1_000L else 2_000L
-    fun idle(): Boolean = System.nanoTime() - interactionNs >= idleMs * 1_000_000L
-    fun coolingDown(): Boolean = System.nanoTime() < slowUntilNs
-
-    fun canBufferPlayback(state: EditorState): Boolean {
-        if (paused || phase != Phase.Ready || player == null || preparedCell != checkerCell || coolingDown()) return false
-        val scene = state.scene
-        val frames = scene.workArea
-        val at = state.frame
-        val lead = (scene.fps / 4).coerceAtLeast(3)
-        if (at !in frames || frames.last - at < lead || state.engine.lastStillMs > 1500.0 / scene.fps) return false
-        val built = store ?: return false
-        if (!(at until at + lead).all { it in built }) return false
-        if ((at + lead..minOf(frames.last, at + scene.fps * 2)).all { it in built }) return false
-        val width = cacheFrameSize(scene.width, scene.height, fit, state.settings.previewQuality.divisor).first
-        return player?.width == width && key?.matchesFrames(keyOf(state)) == true
-    }
-
-    suspend fun follow(next: CacheKey) {
-        val previous = key ?: return
-        if (!automatic || phase == Phase.Rendering || previous.scene == next.scene || previous.copy(scene = next.scene) != next) return
-        val dirty = withContext(Dispatchers.Default) { previewDirtyRanges(previous.scene, next.scene) }
-        currentCoroutineContext().ensureActive()
-        if (key !== previous) return
-        val previousStore = store
-        if (dirty.isNotEmpty() || next.scene.lastFrame < previous.scene.lastFrame) {
-            withContext(Dispatchers.IO) { previousStore?.removeWhere { frame -> dirty.any { frame in it } || frame > next.scene.lastFrame } }
-        }
-        if (key !== previous) return
-        if (dirty.isNotEmpty()) player?.drop()
-        key = next
-        revise(force = true)
-    }
-
-    suspend fun prepare(state: EditorState, context: Context, duringPlayback: Boolean, accept: () -> Boolean) {
-        if (!accept() || phase == Phase.Rendering || fit <= 0f || !state.settings.backgroundPreview) return
-        val next = keyOf(state)
-        val area = next.scene.workArea
-        val at = state.frame.coerceIn(area)
-        val cell = checkerCell
-        val (width, height) = cacheFrameSize(next.scene.width, next.scene.height, fit, next.divisor)
-        val previous = key
-        val extendingManual = !automatic && phase == Phase.Ready && previous?.matchesFrames(next) == true &&
-            storeSize == (width to height) && preparedCell == cell
-        if (extendingManual && (paused || renderedArea == area || store?.countIn(area) == area.frameCount)) return
-        if (!extendingManual && (!automatic || previous == null || previous.copy(scene = next.scene) != next || player?.width != width || player?.height != height || preparedCell != cell)) {
-            val allocation = generation
-            val manager = context.applicationContext.getSystemService(ActivityManager::class.java)
-            val raw = PlatformFeatures.desktop
-            val budget = if (raw) rawStoreBudget(Runtime.getRuntime().maxMemory())
-                else storeBudget(previewCacheBudget(manager?.memoryClass ?: 128, manager?.isLowRamDevice == true, Tier.compatible), width, height)
-            val folder = context.applicationContext.cacheDir
-            val spillBudget = withContext(Dispatchers.IO) {
-                if (!checkedSpill) folder.listFiles { entry -> entry.name.startsWith(SPILL_PREFIX) }?.forEach { entry ->
-                    entry.listFiles { frame -> frame.isFile && frame.name.endsWith(".frame") }?.forEach { it.delete() }
-                    entry.delete()
-                }
-                diskBudget(folder.usableSpace).coerceAtMost(MAX_BACKGROUND_DISK_BUDGET)
-            }
-            checkedSpill = true
-            if (generation != allocation || phase == Phase.Rendering || !accept()) return
-            clear()
-            val spill = if (spillBudget > 0) java.io.File(folder, SPILL_PREFIX + System.nanoTime()).takeIf { it.mkdir() } else null
-            store = FrameStore(0, budget + (if (spill == null) 0 else spillBudget), raw = raw, spill = spill, memoryBudget = budget)
-            player = createPlayer(store!!, width, height)
-            automatic = true
-            preparedCell = cell
-        } else follow(next)
-        key = next
-        phase = Phase.Ready
-        val mine = generation
-        fun current() = generation == mine && accept() && key == next && state.engine.mediaRevision.value == next.resources
-        if (!current() || System.nanoTime() < slowUntilNs) return
-        val built = store ?: return
-        val encoder = if (built.raw) null else try { Encoder(width, height) } catch (_: OutOfMemoryError) {
-            slowUntilNs = System.nanoTime() + 30_000_000_000L
-            return
-        }
-        try {
-            val order = if (duringPlayback) (at..minOf(area.last, at + next.scene.fps * 2)).toList()
-                else listOf(at) + previewOrder(area.last, at, if (built.raw) 30 else 1, first = area.first)
-            var index = 0
-            var refused = 0
-            while (index < order.size) {
-                val frame = order[index]
-                currentCoroutineContext().ensureActive()
-                if (!current()) return
-                if ((duringPlayback && frame < state.frame) || frame in built) { index++; continue }
-                if (!heapRoom(width.toLong() * height * 12)) return
-                val started = System.nanoTime()
-                val pixels = state.engine.capturePreviewFrame(next.scene, next.scene.frameStart(frame), width, height, next.accurateBlur, next.camera, duringPlayback, ::current)
-                if (pixels == null) {
-                    val attempts = if (duringPlayback) 1 else if (built.raw) 20 else 5
-                    if (++refused >= attempts) { refused = 0; index++; continue }
-                    delay(50)
-                    continue
-                }
-                refused = 0
-                index++
-                currentCoroutineContext().ensureActive()
-                if (!current()) return
-                val stored = withContext(Dispatchers.Default) { if (encoder == null) pixels.also { flattenOnChecker(it, width, height, cell) } else encoder.encode(pixels, cell, true) } ?: return
-                if (!current()) return
-                val saved = withContext(Dispatchers.IO) {
-                    while (current()) {
-                        if (built.put(frame, stored)) return@withContext true
-                        if (duringPlayback || extendingManual || !built.evictFarther(at, frame)) break
-                    }
-                    false
-                }
-                revise(force = !saved)
-                if (!saved) return
-                if (encoder == null && built.inMemory(frame) && !duringPlayback) continue
-                val elapsed = System.nanoTime() - started
-                delay((elapsed / 500_000L).coerceIn(30L, 1_000L))
-            }
-            revise(force = true)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: OutOfMemoryError) {
-            slowUntilNs = System.nanoTime() + 30_000_000_000L
-        } catch (e: Exception) {
-            Log.w(TAG, "automatic preview preparation failed", e)
-            slowUntilNs = System.nanoTime() + 10_000_000_000L
-        } finally { encoder?.bitmap?.recycle() }
-    }
 
     val first: Int get() = store?.first ?: 0
     val last: Int get() = store?.last ?: -1
@@ -555,7 +415,7 @@ object PreviewCache {
     fun preRender(state: EditorState, resources: Long = state.engine.mediaRevision.value): PreRender {
         if (phase == Phase.Rendering) return PreRender.Rendering
         if (paused) return PreRender.None
-        if (phase == Phase.Ready && !automatic && key?.matchesFrames(keyOf(state, resources)) == true) {
+        if (phase == Phase.Ready && key?.matchesFrames(keyOf(state, resources)) == true) {
             val area = state.scene.workArea
             return if (renderedArea == area || store?.countIn(area) == area.frameCount) PreRender.Ready else PreRender.None
         }
@@ -581,7 +441,7 @@ object PreviewCache {
         val next = keyOf(state)
         val cell = checkerCell
         val kept = store?.takeIf {
-            !automatic && phase == Phase.Ready && key?.matchesFrames(next) == true &&
+            phase == Phase.Ready && key?.matchesFrames(next) == true &&
                 storeSize == (width to height) && preparedCell == cell
         }
         val covered = kept?.countIn(range) ?: 0
@@ -745,15 +605,13 @@ object PreviewCache {
     }
 
     fun pause() {
-        if (phase != Phase.Ready || automatic) return
+        if (phase != Phase.Ready) return
         paused = true
         rendered = null
         revise(force = true)
     }
 
-    fun forget() {
-        if (automatic) rendered = null else remove()
-    }
+    fun forget() = remove()
 
     fun remove() {
         clear()
@@ -776,8 +634,6 @@ object PreviewCache {
         player = null
         phase = Phase.Empty
         progress = 0f
-        automatic = false
-        slowUntilNs = 0L
         revise(force = true)
     }
 

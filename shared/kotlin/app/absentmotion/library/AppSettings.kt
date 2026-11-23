@@ -170,15 +170,10 @@ class AppSettings(private val context: Context) {
         }
 
     private var fullMotionBlurState by mutableStateOf(prefs.getBoolean("fullMotionBlur", false))
-    private var backgroundPreviewState by mutableStateOf(prefs.getBoolean("backgroundPreview", true))
 
     var fullMotionBlur: Boolean
         get() = fullMotionBlurState
         set(value) { fullMotionBlurState = value; prefs.edit().putBoolean("fullMotionBlur", value).apply() }
-
-    var backgroundPreview: Boolean
-        get() = backgroundPreviewState
-        set(value) { backgroundPreviewState = value; prefs.edit().putBoolean("backgroundPreview", value).apply() }
 
     private var highDetailModelsState by mutableStateOf(prefs.getBoolean("highDetailModels", false).also(::useModelDetail))
 
