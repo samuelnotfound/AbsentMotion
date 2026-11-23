@@ -234,9 +234,11 @@ private fun AutomaticPreview(state: EditorState) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val resources by state.engine.mediaRevision.collectAsState()
     val thermal = remember(context) { app.absentmotion.export.ThermalMonitor.of(context) }
+    val heat by thermal.state.collectAsState()
+    val hot = heat.level >= app.absentmotion.export.ThermalLevel.Hot
     val enabled = state.settings.backgroundPreview
     LaunchedEffect(enabled) { if (!enabled && PreviewCache.automatic) PreviewCache.clear() }
-    LaunchedEffect(state, lifecycle, resources, enabled) {
+    LaunchedEffect(state, lifecycle, resources, enabled, hot) {
         if (!enabled) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             thermal.start()
@@ -248,9 +250,9 @@ private fun AutomaticPreview(state: EditorState) {
                 }.collectLatest { request ->
                     delay(100)
                     PreviewCache.follow(request.key)
-                    if (!request.eligible) return@collectLatest
+                    if (!request.eligible || hot) return@collectLatest
                     delay(PreviewCache.idleMs - 100)
-                    while (!PreviewCache.idle()) delay(80)
+                    while (!PreviewCache.idle() || PreviewCache.coolingDown()) delay(100)
                     fun current() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && PreviewCache.idle() && !thermal.hot &&
                         !state.playing && !state.exportOpen && state.scene == request.key.scene && state.frame == request.frame &&
                         state.settings.fullMotionBlur == request.key.accurateBlur && state.settings.androidEmoji == request.key.androidEmoji &&

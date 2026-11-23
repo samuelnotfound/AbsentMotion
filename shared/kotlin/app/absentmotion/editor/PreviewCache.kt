@@ -355,6 +355,7 @@ object PreviewCache {
     fun interaction() { interactionNs = System.nanoTime() }
     val idleMs: Long get() = if (PlatformFeatures.desktop) 1_000L else 2_000L
     fun idle(): Boolean = System.nanoTime() - interactionNs >= idleMs * 1_000_000L
+    fun coolingDown(): Boolean = System.nanoTime() < slowUntilNs
 
     suspend fun follow(next: CacheKey) {
         val previous = key ?: return
@@ -376,8 +377,10 @@ object PreviewCache {
         val cell = checkerCell
         val (width, height) = cacheFrameSize(next.scene.width, next.scene.height, fit, next.divisor)
         val previous = key
-        if (!automatic || previous == null || previous.copy(scene = next.scene) != next || player?.width != width || player?.height != height || preparedCell != cell) {
-            if (!automatic && phase == Phase.Ready && previous?.matchesFrames(next) == true && storeSize == (width to height) && preparedCell == cell) return
+        val extendingManual = !automatic && phase == Phase.Ready && previous?.matchesFrames(next) == true &&
+            storeSize == (width to height) && preparedCell == cell
+        if (extendingManual && (renderedArea == area || store?.countIn(area) == area.frameCount)) return
+        if (!extendingManual && (!automatic || previous == null || previous.copy(scene = next.scene) != next || player?.width != width || player?.height != height || preparedCell != cell)) {
             clear()
             val manager = context.applicationContext.getSystemService(ActivityManager::class.java)
             val raw = PlatformFeatures.desktop
@@ -399,9 +402,7 @@ object PreviewCache {
             return
         }
         try {
-            val order = previewOrder(area.last, at, if (built.raw) 30 else 1, first = area.first).let {
-                if (state.frame in area) it else listOf(at) + it
-            }
+            val order = listOf(at) + previewOrder(area.last, at, if (built.raw) 30 else 1, first = area.first)
             var index = 0
             var refused = 0
             while (index < order.size) {
@@ -413,7 +414,7 @@ object PreviewCache {
                 val started = System.nanoTime()
                 val pixels = state.engine.capturePreviewFrame(next.scene, next.scene.frameStart(frame), width, height, next.accurateBlur, next.camera, ::current)
                 if (pixels == null) {
-                    if (!built.raw || ++refused >= 20) { refused = 0; index++; continue }
+                    if (++refused >= if (built.raw) 20 else 5) { refused = 0; index++; continue }
                     delay(50)
                     continue
                 }
@@ -423,12 +424,13 @@ object PreviewCache {
                 if (!current()) return
                 val stored = withContext(Dispatchers.Default) { if (encoder == null) pixels.also { flattenOnChecker(it, width, height, cell) } else encoder.encode(pixels, cell, true) } ?: return
                 if (!current()) return
-                while (!built.put(frame, stored)) if (!built.evictFarther(at, frame)) { revise(force = true); return }
+                while (!built.put(frame, stored)) {
+                    if (extendingManual || !built.evictFarther(at, frame)) { revise(force = true); return }
+                }
                 revise()
                 if (encoder == null) continue
                 val elapsed = System.nanoTime() - started
-                if (elapsed > 80_000_000L) { slowUntilNs = System.nanoTime() + 10_000_000_000L; return }
-                delay(maxOf(30L, elapsed / 1_000_000))
+                delay((elapsed / 500_000L).coerceIn(30L, 1_000L))
             }
             revise(force = true)
         } catch (e: CancellationException) {
