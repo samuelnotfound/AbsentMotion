@@ -170,7 +170,9 @@ internal fun Scene.withSplits(ids: List<Long>, frame: Int, sampleMs: Int): Scene
 
 internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List<Int> {
     val times = if (layer == null) listOf(0, totalTime) else listOf(layer.startTime, layer.endTime) + layer.keyframeTimes(scope).filter { it in layer.startTime..layer.endTime }
-    return (times + bookmarks).map { frameAt(it).coerceIn(0, maxOf(lastFrame, 0)) }.distinct().sorted()
+    val editEnd = lastFrame.coerceAtLeast(0)
+    val workAreaStops = listOf(workAreaStartFrame, workAreaEndFrame).filter { it in 1 until editEnd }
+    return ((times + bookmarks).map { frameAt(it).coerceIn(0, editEnd) } + workAreaStops).distinct().sorted()
 }
 
 private fun EditorState.stops(): List<Int> = scene.navigationStops(selected, keyScope)

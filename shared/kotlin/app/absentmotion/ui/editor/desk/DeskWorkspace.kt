@@ -317,11 +317,11 @@ private fun DeskTransport(state: EditorState, modifier: Modifier) {
                 Text(TimelineMath.timecode(state.playheadFrame, state.scene.fps), color = Am.OnDark, fontSize = 13.sp, style = Tabular, maxLines = 1, softWrap = false)
                 if (total) Text(" / " + TimelineMath.timecode(state.scene.lastFrame + 1, state.scene.fps), color = Am.OnDarkDim, fontSize = 13.sp, style = Tabular, maxLines = 1, softWrap = false)
             }
-            if (skips) DeskIcon(ChromeIcons.SkipBack, deskShortcut(R.string.desk_start, deskKeys("GoStart", "Home")), size = 32.dp, shortcut = Shortcut.GoStart) { state.playing = false; state.frame = 0 }
+            if (skips) DeskIcon(ChromeIcons.SkipBack, stringResource(R.string.play_skip_back), size = 32.dp) { state.playing = false; state.skipBack() }
             DeskIcon(DrawingIcons.Prev, deskShortcut(R.string.desk_previous_frame, deskKeys("PreviousFrame", "←")), size = 32.dp, shortcut = Shortcut.PreviousFrame) { state.playing = false; state.stepTo(state.playheadFrame - 1) }
             PlaybackControl(state, Modifier.size(32.dp), desktop = true)
             DeskIcon(DrawingIcons.Next, deskShortcut(R.string.desk_next_frame, deskKeys("NextFrame", "→")), size = 32.dp, shortcut = Shortcut.NextFrame) { state.playing = false; state.stepTo(state.playheadFrame + 1) }
-            if (skips) DeskIcon(ChromeIcons.SkipForward, deskShortcut(R.string.desk_end, deskKeys("GoEnd", "End")), size = 32.dp, shortcut = Shortcut.GoEnd) { state.playing = false; state.parkAtEnd() }
+            if (skips) DeskIcon(ChromeIcons.SkipForward, stringResource(R.string.play_skip_forward), size = 32.dp) { state.playing = false; state.skipForward() }
             if (loop) DeskIcon(ChromeIcons.PlayRepeat, stringResource(R.string.desk_loop), active = state.settings.loopingPlay, size = 32.dp) { state.settings.loopingPlay = !state.settings.loopingPlay }
             Row(if (centred) Modifier.weight(1f) else Modifier, Arrangement.End, Alignment.CenterVertically) {
                 Box(Modifier.size(32.dp), Alignment.Center) { Hint(stringResource(R.string.a11y_animate)) { AnimateButton(state, Modifier) } }
