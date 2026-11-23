@@ -67,6 +67,7 @@ import app.absentmotion.model.Layer
 import app.absentmotion.ui.editor.panels.PanelIcon
 import app.absentmotion.ui.editor.panels.formatFixed
 import app.absentmotion.ui.theme.Am
+import app.absentmotion.ui.theme.Motion
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -132,9 +133,9 @@ internal fun trackRows(layer: Layer, sections: List<TrackSection>, panel: Timeli
 @Composable
 internal fun TimelineTrackTools(state: EditorState, panel: TimelineTrackPanelState, modifier: Modifier) {
     Row(modifier.height(44.dp).background(Am.Panel), verticalAlignment = Alignment.CenterVertically) {
-        val expand = state.scene.layers.any { it.kind != "audio" && it.id !in panel.expanded }
+        val expand = state.scene.layers.any { it.id !in panel.expanded }
         TrackCommand(stringResource(if (expand) R.string.timeline_tracks_expand_all else R.string.timeline_tracks_collapse_all), Modifier.weight(1f), enabled = !state.lookOnly) {
-            panel.expand(if (expand) state.scene.layers.filter { it.kind != "audio" }.map { it.id }.toSet() else emptySet())
+            panel.expand(if (expand) state.scene.layers.map { it.id }.toSet() else emptySet())
         }
         TrackCommand(stringResource(R.string.timeline_tracks_animated), Modifier.weight(1f), active = panel.animatedOnly) {
             panel.animatedOnly = !panel.animatedOnly
@@ -171,7 +172,7 @@ private fun TrackCommand(label: String, modifier: Modifier, active: Boolean = fa
 @Composable
 internal fun TimelineLayerControls(state: EditorState, layer: Layer, panel: TimelineTrackPanelState) {
     val opened = layer.id in panel.expanded
-    val turn by animateFloatAsState(if (opened) 90f else 0f, label = "layer-properties")
+    val turn by animateFloatAsState(if (opened) 90f else 0f, Motion.fast(), label = "layer-properties")
     val mb = layer.kind !in setOf("audio", "light", "camera", "nullobj")
     Row(Modifier.background(Am.Panel)) {
         LayerSwitch(if (layer.hidden) TimelineIcons.EyeOff else TimelineIcons.Eye, null, stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer), !layer.hidden, !state.lookOnly)
@@ -289,8 +290,9 @@ private fun TrackRing(state: EditorState, id: Long, sampleMs: Int, track: Timeli
                 lastEvent = time
                 val gain = 1 + 3 * (abs(drag.x) / density / (elapsed * 1.1f)).coerceIn(0f, 1f)
                 val step = drag.x / density * track.sensitivity() * gain * tier[index] / 100f
-                next = (next + step).coerceIn(track.lower, track.upper)
-                offset += drag.x
+                val requested = next + step
+                next = requested.coerceIn(track.lower, track.upper)
+                offset += drag.x * (if (requested == next) 1f else 0.18f)
                 val result = track.clamp(next)
                 if (floor(result) != floor(previous) && time - lastTick >= 34) {
                     tick(if (result == track.lower || result == track.upper) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
