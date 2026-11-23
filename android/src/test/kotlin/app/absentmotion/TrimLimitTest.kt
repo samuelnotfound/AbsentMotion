@@ -37,6 +37,8 @@ class TrimLimitTest {
         val shape = shapeLayer(end = 9999, children = listOf(XmlNode("transform", children = listOf(keys))))
         val full = Scene.create("t", 100, 100, 30, 0).add(shape)
         assertEquals(listOf(0, 150, 299), full.navigationStops(full.layer(1)))
+        val area = full.withWorkArea(90, 220)
+        assertEquals(listOf(0, 90, 220, 299), area.navigationStops(area.layer(1)))
         val trimmed = full.update(1) { full.trimEndAt(it, 149)!! }
         assertEquals(4999, trimmed.layer(1)!!.endTime)
         assertEquals(listOf(0, 149), trimmed.navigationStops(trimmed.layer(1)))
