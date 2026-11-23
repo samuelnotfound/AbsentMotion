@@ -31,7 +31,7 @@ The launcher icon is an own drawing, made by `tools/icon/make_icon.py` (source o
 | --- | --- |
 | Lucide only | 175 |
 | Lucide shapes plus own parts | 8 |
-| Own drawing only | 44 |
+| Own drawing only | 46 |
 | Tabler | 2 |
 | Simple Icons | 1 |
 | Material Symbols | 0 |
@@ -99,6 +99,8 @@ The launcher icon is an own drawing, made by `tools/icon/make_icon.py` (source o
 | `ui/editor/PanelIcons.kt` | `Animate` | own drawing | - | GPL-3.0 (own) | - | circle with three speed lines |
 | `ui/editor/PanelIcons.kt` | `TrimLeft` | own drawing | - | GPL-3.0 (own) | - | playhead, solid clip and dashed edges |
 | `ui/editor/PanelIcons.kt` | `TrimRight` | own drawing | - | GPL-3.0 (own) | - | mirror of TrimLeft |
+| `ui/editor/PanelIcons.kt` | `ExtendLeft` | own drawing | - | GPL-3.0 (own) | - | clip with an outward arrow |
+| `ui/editor/PanelIcons.kt` | `ExtendRight` | own drawing | - | GPL-3.0 (own) | - | mirror of ExtendLeft |
 | `ui/editor/PanelIcons.kt` | `Split` | Lucide | `scissors` | ISC | https://cdn.jsdelivr.net/npm/lucide-static@1.59.0/icons/scissors.svg | - |
 | `ui/editor/PanelIcons.kt` | `AudioMuted` | Lucide | `volume-x` | ISC | https://cdn.jsdelivr.net/npm/lucide-static@1.59.0/icons/volume-x.svg | - |
 | `ui/editor/PanelIcons.kt` | `Turtle` | Lucide | `turtle` | ISC | https://cdn.jsdelivr.net/npm/lucide-static@1.59.0/icons/turtle.svg | speed 0.3x to 0.75x |
