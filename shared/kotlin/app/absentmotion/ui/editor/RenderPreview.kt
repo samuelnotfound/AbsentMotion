@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -35,6 +36,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -59,6 +64,7 @@ import app.absentmotion.ui.theme.Presence
 import app.absentmotion.ui.theme.presence
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 
 const val RENDER_PREVIEW_TAG = "render_preview"
 
@@ -67,9 +73,13 @@ internal class LiveHandoff {
     var handoff by mutableLongStateOf(0L)
 }
 
-internal fun cacheMatches(state: EditorState, resources: Long): Boolean =
-    PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused && PreviewCache.key?.matchesFrames(PreviewCache.keyOf(state, resources)) == true && state.soloMode == 0 && !state.pixelMode &&
-        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && state.selectedId == null && MultiSelect.ids.isEmpty() && state.drawing == null && state.panel != EditorPanel.EditText
+internal fun cacheMatches(state: EditorState, resources: Long): Boolean {
+    val hasSelection = state.selectedId != null || MultiSelect.ids.isNotEmpty()
+    val selectionCanUseCache = !hasSelection || state.playing && state.selected?.kind != "camera" && state.panel != EditorPanel.Crop
+    return PreviewCache.phase == PreviewCache.Phase.Ready && !PreviewCache.paused &&
+        PreviewCache.key?.matchesFrames(PreviewCache.keyOf(state, resources)) == true && state.soloMode == 0 && !state.pixelMode &&
+        !state.gridMode && state.canvasZoom == 1f && state.canvasPan == Offset.Zero && selectionCanUseCache && state.drawing == null && state.panel != EditorPanel.EditText
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -141,7 +151,73 @@ internal fun CachedFrame(state: EditorState, usable: Boolean, live: LiveHandoff,
             dstSize = IntSize(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1)), filterQuality = FilterQuality.Low,
         )
     }
+    if (state.playing && covered && player.shown?.frame == frame) CachedSelection(state, frame, left, top, width, height)
 }
+
+private data class CachedLayerControls(val contour: Path, val corners: List<Offset>, val anchor: Offset?)
+
+@Composable
+private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Float, width: Float, height: Float) {
+    val scene = state.scene
+    val selected = state.selectedId
+    val ids = MultiSelect.ids.toList().ifEmpty { listOfNotNull(selected) }
+    if (ids.isEmpty()) return
+    val time = rememberUpdatedState(scene.frameStart(frame))
+    var controls by remember(scene, ids, selected, state.cameraMode) { mutableStateOf(emptyList<CachedLayerControls>()) }
+    LaunchedEffect(state, scene, ids, selected, state.cameraMode) {
+        snapshotFlow { time.value }.conflate().collect { ms ->
+            controls = ids.mapNotNull { id ->
+                val layer = scene.layerAt(id, ms)?.takeIf { it.activeAt(ms) } ?: return@mapNotNull null
+                val points = state.engine.layerQuad(id, ms) ?: return@mapNotNull null
+                val corners = List(4) { Offset(points[it * 2], points[it * 2 + 1]) }
+                if (corners.any { !it.x.isFinite() || !it.y.isFinite() }) return@mapNotNull null
+                val shape = layer.kind == "shape"
+                val projection = if (shape || id == selected) state.engine.layerMatrix(id, ms)?.let(::selectionMatrix) else null
+                val path = if (shape && projection != null) state.engine.layerOutline(id, ms)?.let { svg ->
+                    runCatching { PathParser().parsePathString(svg).toPath().apply { transform(projection) } }.getOrNull()
+                } else null
+                val contour = path ?: Path().apply {
+                    moveTo(corners[0].x, corners[0].y)
+                    corners.drop(1).forEach { lineTo(it.x, it.y) }
+                    close()
+                }
+                val anchor = if (id == selected) projection?.map(Offset(layer.pivot[0], layer.pivot[1])) else null
+                CachedLayerControls(contour, corners, anchor)
+            }
+        }
+    }
+    Canvas(Modifier.fillMaxSize()) {
+        val scaleX = width / scene.width
+        val scaleY = height / scene.height
+        val toScreen = Matrix(floatArrayOf(
+            scaleX, 0f, 0f, 0f,
+            0f, scaleY, 0f, 0f,
+            0f, 0f, 1f, 0f,
+            left, top, 0f, 1f,
+        ))
+        for ((contour, corners, anchor) in controls) {
+            val outline = Path().apply { addPath(contour); transform(toScreen) }
+            drawPath(outline, Color.Black.copy(alpha = 0.65f), style = Stroke(1.75.dp.toPx()))
+            drawPath(outline, Am.Accent, style = Stroke(1.dp.toPx()))
+            if (anchor == null || !anchor.x.isFinite() || !anchor.y.isFinite()) continue
+            drawCircle(Am.OnDarkDim, 2.dp.toPx(), toScreen.map(anchor), style = Stroke(1.dp.toPx()))
+            for (i in corners.indices) {
+                val next = corners[(i + 1) % corners.size]
+                for (point in listOf(corners[i], (corners[i] + next) / 2f)) {
+                    drawCircle(Color.Black, 3.5.dp.toPx(), toScreen.map(point))
+                    drawCircle(Am.OnDark, 2.75.dp.toPx(), toScreen.map(point))
+                }
+            }
+        }
+    }
+}
+
+private fun selectionMatrix(m: FloatArray): Matrix = Matrix(floatArrayOf(
+    m[0], m[3], 0f, m[6],
+    m[1], m[4], 0f, m[7],
+    0f, 0f, 1f, 0f,
+    m[2], m[5], 0f, m[8],
+))
 
 @Composable
 internal fun RenderPreviewNotes(state: EditorState, cachedPlaying: State<Boolean>, modifier: Modifier) {
