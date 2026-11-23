@@ -10,6 +10,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PreviewCacheTest {
+    @Test fun reportsMemoryAndStorageRunsAndReusesSpace() {
+        val directory = java.nio.file.Files.createTempDirectory("preview-spill-test").toFile()
+        FrameStore(0, budget = 12, spill = directory, memoryBudget = 4).use { store ->
+            assertTrue(store.put(2, byteArrayOf(1, 2, 3, 4)))
+            assertTrue(store.put(3, byteArrayOf(5, 6, 7, 8)))
+            assertTrue(store.put(4, byteArrayOf(9, 10, 11, 12)))
+            assertEquals(listOf(2..2), store.runs(onDisk = false))
+            assertEquals(listOf(3..4), store.runs(onDisk = true))
+            assertTrue(store[3]?.contentEquals(byteArrayOf(5, 6, 7, 8)) == true)
+            assertFalse(store.put(5, byteArrayOf(13)))
+            store.removeWhere { it == 3 }
+            assertTrue(store.put(5, byteArrayOf(13)))
+            assertEquals(listOf(4..5), store.runs(onDisk = true))
+        }
+        assertFalse(directory.exists())
+    }
+
     private val mib = 1L shl 20
 
     @Test fun theBudgetIsAShareOfTheMemoryClassWithAHardCap() {

@@ -2151,18 +2151,23 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
 
 private fun DrawScope.drawCacheBar(state: EditorState, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
     PreviewCache.revision
-    val runs = PreviewCache.runsFor(state)
-    if (runs.isEmpty()) return
+    val memory = PreviewCache.runsFor(state, onDisk = false)
+    val storage = PreviewCache.runsFor(state, onDisk = true)
+    if (memory.isEmpty() && storage.isEmpty()) return
     val height = CacheBarHeight.toPx()
     val top = rulerH - height - 1.dp.toPx()
-    clipRect(left = left) {
-        for (run in runs) {
-            val start = time.x(TimelineMath.frameTimeMs(run.first, fps))
-            val end = time.x(TimelineMath.frameTimeMs(run.last + 1, fps))
-            if (end < left || start > size.width) continue
-            drawRect(CacheBarColor, Offset(start, top), Size(end - start, height))
+    fun stripe(runs: List<IntRange>, color: Color) {
+        clipRect(left = left) {
+            for (run in runs) {
+                val start = time.x(TimelineMath.frameTimeMs(run.first, fps))
+                val end = time.x(TimelineMath.frameTimeMs(run.last + 1, fps))
+                if (end < left || start > size.width) continue
+                drawRect(color, Offset(start, top), Size(end - start, height))
+            }
         }
     }
+    stripe(memory, CacheBarColor)
+    stripe(storage, Color(0xFF48A4F2))
 }
 
 private fun DrawScope.drawRuler(time: TimeScale, fps: Int, lastFrame: Int, tickFrames: Int) {
