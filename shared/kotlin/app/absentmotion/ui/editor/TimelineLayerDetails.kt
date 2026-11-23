@@ -172,7 +172,7 @@ private fun TimelinePropertyTools(
     canEdit: Boolean, modifier: Modifier, onDismiss: () -> Unit,
 ) {
     val clocks = groupClocks(state.scene, groups) ?: return
-    val localTime = localTimelineTime(state.sampleMs, clocks)
+    val localTime = localTimelineTime(state.sampleMs, clocks) ?: return
     val frame = owner.frameAt(localTime)
     val time = owner.frameTime(frame)
     val member = owner.layerAt(layer.id, time) ?: return
@@ -192,11 +192,13 @@ private fun TimelinePropertyTools(
     val raw = if (ref == SpeedRef) "" else element?.valueAt(member.t) ?: fallback
     val typed = raw.split(',').map { it.trim().toFloatOrNull()?.takeIf { n -> n.isFinite() } }
     val numbers = when (ref) {
-        PropRef.Location -> if (member.uses3D) typed.take(3) else typed.take(2)
+        PropRef.Location -> member.location.take(if (member.uses3D) 3 else 2)
         PropRef.Rotation -> typed.map { it?.unaryMinus() }
         else -> typed
     }
-    val editable = canEdit && (ref != PropRef.Tilt || member.uses3D) && frame in owner.firstShownFrame(member.startTime)..owner.lastShownFrame(member.endTime) &&
+    val editable = canEdit && (ref != PropRef.Tilt || member.uses3D) &&
+        localTimelineTime(state.sampleMs, clocks, insideGroups = true) != null &&
+        frame in owner.firstShownFrame(member.startTime)..owner.lastShownFrame(member.endTime) &&
         element?.children?.none { it.name == "valueLink" } != false
     fun seek(localFrame: Int) {
         val host = clocks.asReversed().fold(owner.frameStart(localFrame).toDouble()) { ms, (group, fps) -> group.nestedHostTime(ms, fps) }
@@ -254,8 +256,14 @@ private fun groupClocks(scene: Scene, groups: List<Long>): List<Pair<Layer, Int>
     return clocks
 }
 
-private fun localTimelineTime(time: Int, clocks: List<Pair<Layer, Int>>): Int =
-    clocks.fold(time.toDouble()) { ms, (group, fps) -> group.nestedTime(ms, fps, quantize = false).ms }.roundToInt()
+private fun localTimelineTime(time: Int, clocks: List<Pair<Layer, Int>>, insideGroups: Boolean = false): Int? {
+    var ms = time.toDouble()
+    for ((group, fps) in clocks) {
+        if (insideGroups && (ms < group.startTime || ms > group.endTime)) return null
+        ms = group.nestedTime(ms, fps, quantize = false).ms
+    }
+    return ms.roundToInt()
+}
 
 private fun editTimelineLayer(
     state: EditorState, groups: List<Long>, id: Long, time: Int = state.sampleMs, change: (Scene, Layer, Int) -> Layer,
@@ -264,7 +272,8 @@ private fun editTimelineLayer(
     state.edit { scene ->
         val clocks = groupClocks(scene, groups)?.takeUnless { it.any { (group, _) -> group.locked } } ?: return@edit scene
         val owner = scene.focused(groups) ?: return@edit scene
-        val at = owner.frameTime(owner.frameAt(localTimelineTime(time, clocks)))
+        val local = localTimelineTime(time, clocks) ?: return@edit scene
+        val at = owner.frameTime(owner.frameAt(local))
         val layer = owner.layerAt(id, at)?.takeUnless { it.locked } ?: return@edit scene
         val next = change(owner, layer, at)
         if (next.node == layer.node) scene else scene.withFocused(groups, owner.update(id, at) { next })
