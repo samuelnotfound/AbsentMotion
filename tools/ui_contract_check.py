@@ -221,9 +221,13 @@ class UiContracts(unittest.TestCase):
         tools = source('ui/editor/LayerTools.kt')
         self.assertIn('if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null', tools)
         panel = source('ui/editor/panels/MoveTransformPanel.kt')
-        self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)', panel)
+        self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn, rulers)', panel)
         self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])
-        self.assertIn('TurnHook(state, turn)', panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0])
+        axes = panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0]
+        self.assertIn('TurnHook(state, turn)', axes)
+        self.assertIn('TransformRulers(state,', axes)
+        self.assertIn('RotationDial(state, values[axis]', axes)
+        self.assertIn('for (i in transformAxisOrder) NumberBox', axes)
 
     def test_media_search_opens_from_a_square_over_the_grid(self):
         text = source('ui/editor/MediaTab.kt')
