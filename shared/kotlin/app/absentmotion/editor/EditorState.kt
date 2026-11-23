@@ -399,6 +399,8 @@ class EditorState(
     var layerPoints by mutableStateOf<LayerPoints?>(null)
     var pivotEditing by mutableStateOf(false)
 
+    internal var rotateInLayerSpace by mutableStateOf<((Layer, Int, Float) -> FloatArray)?>(null)
+
     var turner by mutableStateOf<((drag: Offset, twist: Float) -> Unit)?>(null)
 
     var cropAspect by mutableStateOf<Float?>(null)

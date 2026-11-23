@@ -2129,17 +2129,16 @@ SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs) {
     return SiblingMatrix(scene.layers, layer, timeMs);
 }
 
-void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[42]) {
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[55]) {
     WorldMatrix(scene, layer, timeMs).get9(m);
     PlaneMatrix(scene.layers, layer, scene.width, scene.height, timeMs).get9(m + 9);
     const SkM44 pivot = LayerPivotMatrix(scene, layer, timeMs);
-    const SkM44 location = layer.spatial() && layer.kind != "camera" ? LayerLocationMatrix(scene, layer, timeMs) : SkM44();
     int i = 18;
-    for (const SkM44* matrix : {&pivot, &location}) {
-        for (int row : {0, 1, 3}) {
-            for (int col = 0; col < 4; ++col) m[i++] = matrix->rc(row, col);
-        }
+    for (int row : {0, 1, 3}) {
+        for (int col = 0; col < 4; ++col) m[i++] = pivot.rc(row, col);
     }
+    if (layer.spatial() && layer.kind != "camera") LayerGizmoMatrices(scene, layer, timeMs, m + 30);
+    else std::fill(m + 30, m + 55, 0.f);
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {

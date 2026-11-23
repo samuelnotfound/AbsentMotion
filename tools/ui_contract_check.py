@@ -256,7 +256,7 @@ class UiContracts(unittest.TestCase):
 
     def test_camera_view_refreshes_selection_quad(self):
         text = source('ui/editor/Preview.kt')
-        self.assertIn('LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange) {', text)
+        self.assertIn('LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange, showSpatialControls) {', text)
         self.assertIn('if (quadFor != Triple(state.selectedId, cropping, shownChange)) {', text)
         self.assertIn('snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest', text)
 
