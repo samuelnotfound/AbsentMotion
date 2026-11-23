@@ -151,13 +151,13 @@ internal fun CachedFrame(state: EditorState, usable: Boolean, live: LiveHandoff,
             dstSize = IntSize(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1)), filterQuality = FilterQuality.Low,
         )
     }
-    if (state.playing && covered && player.shown?.frame == frame) CachedSelection(state, frame, left, top, width, height)
+    if (state.playing && covered) CachedSelection(state, frame, left, top, width, height) { player.shown?.frame == frame }
 }
 
 private data class CachedLayerControls(val contour: Path, val corners: List<Offset>, val anchor: Offset?)
 
 @Composable
-private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Float, width: Float, height: Float) {
+private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Float, width: Float, height: Float, visible: () -> Boolean) {
     val scene = state.scene
     val selected = state.selectedId
     val ids = MultiSelect.ids.toList().ifEmpty { listOfNotNull(selected) }
@@ -187,6 +187,7 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
         }
     }
     Canvas(Modifier.fillMaxSize()) {
+        if (!visible()) return@Canvas
         val scaleX = width / scene.width
         val scaleY = height / scene.height
         val toScreen = Matrix(floatArrayOf(
