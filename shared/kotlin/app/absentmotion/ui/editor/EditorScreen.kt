@@ -222,7 +222,7 @@ private fun PhoneEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: 
                     (state.drawing as? app.absentmotion.editor.PointMode)?.let { PointOverlay(state, it, Modifier.fillMaxSize()) }
                     Presence(state.previewPanelOpen) { PreviewModePanel(state, Modifier.align(Alignment.CenterEnd).presence(slideX = 0.4f).tutorialGuard(any = true)) }
                     AnimateButton(state, Modifier.align(Alignment.BottomEnd))
-                    if (state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.BottomStart).padding(12.dp).tutorialTarget("transition"))
+                    if (state.settings.transitionInPreview || state.inlinePanelHidden) TransitionButton(state, Modifier.align(Alignment.BottomStart).padding(12.dp).tutorialTarget("transition"))
                     HistoryNotes(state, Modifier.align(Alignment.BottomCenter))
                 }
                 Box(Modifier.fillMaxWidth().height(46.dp).enterFade().tutorialTarget("playbar")) {
@@ -257,7 +257,8 @@ internal fun LowerPanels(state: EditorState, addLibrary: AddLibrary, top: Boolea
             state.drawing is app.absentmotion.editor.PointMode -> "points"
             state.addOpen -> "add"
             MultiSelect.active -> "multi"
-            state.selectedId == null -> "button"
+            state.inlineGraphOpen -> "inlineGraph"
+            !state.showsLayerInspector -> "button"
             state.panel == EditorPanel.Tools -> if (state.volumeOpen) "volume" to state.easingOpen else "tools"
             else -> state.panel to state.easingOpen
         },
@@ -269,8 +270,11 @@ internal fun LowerPanels(state: EditorState, addLibrary: AddLibrary, top: Boolea
             state.drawing is app.absentmotion.editor.PointMode -> Box(lower.height(PanelHeight).background(Am.Panel).tutorialTarget("panel")) { (state.drawing as? app.absentmotion.editor.PointMode)?.let { PointPanel(state, it) } }
             state.addOpen -> AddPopup(state, lower.height(AddPopupHeight).tutorialTarget("add_panel"), addLibrary)
             MultiSelect.active -> MultiBar(state, lower.height(48.dp))
-            state.selectedId == null -> {
-                if (transitionHere && !state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.BottomEnd).padding(bottom = 58.dp).tutorialTarget("transition"), fromEnd = true)
+            state.inlineGraphOpen -> app.absentmotion.ui.editor.panels.PhoneFit(lower.height(PanelHeight).tutorialTarget("panel")) {
+                app.absentmotion.ui.editor.panels.EasingPanel(state, Modifier.fillMaxSize())
+            }
+            !state.showsLayerInspector -> {
+                if (transitionHere && !state.inlinePanelHidden && !state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.BottomEnd).padding(bottom = 58.dp).tutorialTarget("transition"), fromEnd = true)
                 AddButton(state, Modifier.align(Alignment.BottomEnd).tutorialTarget("add"))
             }
             state.volumeOpen && state.panel == EditorPanel.Tools -> key(state.selectedId) { app.absentmotion.ui.editor.panels.PhoneFit(lower.height(PanelHeight).tutorialTarget("panel")) { VolumePanel(state, Modifier.fillMaxSize()) } }

@@ -81,7 +81,7 @@ internal fun WideEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: 
         val timeline = (maxHeight - 88.dp - 260.dp).coerceIn(140.dp, 320.dp)
         val textEdit = state.panel == EditorPanel.EditText && state.selectedId?.let { state.scene.layer(it) }?.kind == "text"
         val textUi = remember { TextEditUi() }
-        val side = textEdit || (state.selectedId != null && !state.addOpen && !MultiSelect.active)
+        val side = textEdit || (state.showsLayerInspector && !state.addOpen && !MultiSelect.active)
         val reserve = if (side) SideWidth else 0.dp
         Column(Modifier.fillMaxSize().then(if (side) Modifier else Modifier.imePadding())) {
             EditorTopBar(state, onExit, Modifier.fillMaxWidth().height(42.dp).enterFade().tutorialGuard(any = true))
@@ -120,7 +120,7 @@ internal val LeftRailWidth = 55.dp
 private fun RailEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: AddLibrary, timeline: Dp, dock: Dp?) {
     val textEdit = state.panel == EditorPanel.EditText && state.selectedId?.let { state.scene.layer(it) }?.kind == "text"
     val textUi = remember { TextEditUi() }
-    val layerSide = textEdit || state.drawing is app.absentmotion.editor.PointMode || MultiSelect.active || (state.selectedId != null && !state.addOpen)
+    val layerSide = textEdit || state.drawing is app.absentmotion.editor.PointMode || MultiSelect.active || (state.showsLayerInspector && !state.addOpen)
     SideEffect { if (state.previewPanelOpen) state.previewPanelOpen = false }
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().padding(end = if (dock == null) SideWidth + SideRailWidth else SideRailWidth)) {

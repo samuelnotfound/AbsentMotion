@@ -52,7 +52,9 @@ struct Anim {
     int linkStart = 0, linkEnd = 0, linkRole = 0;
     int64_t linkOwner = 0;
 
-    bool empty() const { return value.empty() && keys.empty() && links.empty(); }
+    std::vector<Anim> axes;
+
+    bool empty() const { return value.empty() && keys.empty() && links.empty() && axes.empty(); }
     float get(int i, float t, float fallback) const;
     bool steady(float from, float to) const;
 };

@@ -344,14 +344,26 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun withProp(name: String, type: String, vararg values: Float): Layer = withProp(name, type, formatFloats(values))
 
-    fun element(ref: PropRef): XmlNode? = when (ref.kind) {
+    fun element(ref: PropRef): XmlNode? {
+        val index = ref.component ?: return propertyElement(ref)
+        return propertyElement(ref)?.axisTrack(index, ref.axisDefaults())
+    }
+
+    internal fun propertyElement(ref: PropRef): XmlNode? = when (ref.kind) {
         PropRef.Kind.Effect -> effects.getOrNull(ref.effectIndex)?.effectProperty(ref.name)
         PropRef.Kind.Transform -> node.child("transform")?.child(ref.name)
         PropRef.Kind.Child -> node.path(ref.name)
         PropRef.Kind.Property -> node.children.firstOrNull { it.name == "property" && it["name"] == ref.name }
     }
 
-    internal fun withElement(ref: PropRef, element: XmlNode): Layer = copy(
+    internal fun withElement(ref: PropRef, element: XmlNode): Layer {
+        val index = ref.component ?: return withPropertyElement(ref, element)
+        val property = propertyElement(ref) ?: XmlNode(ref.name, mapOf("value" to ref.axisDefaults()))
+        if (property.children.any { it.name == "valueLink" && (it["component"]?.toIntOrNull() ?: 0) == index }) return this
+        return withPropertyElement(ref, property.withAxis(index, element))
+    }
+
+    private fun withPropertyElement(ref: PropRef, element: XmlNode): Layer = copy(
         node = when (ref.kind) {
             PropRef.Kind.Effect -> withEffect(ref.effectIndex) { effect ->
                 val old = effect.effectProperty(ref.name)
@@ -369,11 +381,11 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun keyframes(ref: PropRef): List<Keyframe> = element(ref)?.keyframes ?: emptyList()
 
-    fun onKeyframe(ref: PropRef): Boolean = (element(ref)?.keyframeAt(snap) ?: -1) >= 0
+    fun onKeyframe(ref: PropRef): Boolean = element(ref)?.hasVectorKeyAt(snap) == true
 
     fun withKeyframeToggled(ref: PropRef, fallback: String): Layer {
         val element = element(ref) ?: XmlNode(ref.name, mapOf("value" to fallback))
-        return withElement(ref, element.withKeyframeToggled(t, snap))
+        return withElement(ref, element.withVectorKeyToggled(t, snap))
     }
 
     fun easing(ref: PropRef): Easing? {
