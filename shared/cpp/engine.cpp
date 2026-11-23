@@ -232,7 +232,7 @@ public:
     void flushPartial();
     bool layerQuad(int64_t layerId, double timeMs, float xy[8]) override;
     bool propertyNumbers(int64_t layerId, int effect, const std::string& name, double timeMs, float values[3]) override;
-    bool layerMatrix(int64_t layerId, double timeMs, float m[30]) override;
+    bool layerMatrix(int64_t layerId, double timeMs, float m[42]) override;
     bool layerBounds(int64_t layerId, double timeMs, float ltrb[4]) override;
     int64_t hitTest(float x, float y, double timeMs) override;
     bool still(double timeMs, int width, int height, std::vector<uint8_t>* rgba) override;
@@ -1424,7 +1424,7 @@ bool EngineImpl::propertyNumbers(int64_t layerId, int effect, const std::string&
     return layer && PropertyNumbers(*layer, effect, name, timeMs, values);
 }
 
-bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[30]) {
+bool EngineImpl::layerMatrix(int64_t layerId, double timeMs, float m[42]) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
     SetEditorCamera(fEditorCamera);
@@ -1478,6 +1478,7 @@ bool EngineImpl::previewStill(double timeMs, int width, int height, bool accurat
     if (fScene.width <= 0) return false;
     const bool previousCamera = CameraViewOn();
     SetCameraView(camera);
+    SetLayerShutterPreview(true);
     const bool made = this->offscreen(width, height, false, [&](SkCanvas* canvas) {
         canvas->scale((float)width / fScene.width, (float)height / fScene.height);
         const LayerEffects fx = this->layerEffects();
@@ -1486,6 +1487,7 @@ bool EngineImpl::previewStill(double timeMs, int width, int height, bool accurat
         SetFastShutterBlur(false);
     }, rgba);
     SetFastShutterBlur(false);
+    SetLayerShutterPreview(false);
     SetCameraView(previousCamera);
     return made;
 }

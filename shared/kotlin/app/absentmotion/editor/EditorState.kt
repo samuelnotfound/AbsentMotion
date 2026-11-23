@@ -384,6 +384,7 @@ class EditorState(
 
     var layerPoints by mutableStateOf<LayerPoints?>(null)
     var pivotEditing by mutableStateOf(false)
+    internal var fastTrackPreview by mutableStateOf(false)
 
     var turner by mutableStateOf<((drag: Offset, twist: Float) -> Unit)?>(null)
 

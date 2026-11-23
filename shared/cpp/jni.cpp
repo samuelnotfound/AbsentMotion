@@ -332,14 +332,14 @@ JNIEXPORT jfloatArray JNICALL JNI_FN(nativePropertyNumbers)(JNIEnv* env, jclass,
 }
 
 JNIEXPORT jfloatArray JNICALL JNI_FN(nativeLayerMatrix)(JNIEnv* env, jclass, jlong engine, jlong layerId, jdouble timeMs) {
-    float m[30];
+    float m[42];
     if (!engineOf(engine)->layerMatrix(layerId, timeMs, m)) return nullptr;
-    jfloatArray out = env->NewFloatArray(30);
+    jfloatArray out = env->NewFloatArray(42);
     if (!out) {
         env->ExceptionClear();
         return nullptr;
     }
-    env->SetFloatArrayRegion(out, 0, 30, m);
+    env->SetFloatArrayRegion(out, 0, 42, m);
     return out;
 }
 

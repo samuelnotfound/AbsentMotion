@@ -1514,7 +1514,9 @@ void DrawShuttered(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     const bool restricted = !(shutter.position && shutter.scale && shutter.rotation);
     FrozenScope scope(restricted ? &frozen : gFrozen);
     SkPaint composite;
-    const double lead = shutter.trailing ? 0 : open / 2;
+    const double lead = shutter.layerSetting
+        ? 1000.0 / std::max(gScene ? gScene->fps : 30, 1) * (shutter.phase + shutter.angle) / 360
+        : shutter.trailing ? 0 : open / 2;
     if (shutter.fast) {
         const SkPoint middle = ShapePath(l, l.localTime(timeMs)).getBounds().center();
         const SkVector moved = SiblingMatrix(siblings, l, timeMs + lead).mapPoint(middle) -
@@ -1719,7 +1721,7 @@ void DrawOne(SkCanvas* canvas, const std::vector<Layer>& siblings, const Layer& 
         return;
     }
     ShutterBlur shutter;
-    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter) && !SeesPrevious(siblings, l)) {
+    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter, gScene) && !SeesPrevious(siblings, l)) {
         DrawShuttered(canvas, siblings, l, timeMs, pictures, ov, shutter);
         return;
     }
@@ -2129,14 +2131,17 @@ SkMatrix WorldMatrix(const Scene& scene, const Layer& layer, double timeMs) {
     return SiblingMatrix(scene.layers, layer, timeMs);
 }
 
-void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[30]) {
+void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float m[42]) {
     WorldMatrix(scene, layer, timeMs).get9(m);
     PlaneMatrix(scene.layers, layer, scene.width, scene.height, timeMs).get9(m + 9);
-    const SkM44 pivot = LayerPivotMatrix(scene, layer, timeMs);
     int i = 18;
-    for (int row : {0, 1, 3}) {
-        for (int col = 0; col < 4; ++col) m[i++] = pivot.rc(row, col);
-    }
+    const auto append = [&](const SkM44& matrix) {
+        for (int row : {0, 1, 3}) {
+            for (int col = 0; col < 4; ++col) m[i++] = matrix.rc(row, col);
+        }
+    };
+    append(LayerPivotMatrix(scene, layer, timeMs));
+    append(layer.spatial() ? LayerLocationMatrix(scene, layer, timeMs) : SkM44());
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {
@@ -2221,7 +2226,7 @@ bool Mixable(const std::vector<Layer>& layers, const Layer& l, double timeMs) {
     if (std::any_of(l.borders.begin(), l.borders.end(), [](const Edge& e) { return e.enabled; })) return false;
     Echo echo;
     ShutterBlur shutter;
-    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter)) return false;
+    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter, gScene)) return false;
     const bool effects = EffectsApply(layers, l);
     if (effects && (gEffects->lifted(l) || gEffects->behind(l) || (gEffects->spills && gEffects->spills(l, timeMs)))) return false;
     const float t = l.localTime(timeMs);
