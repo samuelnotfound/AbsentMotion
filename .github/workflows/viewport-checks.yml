@@ -46,3 +46,19 @@ jobs:
         run: |
           clang++ -std=c++20 -fno-rtti -fsyntax-only -Ithird_party/skia -Ishared/cpp \
             shared/cpp/camera.cpp shared/cpp/model.cpp shared/cpp/styles.cpp shared/cpp/preview.cpp
+
+  android-compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install the Android compile SDK
+        shell: bash
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Compile the Android editor
+        shell: bash
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          ./gradlew :app:compileFossDebugKotlin --no-daemon
