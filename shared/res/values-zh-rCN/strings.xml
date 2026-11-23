@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">抠图时会设置边缘。如需更改，请重新运行去除背景，将从原始照片重新开始。</string>
     <string name="prerender">预渲染</string>
     <string name="prerender_progress">正在预渲染 %1$d%%</string>
-    <string name="prerender_playing">已预渲染</string>
     <string name="prerender_outdated">预渲染已过期。</string>
     <string name="prerender_again">重新预渲染</string>
     <string name="caption_outline_thickness">粗细</string>

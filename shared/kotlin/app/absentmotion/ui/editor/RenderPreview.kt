@@ -13,9 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -118,19 +116,6 @@ internal fun PreRenderCell(state: EditorState, modifier: Modifier) {
             },
             fontSize = 10.sp, lineHeight = 11.sp, maxLines = 2, textAlign = TextAlign.Center,
         )
-    }
-}
-
-@Composable
-internal fun PreRenderBadge(cachedPlaying: State<Boolean>, modifier: Modifier) {
-    Presence(cachedPlaying.value && !PreviewCache.automatic) {
-        Row(
-            modifier.presence().padding(10.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xB3222222)).padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(Am.Accent))
-            Text(stringResource(R.string.prerender_playing), Modifier.padding(start = 5.dp), color = Am.OnDark, fontSize = 11.sp, maxLines = 1)
-        }
     }
 }
 

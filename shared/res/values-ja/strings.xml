@@ -2195,7 +2195,6 @@
     <string name="cutout_edge_photo">縁は切り抜きの作成時に設定されます。変更するには「背景を削除」をもう一度実行してください。元の写真からやり直します。</string>
     <string name="prerender">事前レンダリング</string>
     <string name="prerender_progress">事前レンダリング中 %1$d%%</string>
-    <string name="prerender_playing">事前レンダリング済み</string>
     <string name="prerender_outdated">事前レンダリングが古くなっています。</string>
     <string name="prerender_again">もう一度事前レンダリング</string>
     <string name="caption_outline_thickness">太さ</string>

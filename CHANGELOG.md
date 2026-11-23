@@ -21,6 +21,10 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Selection** outlines show the projected bounds of every selected layer.
 - **Group layers** use orange bars in the timeline.
 
+### Removed
+
+- The **Pre-rendered** badge during preview playback.
+
 ### Fixed
 
 - **2D compositing** follows timeline order. 3D effects still draw inside a flat layer, with X/Y tilt and Z movement disabled on the layer itself. Active camera views hide flat layers. Older XML projects can have saved Z movement or X/Y rotation on layers that open flat because 3D is off. Those values are preserved, and turning on **3D** makes them active again.
