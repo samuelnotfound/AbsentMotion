@@ -168,29 +168,33 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
     val kind = still?.kind
     Column(modifier.background(Am.Panel).deskVerticalScroll().padding(start = 62.px, top = 42.px, end = 62.px)) {
         Row(Modifier.fillMaxWidth().height(107.px)) {
-            SmallTool(PanelIcons.Speed, stringResource(R.string.a11y_speed), Modifier.width(183.px), ToolShape, enabled = still?.mediaFill?.video == true || still?.kind == "audio") { state.panel = EditorPanel.Speed }
+            SmallTool(PanelIcons.Speed, stringResource(R.string.a11y_speed), Modifier.width(125.px), ToolShape, enabled = still?.mediaFill?.video == true || still?.kind == "audio") { state.panel = EditorPanel.Speed }
             Spacer(Modifier.width(17.px))
             Row(Modifier.weight(1f).fillMaxHeight(), Arrangement.spacedBy(3.px)) {
                 val clipStart = still?.startTime
                 val clipEnd = still?.endTime
                 val past by remember(state, clipEnd) { derivedStateOf { clipEnd != null && state.sampleMs > clipEnd } }
                 val before by remember(state, clipStart) { derivedStateOf { clipStart != null && state.timeMs < clipStart } }
-                if (!past) SmallTool(PanelIcons.TrimLeft, stringResource(if (before) R.string.a11y_extend_start else R.string.a11y_trim_start), Modifier.weight(1f), ToolShape.copy(topEnd = Square, bottomEnd = Square)) {
-                    if (before) state.moveClipEdges(false, true) else state.trimStart()
-                }
-                val middle = when { past -> ToolShape.copy(topEnd = Square, bottomEnd = Square); before -> ToolShape.copy(topStart = Square, bottomStart = Square); else -> RoundedCornerShape(0.dp) }
-                SmallTool(if (past) ChromeIcons.SkipForward else if (before) ChromeIcons.SkipBack else PanelIcons.Split, stringResource(if (past || before) R.string.a11y_move_to_playhead else R.string.a11y_split), Modifier.weight(1f).tutorialTarget("tool_split"), middle) {
+                val inside = still != null && !before && !past
+                val middle = RoundedCornerShape(0.dp)
+                SmallTool(ChromeIcons.SkipBack, stringResource(R.string.a11y_extend_start), Modifier.weight(1f), ToolShape.copy(topEnd = Square, bottomEnd = Square),
+                    enabled = before, iconSize = 20.dp) { state.moveClipEdges(end = false, extend = true) }
+                SmallTool(PanelIcons.TrimLeft, stringResource(R.string.a11y_trim_start), Modifier.weight(1f), middle,
+                    enabled = inside, iconSize = 20.dp) { state.trimStart() }
+                SmallTool(if (past) ChromeIcons.SkipForward else if (before) ChromeIcons.SkipBack else PanelIcons.Split, stringResource(if (past || before) R.string.a11y_move_to_playhead else R.string.a11y_split), Modifier.weight(1f).tutorialTarget("tool_split"), middle,
+                    enabled = still != null, iconSize = 20.dp) {
                     if (past || before) state.moveClipEdges(past, false) else state.split()
                 }
-                if (!before) SmallTool(PanelIcons.TrimRight, stringResource(if (past) R.string.a11y_extend_end else R.string.a11y_trim_end), Modifier.weight(1f), ToolShape.copy(topStart = Square, bottomStart = Square)) {
-                    if (past) state.moveClipEdges(true, true) else state.trimEnd()
-                }
+                SmallTool(PanelIcons.TrimRight, stringResource(R.string.a11y_trim_end), Modifier.weight(1f), middle,
+                    enabled = inside, iconSize = 20.dp) { state.trimEnd() }
+                SmallTool(ChromeIcons.SkipForward, stringResource(R.string.a11y_extend_end), Modifier.weight(1f), ToolShape.copy(topStart = Square, bottomStart = Square),
+                    enabled = past, iconSize = 20.dp) { state.moveClipEdges(end = true, extend = true) }
             }
             Spacer(Modifier.width(17.px))
             val sound = still?.let { it.kind == "audio" || it.mediaFill?.video == true } == true
             val silent by remember(state) { derivedStateOf { (state.selected?.gain ?: 1f) <= 0f } }
             val muted = !sound || silent
-            SmallTool(if (muted) PanelIcons.AudioMuted else AudioIcons.Speaker, stringResource(R.string.volume_volume), Modifier.width(183.px).tutorialTarget("tool_volume"), ToolShape,
+            SmallTool(if (muted) PanelIcons.AudioMuted else AudioIcons.Speaker, stringResource(R.string.volume_volume), Modifier.width(125.px).tutorialTarget("tool_volume"), ToolShape,
                 enabled = sound, iconSize = if (muted) 24.dp else 32.dp) { state.volumeOpen = true }
         }
         Spacer(Modifier.height(28.px))
