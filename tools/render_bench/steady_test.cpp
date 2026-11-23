@@ -89,9 +89,11 @@ int main() {
     am::LayerEffect pieces;
     pieces.id = "absent.scatter3d";
     particles.effects = {pieces};
-    Expect(!runtime.active(particles), "3D effects are bypassed on flat layers");
+    Expect(runtime.active(particles), "3D effects draw on flat layers");
+    input[2] = particles;
+    am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
+    Expect(output[1].id == 1 && output[2].id == 8 && output[3].id == 2 && !output[2].spatial(), "scatter does not move a flat layer into scene depth");
     particles.force3d = true;
-    Expect(runtime.active(particles), "3D effects resume with the layer toggle");
     particles.effects.clear();
     input[2] = particles;
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);

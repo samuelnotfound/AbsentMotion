@@ -955,8 +955,6 @@ std::string EffectRuntime::load(const std::string& xml) {
     auto root = ParseXml(xml, &error);
     if (!root || root->name != "effect" || !root->attr("id")) return "shader error: bad definition " + error;
     Definition d;
-    const char* category = root->attr("category");
-    d.spatial = category && std::string_view(category) == "3d";
     for (const auto& c : root->children) {
         if (c->name != "param" || !c->attr("name")) continue;
         d.defaults[c->attr("name")] = ParseAnimNode(c.get());
@@ -997,7 +995,6 @@ std::string EffectRuntime::load(const std::string& xml) {
         d.timed = (result.effect->findUniform("time") && Mentions(sksl, "time") > 1) || result.effect->findUniform("beat") ||
                   result.effect->findUniform("beatTime") || result.effect->findUniform("beatIndex");
         const bool oriented = result.effect->findUniform("orient") != nullptr;
-        d.spatial = d.spatial || oriented;
         if (added || oriented) NoteOrientedEffect(id, oriented);
         d.palette = result.effect->findChild("palette") != nullptr;
         d.matrix = result.effect->findChild("thresholds") != nullptr;
@@ -1011,10 +1008,6 @@ std::string EffectRuntime::load(const std::string& xml) {
 const EffectRuntime::Definition* EffectRuntime::find(const std::string& id) const {
     auto d = fDefinitions.find(id);
     return d == fDefinitions.end() ? nullptr : &d->second;
-}
-
-bool EffectRuntime::allowed(const Layer& layer, const LayerEffect& effect, const Definition* definition) const {
-    return !effect.hidden && (layer.spatial() || (!pieces3d::IsEffect(effect.id) && !(definition && definition->spatial)));
 }
 
 int EffectRuntime::method(const LayerEffect& e, const Definition* d, float t) const {
@@ -1043,7 +1036,7 @@ int EffectRuntime::diffusing(const Layer& layer, int lift, float t) const {
     for (size_t k = (size_t)(lift + 1); k < layer.effects.size(); k++) {
         const LayerEffect& e = layer.effects[k];
         const Definition* d = e.hidden ? nullptr : find(e.id);
-        if (allowed(layer, e, d) && d && d->shader && d->palette && d->matrix && method(e, d, t) >= kDiffuse) return (int)k;
+        if (d && d->shader && d->palette && d->matrix && method(e, d, t) >= kDiffuse) return (int)k;
     }
     return -1;
 }
@@ -1062,15 +1055,16 @@ bool EffectRuntime::grabs(const std::vector<Layer>& layers) const {
     return std::any_of(layers.begin(), layers.end(), [&](const Layer& l) {
         return std::any_of(l.effects.begin(), l.effects.end(), [&](const LayerEffect& e) {
             const Definition* d = e.hidden ? nullptr : find(e.id);
-            return allowed(l, e, d) && (pieces3d::IsEffect(e.id) || (d && d->palette && d->matrix && mayDiffuse(e, d)));
+            return !e.hidden && (pieces3d::IsEffect(e.id) || (d && d->palette && d->matrix && mayDiffuse(e, d)));
         }) || grabs(l.inner());
     });
 }
 
 bool EffectRuntime::active(const Layer& layer) const {
     return std::any_of(layer.effects.begin(), layer.effects.end(), [&](const LayerEffect& e) {
+        if (e.hidden) return false;
         const Definition* d = find(e.id);
-        return allowed(layer, e, d) && (BuiltIn(e.id) || pieces3d::IsEffect(e.id) || (d && d->shader));
+        return BuiltIn(e.id) || pieces3d::IsEffect(e.id) || (d && d->shader);
     });
 }
 
@@ -1099,7 +1093,7 @@ bool EffectRuntime::spills(const Layer& layer, double timeMs) const {
 bool EffectRuntime::needs(const Layer& layer, bool Definition::*input) const {
     return std::any_of(layer.effects.begin(), layer.effects.end(), [&](const LayerEffect& e) {
         const Definition* d = e.hidden ? nullptr : find(e.id);
-        return allowed(layer, e, d) && d && (d->shader || BuiltIn(e.id)) && d->*input;
+        return d && (d->shader || BuiltIn(e.id)) && d->*input;
     });
 }
 
@@ -1132,9 +1126,9 @@ sk_sp<SkImage> EffectRuntime::held(SkCanvas* canvas, const Scene& scene, const L
 
 bool EffectRuntime::reaches(const Layer& layer) const {
     return std::any_of(layer.effects.begin(), layer.effects.end(), [&](const LayerEffect& e) {
-        const Definition* d = find(e.id);
-        if (!allowed(layer, e, d) || e.id == kLift) return false;
+        if (e.hidden || e.id == kLift) return false;
         if (BuiltIn(e.id)) return true;
+        const Definition* d = find(e.id);
         return d && d->shader && (!d->pointwise || d->blurred);
     });
 }
@@ -1155,7 +1149,6 @@ bool EffectRuntime::steady(const Layer& layer, float from, float to) const {
 }
 
 bool EffectRuntime::turnCorners(const Layer& layer, double timeMs, SkPoint corners[4]) const {
-    if (!layer.spatial()) return false;
     const LayerEffect* turned = nullptr;
     const Definition* d = nullptr;
     for (const LayerEffect& e : layer.effects) {
@@ -1227,9 +1220,9 @@ sk_sp<SkImageFilter> EffectRuntime::chain(const Scene& scene, const Layer& layer
     const auto pointwiseAfter = [&](size_t from) {
         for (size_t j = from; j < end; j++) {
             const LayerEffect& next = layer.effects[j];
-            const Definition* d = find(next.id);
-            if (!allowed(layer, next, d) || next.id == kLift || (layer.video && next.id == "absent.datamosh")) continue;
+            if (next.hidden || next.id == kLift || (layer.video && next.id == "absent.datamosh")) continue;
             if (next.id == kPuppet || BuiltIn(next.id)) return false;
+            const Definition* d = find(next.id);
             if (d && d->shader && (!d->pointwise || d->blurred)) return false;
         }
         return true;
@@ -1237,8 +1230,8 @@ sk_sp<SkImageFilter> EffectRuntime::chain(const Scene& scene, const Layer& layer
     for (size_t k = from >= 0 ? (size_t)from : before >= 0 ? 0 : (size_t)(liftAt(layer) + 1); k < end; k++) {
         const LayerEffect& e = layer.effects[k];
         at = k;
+        if (e.hidden || e.id == kLift || (layer.video && e.id == "absent.datamosh")) continue;
         const Definition* d = find(e.id);
-        if (!allowed(layer, e, d) || e.id == kLift || (layer.video && e.id == "absent.datamosh")) continue;
         const auto* defaults = d ? &d->defaults : nullptr;
         if (e.id == kPuppet) {
             f = PuppetFilter(e, defaults, t, timeMs, area, placed, bounds, f ? f->computeFastBounds(drawn) : drawn, reach, f);
@@ -1415,7 +1408,7 @@ bool EffectRuntime::draw(SkCanvas* canvas, const Scene& scene, const Layer& laye
         if (bounded) *bounded = drawn.isEmpty() ? SkRect::MakeEmpty() : drawn.makeOffset(at.left(), at.top());
         return SkImageFilters::Picture(std::move(picture), drawn);
     };
-    if (layer.spatial() && lift < 0 && std::any_of(layer.effects.begin(), layer.effects.end(), [](const LayerEffect& e) { return !e.hidden && pieces3d::IsEffect(e.id); })) {
+    if (lift < 0 && std::any_of(layer.effects.begin(), layer.effects.end(), [](const LayerEffect& e) { return !e.hidden && pieces3d::IsEffect(e.id); })) {
         std::function<void(SkCanvas*)> current = source;
         int from = 0, last = -1;
         depth::Pass* const pass = depth::Active() && depth::Active()->target == &layer ? depth::Active() : nullptr;
@@ -1640,7 +1633,7 @@ bool EffectRuntime::draw(SkCanvas* canvas, const Scene& scene, const Layer& laye
         bool glowOnly = true;
         for (const LayerEffect& e : layer.effects) {
             const Definition* d = find(e.id);
-            if (!allowed(layer, e, d) || !(BuiltIn(e.id) || (d && d->shader))) continue;
+            if (e.hidden || !(BuiltIn(e.id) || (d && d->shader))) continue;
             if (e.id != "absent.glow") { glowOnly = false; break; }
             reach += GlowExtent([&](const char* name, int i, float fallback) { return Value(e, d ? &d->defaults : nullptr, name, i, t, fallback); });
         }

@@ -850,7 +850,7 @@ float Highest(const LayerEffect& e, const char* name, float fallback) {
     return most > -1e30f ? most : fallback;
 }
 
-particles::Settings ParticleSettings(const LayerEffect& e, float t, bool spatial) {
+particles::Settings ParticleSettings(const LayerEffect& e, float t) {
     particles::Settings s;
     const auto v = [&](const char* name, float fallback) { return Setting(e, name, t, fallback); };
     const auto pick = [&](const char* name, int most) { return std::clamp((int)std::lround(v(name, 0)), 0, most); };
@@ -860,9 +860,9 @@ particles::Settings ParticleSettings(const LayerEffect& e, float t, bool spatial
     s.beatEvery = 1 << pick("beats", 2);
     s.follow = pick("orientation", 1) == 1;
     s.prewarm = v("prewarm", 1) >= 0.5f;
-    s.depth = spatial && v("depth", 0) >= 0.5f;
-    s.zSpeed = s.depth ? v("zSpeed", 0) : 0;
-    s.zSpread = s.depth ? v("zSpread", 0) : 0;
+    s.depth = v("depth", 0) >= 0.5f;
+    s.zSpeed = v("zSpeed", 0);
+    s.zSpread = v("zSpread", 0);
     s.perspective = v("perspective", 1);
     s.rate = v("rate", 40);
     s.count = v("count", 100);
@@ -1059,7 +1059,7 @@ void DrawParticles(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     field.fps = Fps();
     field.origin = l.startTime / 1000.0;
     if (gScene) field.beats = gScene->beats;
-    field.at = [&](double s) { return ParticleSettings(e, (float)(s * 1000 / length), l.spatial()); };
+    field.at = [&](double s) { return ParticleSettings(e, (float)(s * 1000 / length)); };
     const SkRect box = path.getBounds();
     const int emitter = std::clamp((int)std::lround(Setting(e, "emitter", t, 1)), 0, 3);
     const float reach = std::max(0.0f, Setting(e, "emitterSize", t, 1));
@@ -1127,7 +1127,7 @@ void DrawParticles(SkCanvas* canvas, const std::vector<Layer>& siblings, const L
     std::vector<particles::Particle> list;
     particles::Simulate(field, std::max(0.0, (l.steppedMs(timeMs) - l.startTime) / 1000.0), &list);
     if (list.empty()) return;
-    const particles::Settings look = ParticleSettings(e, t, l.spatial());
+    const particles::Settings look = ParticleSettings(e, t);
     const bool layered = look.kind == particles::kLayer;
     Sprite sprite;
     if (layered) {

@@ -363,8 +363,7 @@ private fun renderAddedEffectPicture(native: NativeEngine, definition: EffectDef
         val media = MediaDeclaration(XmlNode("media", mapOf("uri" to uri, "width" to "${sample.width}", "height" to "${sample.height}")))
         val size = 256
         val scene = Scene.create("", size, size, 30, 0)
-        val source = checkNotNull(scene.imageLayer(media, 0, 1))
-        val layer = source.copy(node = source.node.with("threeD", "true")).addEffect(definition.instance())
+        val layer = checkNotNull(scene.imageLayer(media, 0, 1)).addEffect(definition.instance())
         check(native.setPicture(uri, sample))
         native.setScene(scene.add(layer, listOf(media)).toXml())
         val rgba = checkNotNull(native.still(100.0, size, size))
