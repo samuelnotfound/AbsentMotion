@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -28,12 +27,10 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.absentmotion.R
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.InlineSection
@@ -61,6 +58,10 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 
 private val GroupRowHeight = 28.dp
+private val GroupIconWidth = 22.dp
+private val GroupDisclosureWidth = 26.dp
+private val GroupSidebarStart = 4.dp
+private val GroupSidebarEnd = 2.dp
 
 internal class TimelineGroupRow(
     val layer: Layer, val owner: Scene, val groups: List<Long>, private val clocks: List<Pair<Layer, Int>>,
@@ -129,23 +130,24 @@ internal fun TimelineGroupContents(
             val open = isExpanded(row.path)
             val selected = state.selectedId == layer.id && state.selectedGroups == row.groups
             val controls = open || selected
-            val sidebarWidth = if (controls) 210.dp else 166.dp
+            val icons = if (controls) 4 else 2
+            val sidebarWidth = indent + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * icons
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
             Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected) Am.Field else Am.TimelineBg)) {
                 GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize())
                 Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
-                    .clip(RoundedCornerShape(50)).background(Am.Button).padding(start = 4.dp, end = 2.dp),
+                    .clip(RoundedCornerShape(50)).background(Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
                     verticalAlignment = Alignment.CenterVertically) {
                     val visibility = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
                     val toggleVisibility = if (row.editable && !state.lookOnly) Modifier.inlineTap {
                         state.editGroupMember(row) { it.withHidden(!it.hidden) }
                     } else Modifier
-                    Box(Modifier.size(22.dp).then(toggleVisibility), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(GroupIconWidth).then(toggleVisibility), contentAlignment = Alignment.Center) {
                         PanelIcon(if (layer.hidden) TimelineIcons.EyeOff else TimelineIcons.Eye, Am.OnDarkDim,
                             size = 16.dp, description = visibility)
                     }
-                    Box(Modifier.size(26.dp).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(GroupDisclosureWidth).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
                         PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
                             if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
                     }
@@ -154,7 +156,7 @@ internal fun TimelineGroupContents(
                         val lockAction = if (!state.lookOnly && row.parentsUnlocked) Modifier.inlineTap {
                             state.editGroupMember(row) { it.withLock(if (it.node["lock"] == null) "all" else null) }
                         } else Modifier
-                        Box(Modifier.size(22.dp).then(lockAction), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(GroupIconWidth).then(lockAction), contentAlignment = Alignment.Center) {
                             PanelIcon(if (layer.locked || layer.timingLocked) TimelineIcons.Lock else TimelineIcons.LockOpen,
                                 Am.OnDarkDim, size = 13.dp, description = lockLabel)
                         }
@@ -162,17 +164,17 @@ internal fun TimelineGroupContents(
                         val toggle3d = if (!state.lookOnly && row.editable && layer.canToggle3D) Modifier.inlineTap {
                             state.editGroupMember(row) { it.copy(node = it.node.with("threeD", if (it.uses3D) null else "true")) }
                         } else Modifier
-                        Box(Modifier.size(22.dp).then(toggle3d), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(GroupIconWidth).then(toggle3d), contentAlignment = Alignment.Center) {
                             PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
                                 size = 14.dp, description = dimension)
                         }
                     }
-                    Box(Modifier.size(22.dp).then(layerTap), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size(GroupIconWidth).then(layerTap).semantics { contentDescription = layer.shownName() },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
                     }
-                    Text(layer.shownName(), Modifier.weight(1f).then(layerTap)
-                        .padding(start = 5.dp, end = 5.dp), color = if (layer.hidden) Am.OnDarkDim else Am.OnDark,
-                        fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             row.details?.let { sections ->
