@@ -796,15 +796,17 @@ private sealed interface Hit {
 
     data class Key(val key: InlineKey) : Hit
     data class Bar(val id: Long) : Hit
+    data class GroupBar(val row: TimelineGroupRow) : Hit
     data class Header(val id: Long) : Hit
     data class Grip(val id: Long, val start: Boolean) : Hit
     data class Handle(val id: Long) : Hit
     data class Row(val id: Long) : Hit
 }
 
-private enum class Drag(val edit: Boolean = false) { Scrub, Scroll, Pinch, Spent, Select, TrimStart(true), TrimEnd(true), Reorder(true), Lift(true), KeyBox(true), GroupBox(true), Keys(true), WorkAreaStart(true), WorkAreaEnd(true) }
+private enum class Drag(val edit: Boolean = false) { Scrub, Scroll, Pinch, Spent, Select, TrimStart(true), TrimEnd(true), Reorder(true), Lift(true), KeyBox(true), GroupBox(true), GroupClip(true), Keys(true), WorkAreaStart(true), WorkAreaEnd(true) }
 
 private const val MOVE_EDIT = "clip-move"
+private const val GROUP_CLIP_EDIT = "group-clip-move"
 private const val KEYFRAME_HOLD_MS = 250L
 
 
@@ -819,7 +821,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
     val rowH = RowHeight.px
     var coordinates: LayoutCoordinates? = null
     var headerDp by mutableFloatStateOf(DeskTimelineControls.headerDp)
-    val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
+    val headerWidth: Float get() = if (deskLayout) headerDp.coerceAtLeast(MinDesktopHeader) * scale else HeaderWidth.px
     fun showsLayerControls(layer: Layer): Boolean =
         (!state.editingGroupMember && state.showsLayerInspector && layer.id == state.selectedId) ||
             layer.id in MultiSelect.rootIds || inlinePosition(layer)
@@ -1342,7 +1344,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.Inline || hit is Hit.Cube || hit is Hit.CollapseTransforms || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Inline || hit is Hit.Cube || hit is Hit.CollapseTransforms || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit is Hit.GroupBar || hit == Hit.Readout || hit == Hit.Ruler
     }
 
     fun clipId(hit: Hit): Long? = when (hit) {
@@ -1632,7 +1634,13 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val row = rowAt(at.y)
         val layer = layerAt(row) ?: return Hit.Empty
         keyAt(at, row, layer)?.let { return Hit.Key(it) }
-        if (at.y >= rowTop(row) + rowH) return Hit.InlineBody
+        if (at.y >= rowTop(row) + rowH) {
+            val (child, top) = groupRowAt(at) ?: return Hit.InlineBody
+            if (at.y >= top + child.headerHeightPx(density) || at.x < child.sidebarWidth(state, expandedPath(child.path)).px) return Hit.InlineBody
+            val hostTime = timeScale().time(at.x)
+            val span = child.visibleRange()
+            return if (!span.isEmpty() && hostTime >= span.first && hostTime < span.last + 1.0f) Hit.GroupBar(child) else Hit.InlineBody
+        }
         val time = timeScale()
         val left = time.x(layer.startTime.toFloat())
         val right = time.x(layer.endTime + 1f)
@@ -1674,6 +1682,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             is Hit.Inline -> if (MultiSelect.active) select(hit.id) else toggleInlinePosition(hit.id)
             is Hit.Cube -> if (MultiSelect.active) select(hit.id) else state.toggleLayer3D(hit.id)
             is Hit.CollapseTransforms -> if (MultiSelect.active) select(hit.id) else state.toggleCollapseTransforms(hit.id)
+            is Hit.GroupBar -> openGroupRow(hit.row, null)
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
@@ -1799,6 +1808,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             Drag.Scroll -> scrollBy(delta.y)
             Drag.KeyBox -> updateKeyBox(at)
             Drag.GroupBox -> updateGroupBox(at)
+            Drag.GroupClip -> updateGroupClip(at)
             Drag.Keys -> updateKeyMove(at)
             Drag.TrimStart, Drag.TrimEnd -> {
                 trimBy(delta.x, start = drag == Drag.TrimStart)
@@ -1832,6 +1842,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
             if (lifted) revealRow(dragId) else state.cancelGesture("reorder")
         }
         if (drag == Drag.Select) endSelect()
+        if (drag == Drag.GroupClip) {
+            if (!lifted) state.cancelGesture(GROUP_CLIP_EDIT)
+            groupClipDrag = null
+        }
         if (drag == Drag.KeyBox || drag == Drag.GroupBox) {
             if (drag == Drag.GroupBox && MultiSelect.ids.isEmpty()) MultiSelect.clear()
             keyBox = null
@@ -1979,6 +1993,69 @@ private class TimelineView(val state: EditorState, private val density: Density,
                 moveApply()
             }
             if (!deskLayout) scrubBy(-moved * timeScale().pxPerMs)
+        }
+    }
+
+    private class GroupClipDrag(
+        val row: TimelineGroupRow, val start: Offset, val others: List<Layer>, val snap: Set<Int>,
+        var horizontal: Boolean? = null,
+    )
+
+    private var groupClipDrag: GroupClipDrag? = null
+
+    fun startGroupClip(row: TimelineGroupRow, at: Offset): Drag {
+        if (!row.editable || state.lookOnly) {
+            state.hint(R.string.layer_locked_hint)
+            return Drag.Spent
+        }
+        state.playing = false
+        val selected = if (MultiSelect.active && MultiSelect.groups == row.groups && row.layer.id in MultiSelect.ids)
+            row.owner.layers.filter { it.id != row.layer.id && it.id in MultiSelect.ids } else emptyList()
+        val targets = TimelineMath.snapTargets(row.owner, selected.mapTo(mutableSetOf(row.layer.id)) { it.id },
+            row.owner.frameAt(row.localTime(state.sampleMs)))
+        groupClipDrag = GroupClipDrag(row, at, selected, targets)
+        return Drag.GroupClip
+    }
+
+    private fun updateGroupClip(at: Offset) {
+        val drag = groupClipDrag ?: return
+        val delta = at - drag.start
+        if (drag.horizontal == null) {
+            if (delta.getDistance() <= 4.dp.px) return
+            drag.horizontal = abs(delta.x) > abs(delta.y)
+        }
+        val row = drag.row
+        val id = row.layer.id
+        val groups = row.groups
+        if (drag.horizontal == false) {
+            val target = groupRowAt(at)?.first?.takeIf { it.groups == groups && it.layer.id != id } ?: return
+            state.edit(GROUP_CLIP_EDIT) { project ->
+                val owner = project.focused(groups) ?: return@edit project
+                val index = owner.layers.indexOfFirst { it.id == target.layer.id }
+                if (index < 0) project else project.withFocused(groups, owner.reorder(id, index))
+            }
+            return
+        }
+        if ((listOf(row.layer) + drag.others).any { it.timingLocked }) {
+            lockHint = R.string.layer_timing_locked_hint
+            showLockHint()
+            return
+        }
+        val time = timeScale()
+        fun local(x: Float) = row.localTime(time.time(x).roundToInt())
+        val wanted = row.layer.startTime + (local(at.x) - local(drag.start.x)).toFloat()
+        val zone = abs(local(at.x + SnapZone.px) - local(at.x)).toFloat()
+        val base = row.owner
+        val from = base.firstShownFrame(row.layer.startTime)
+        val length = base.lastShownFrame(row.layer.endTime) + 1 - from
+        val span = (row.layer.endTime + 1 - row.layer.startTime).toFloat()
+        val next = TimelineMath.moveTarget(wanted, span, length, if (snapDisabled) emptySet() else drag.snap, base.fps, zone,
+            TimelineMath.earliestClipMove(base, row.layer, drag.others))
+        val frame = next.frame.coerceAtMost(maxOf(base.lastFrame, from))
+        state.edit(GROUP_CLIP_EDIT) { project ->
+            val owner = project.focused(groups) ?: return@edit project
+            val moved = TimelineMath.movedClips(owner, row.layer, drag.others, frame)
+            if (moved == owner) project else project.withFocused(groups, moved)
         }
     }
 
@@ -2282,6 +2359,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                     is Hit.Locked -> view.state.hint(R.string.layer_locked_hint)
                     is Hit.Grip -> { view.selectDesktop(h.id, false, false); drag = view.beginDrag(h, Offset.Zero) }
                     is Hit.WorkAreaEdge -> drag = view.beginDrag(h, Offset.Zero)
+                    is Hit.GroupBar -> if (plain) drag = view.startGroupClip(h.row, at)
                     is Hit.Bar -> {
                         if (plain) {
                             view.selectDesktop(h.id, false, false)
@@ -2379,7 +2457,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    is Hit.Inline, is Hit.Cube, is Hit.CollapseTransforms, is Hit.Key, Hit.InlineBody, Hit.Readout -> view.tap(h)
+                    is Hit.Inline, is Hit.Cube, is Hit.CollapseTransforms, is Hit.Key, is Hit.GroupBar, Hit.InlineBody, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }
@@ -2415,7 +2493,7 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
     val groupHold = if (dismissing) null else view.groupMarqueeRow(down.position)
     val keyHold = !view.state.lookOnly && !dismissing && view.canBoxKeys(hit, down.position)
     val holdable = !view.state.lookOnly && !dismissing &&
-        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Bar || keyHold || groupHold != null)
+        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Bar || hit is Hit.GroupBar || keyHold || groupHold != null)
     val longPress = viewConfiguration.longPressTimeoutMillis
     val deadline = down.uptimeMillis + if (keyHold || groupHold != null) minOf(KEYFRAME_HOLD_MS, longPress) else longPress
     try {
@@ -2437,6 +2515,7 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
                         view.openLockMenu(hit.id)
                         held = true
                     }
+                    hit is Hit.GroupBar -> drag = view.startGroupClip(hit.row, down.position)
                     hit is Hit.Row && view.lift(hit.id, finger, viewConfiguration.touchSlop, moves = false) -> drag = Drag.Lift
                     hit is Hit.Bar && view.lift(hit.id, finger, viewConfiguration.touchSlop, moves = true) -> drag = Drag.Lift
                     view.longPress(hit, finger.y, viewConfiguration.touchSlop) -> drag = Drag.Select

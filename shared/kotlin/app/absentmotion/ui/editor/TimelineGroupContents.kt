@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -262,7 +263,10 @@ private fun GroupMemberClip(
                     }
                 }
             }
-            if (onOpen != null) Box(Modifier.inlineTap(onOpen).semantics { contentDescription = layer.shownName() })
+            if (onOpen != null) Box(Modifier.semantics {
+                contentDescription = layer.shownName()
+                onClick { onOpen(); true }
+            })
         },
     ) { measurables, constraints ->
         val width = constraints.maxWidth
