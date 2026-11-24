@@ -1,3 +1,5 @@
+## This is an experimental fork of the Absent Motion app, and modified for my personal use. Until I finish and fully integrate the features I personally use, I will then make some pull request to fix the bugs that I have encountered while using the original app. 
+
 <p align="center">
   <img src="docs/logo.png" alt="AbsentMotion" width="128" height="128">
 </p>
