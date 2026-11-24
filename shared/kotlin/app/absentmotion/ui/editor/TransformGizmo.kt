@@ -21,7 +21,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 internal const val TRANSFORM_GIZMO = "transform-gizmo"
-private const val GizmoRadius = 38f
+private const val GizmoRadius = 52f
 
 private val AxisColors = listOf(Color(0xFFFF7570), Color(0xFF80DA87), Color(0xFF77B9FF))
 private val GizmoShadow = Color.Black.copy(alpha = 0.7f)
@@ -34,7 +34,7 @@ internal fun ScaleAxes(projection: PivotProjection, point: FloatArray, scale: Fl
         for ((axis, base) in AxisColors.withIndex()) {
             val tip = axes.handle(axis) ?: continue
             val color = base.copy(alpha = if (axis == 2) 0.44f else 1f)
-            drawLine(GizmoShadow, centre, tip, 4.dp.toPx(), StrokeCap.Round)
+            drawLine(GizmoShadow, centre, tip, 5.dp.toPx(), StrokeCap.Round)
             drawLine(color, centre, tip, 1.5.dp.toPx(), StrokeCap.Round)
             if (axis < 2) {
                 val half = 3.5.dp.toPx()
@@ -115,7 +115,7 @@ internal class SpatialGizmo(
         if ((at - pivot).getDistance() <= 10 * density) return depthHandle
         return (0..2).filter { it != depthHandle }.mapNotNull { i ->
             arms[i]?.let { tip -> i to distanceToSegment(pivot, tip.at, at).first }
-        }.minByOrNull { it.second }?.takeIf { it.second <= 8 * density }?.first
+        }.minByOrNull { it.second }?.takeIf { it.second <= 12 * density }?.first
     }
 
     fun move(axis: Int, travel: Offset): FloatArray {
@@ -189,30 +189,30 @@ internal class SpatialGizmo(
         for ((axis, color) in AxisColors.withIndex()) {
             val tip = arms[axis] ?: continue
             if (axis == depthHandle) {
-                drawCircle(GizmoShadow, 5.5.dp.toPx(), pivot.at, style = Stroke(3.dp.toPx()))
-                drawCircle(color, 5.5.dp.toPx(), pivot.at, style = Stroke(2.dp.toPx()))
+                drawCircle(GizmoShadow, 7.dp.toPx(), pivot.at, style = Stroke(3.dp.toPx()))
+                drawCircle(color, 7.dp.toPx(), pivot.at, style = Stroke(2.dp.toPx()))
                 continue
             }
             val vector = tip.at - pivot.at
             val length = vector.getDistance()
             if (length <= 0.5.dp.toPx()) continue
             val direction = vector / length
-            val back = tip.at - direction * minOf(7.dp.toPx(), length * 0.35f)
-            val cross = Offset(-direction.y, direction.x) * minOf(3.dp.toPx(), length * 0.18f)
+            val back = tip.at - direction * minOf(11.dp.toPx(), length * 0.36f)
+            val cross = Offset(-direction.y, direction.x) * minOf(5.dp.toPx(), length * 0.21f)
             val base = project(pointOnAxis(axis, -reach * 0.70f))
             fun arm(a: GizmoPoint, b: GizmoPoint, positive: Boolean) {
                 fun paint(alpha: Float) {
-                    val tint = color.copy(alpha = alpha * if (positive) 1f else 0.55f)
-                    drawLine(GizmoShadow.copy(alpha = GizmoShadow.alpha * alpha), a.at, b.at, 4.dp.toPx(), StrokeCap.Round)
-                    drawLine(tint, a.at, b.at, 1.6.dp.toPx(), StrokeCap.Round)
+                    val tint = color.copy(alpha = alpha * if (positive) 1f else 0.66f)
+                    drawLine(GizmoShadow.copy(alpha = GizmoShadow.alpha * alpha), a.at, b.at, 5.dp.toPx(), StrokeCap.Round)
+                    drawLine(tint, a.at, b.at, 2.2.dp.toPx(), StrokeCap.Round)
                     if (positive) {
-                        drawLine(tint, back - cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
-                        drawLine(tint, back + cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
+                        drawLine(tint, back - cross, tip.at, 2.2.dp.toPx(), StrokeCap.Round)
+                        drawLine(tint, back + cross, tip.at, 2.2.dp.toPx(), StrokeCap.Round)
                     }
                 }
                 if (surface != null && occluded(a, b)) {
                     clipPath(surface, ClipOp.Difference) { paint(1f) }
-                    clipPath(surface) { paint(0.45f) }
+                    clipPath(surface) { paint(0.62f) }
                 } else paint(1f)
             }
             if (base != null) arm(base, pivot, false)

@@ -2123,6 +2123,7 @@ static SkRect FrameBounds(const Layer& layer, double timeMs, const SkMatrix& mat
         bounds.setBounds({corners, 4});
         return bounds.isFinite() ? bounds : SkRect::MakeEmpty();
     }
+    if (cropped && layer.kind == "nullobj") return matrix.mapRect(SkRect::MakeLTRB(-50, -50, 50, 50));
     if (layer.kind != "embedScene") {
         const float t = layer.localTime(timeMs);
         SkRect crop;
