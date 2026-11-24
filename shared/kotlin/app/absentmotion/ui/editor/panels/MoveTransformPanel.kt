@@ -60,7 +60,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.KeypadField
-import app.absentmotion.editor.KeyTarget
 import app.absentmotion.editor.KeypadRequest
 import app.absentmotion.engine.SnapGuide
 import app.absentmotion.editor.centred
@@ -90,8 +89,12 @@ import app.absentmotion.ui.HoldName
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = layer.positionDimensionsSeparated || state.settings.positionRulers())
-            1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
+            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers(layer.positionDimensionsSeparated))
+            1, 3 -> when {
+                turn == null -> RotationTab(state, layer)
+                state.settings.rotateFree -> TurnTab(state, layer, turn)
+                else -> AxesTab(state, layer, turn)
+            }
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)
             else -> PivotTab(state, layer, onFlip)
@@ -791,34 +794,11 @@ private fun FlipHint(text: String) {
 @Composable
 private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     val separated = turn.effect < 0 && layer.rotationDimensionsSeparated
-    val focus = if (turn.effect < 0) state.inlineProperty?.takeIf {
-        it.copy(component = null) == PropRef.Tilt || it == PropRef.Rotation || it == PropRef.RotationXYZ
-    } else null
-    var axis by remember(layer.id, focus, separated) { mutableIntStateOf(focus?.component ?: 2) }
-    fun target(which: Int) = when {
-        turn.effect >= 0 -> turn.target(which)
-        !separated -> KeyTarget(PropRef.RotationXYZ, "0,0,0")
-        which < 2 -> KeyTarget(PropRef.Tilt.copy(component = which), "0")
-        else -> turn.target(which)
-    }
-    SideEffect {
-        state.inlineTransformAxis = axis
-        state.keyTarget = target(axis)
-    }
+    val axis = state.inlineTransformAxis
+    SideEffect { state.keyTarget = turn.target(layer, axis) }
     TurnHook(state, turn)
     val values = turn.values(layer)
-    fun openKeypad(which: Int) {
-        axis = which
-        val axes = if (separated) listOf(which) else transformAxisOrder
-        val fields = axes.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
-        state.keypad = KeypadRequest(fields, axes.indexOf(which)) { applied ->
-            state.editSelected { current ->
-                val next = turn.values(current)
-                axes.forEachIndexed { index, component -> next[component] = applied[index] }
-                turn.withValues(current, next)
-            }
-        }
-    }
+    fun select(which: Int) { state.inlineTransformAxis = which }
     fun colour(which: Int) = if (turn.effect < 0 && !separated || which == axis) Am.Accent else Am.OnDark
     fun drag(which: Int, amount: Float) {
         state.editSelected(key = "axis-$which") { l ->
@@ -830,9 +810,9 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     fun reset(which: Int) {
         state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
     }
-    TransformRulers(state, ::colour, { formatFixed(values[it], 1) + "º" }, ::openKeypad,
-        { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset,
-        activeAxis = axis.takeIf { separated }, keyed = { layer.onKeyframe(target(it).ref) })
+    TransformRulers(state, ::colour, { formatFixed(values[it], 1) + "º" }, { turn.openKeypad(state, layer, it) },
+        ::select, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset,
+        activeAxis = axis.takeIf { separated }, keyed = { layer.onKeyframe(turn.target(layer, it).ref) })
 }
 
 @Composable
