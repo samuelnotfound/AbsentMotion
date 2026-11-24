@@ -234,6 +234,7 @@ public:
     bool propertyNumbers(int64_t layerId, int effect, const std::string& name, double timeMs, float values[3]) override;
     bool layerMatrix(int64_t layerId, double timeMs, float m[55]) override;
     bool layerBounds(int64_t layerId, double timeMs, float ltrb[4]) override;
+    std::vector<float> modelJoints(int64_t layerId, double timeMs) override;
     int64_t hitTest(float x, float y, double timeMs) override;
     bool still(double timeMs, int width, int height, std::vector<uint8_t>* rgba) override;
     bool previewStill(double timeMs, int width, int height, bool accurateBlur, bool camera, std::vector<uint8_t>* rgba) override;
@@ -1444,6 +1445,13 @@ bool EngineImpl::layerBounds(int64_t layerId, double timeMs, float ltrb[4]) {
     ltrb[0] = bounds.left(); ltrb[1] = bounds.top();
     ltrb[2] = bounds.right(); ltrb[3] = bounds.bottom();
     return !bounds.isEmpty();
+}
+
+std::vector<float> EngineImpl::modelJoints(int64_t layerId, double timeMs) {
+    const SceneScope scope(fScene);
+    SetCameraView(fCameraView);
+    const Layer* layer = fScene.layer(layerId);
+    return layer && layer->kind == "model" ? ModelJoints(fScene.layers, *layer, fScene.width, fScene.height, timeMs, fScene.depthOrder) : std::vector<float>{};
 }
 
 int64_t EngineImpl::hitTest(float x, float y, double timeMs) {
