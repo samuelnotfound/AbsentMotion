@@ -14,6 +14,7 @@ import app.absentmotion.model.Scene
 import app.absentmotion.model.SpeedRef
 import app.absentmotion.model.XmlNode
 import app.absentmotion.model.axis
+import app.absentmotion.model.axisDefaults
 import app.absentmotion.model.axisTrack
 import app.absentmotion.model.effects
 import app.absentmotion.model.isKeyframed
@@ -52,7 +53,12 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: P
     }
     val xyz = if (layer.uses3D) "XYZ" else "XY"
     val rotate = AppText.get(R.string.a11y_tab_rotate)
-    vector(PropRef.Location, AppText.get(R.string.panel_position), xyz, "0,0,0")
+    val position = AppText.get(R.string.panel_position)
+    if (layer.positionDimensionsSeparated) {
+        vector(PropRef.Location, position, xyz, PropRef.Location.axisDefaults())
+    } else if (active == PropRef.Location || layer.propertyElement(PropRef.Location)?.isKeyframed == true) {
+        transform += InlineTrack(PropRef.Location, position)
+    }
     if (active == PropRef.Rotation || layer.propertyElement(PropRef.Rotation)?.isKeyframed == true) {
         transform += InlineTrack(PropRef.Rotation, if (layer.uses3D) "Z $rotate" else rotate, -1f, "°")
     }

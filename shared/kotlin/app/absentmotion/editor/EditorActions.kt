@@ -211,6 +211,21 @@ fun EditorState.skipForward() {
     if (next == null || next >= scene.lastFrame) parkAtEnd() else frame = next
 }
 
+internal fun EditorState.togglePositionDimensions() {
+    endGesture()
+    val layer = selected?.takeUnless { it.locked } ?: return
+    val separated = !layer.positionDimensionsSeparated
+    val updated = layer.withPositionDimensionsSeparated(separated)
+    if (updated == null) {
+        hint(R.string.position_join_requires_matching_keys)
+        return
+    }
+    editSelected { updated }
+    if (inlineProperty?.copy(component = null) == PropRef.Location) {
+        inlineProperty = if (separated) PropRef.Location.copy(component = inlineTransformAxis) else PropRef.Location
+    }
+}
+
 fun EditorState.resetTransform(tabs: List<Int>) {
     if (tabs == listOf(5)) return resetPivot()
     editSelected { scene.resetTransform(it, sampleMs, tabs) }

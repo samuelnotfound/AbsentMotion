@@ -107,22 +107,29 @@ private fun EditorState.inlineComponent(ref: PropRef): Int? =
 private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?, rulers: Boolean) {
     val at = layer.location
     val spatial = layer.uses3D
+    val separated = layer.positionDimensionsSeparated
     val focus = state.inlineComponent(PropRef.Location)
-    var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
+    var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf((focus ?: 0).coerceAtMost(if (spatial) 2 else 1)) }
     SideEffect { state.inlineTransformAxis = activeAxis }
     val depth = spatial && activeAxis == 2
-    fun Layer.updatePosition(x: Float, y: Float, z: Float): Layer =
-        withTransformAxes(PropRef.Location, x, y, z)
-    fun colour(which: Int) = if (activeAxis == which) Am.Accent else Am.OnDark
-    val deep by rememberUpdatedState(depth)
+    fun colour(which: Int): Color {
+        val active = if (separated || depth) activeAxis == which else which < 2
+        return if (active) Am.Accent else Am.OnDark
+    }
+    val axis by rememberUpdatedState(activeAxis)
     fun openKeypad(active: Int) {
         activeAxis = active
-        val axes = if (spatial) transformAxisOrder else listOf(0, 1)
+        val axes = when {
+            separated -> listOf(active)
+            spatial -> transformAxisOrder
+            else -> listOf(0, 1)
+        }
         val fields = axes.map { KeypadField("XYZ"[it].toString(), at[it]) }
-        state.keypad = KeypadRequest(fields, axes.indexOf(active)) { v ->
-            state.editSelected {
-                if (spatial) it.updatePosition(v[0], v[1], v[2])
-                else it.updatePosition(v[0], v[1], it.location[2])
+        state.keypad = KeypadRequest(fields, axes.indexOf(active)) { values ->
+            state.editSelected { current ->
+                val position = current.location.copyOf()
+                axes.forEachIndexed { index, component -> position[component] = values[index] }
+                current.withTransform("location", *position)
             }
         }
     }
@@ -148,6 +155,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             var travel = Offset.Zero
             var shown = Offset.Zero
             var straight = TrackpadAlignment()
+            var dragAxis: Int? = null
             var scale = 1f
             fun done() { state.snapGuides = emptyList(); state.endGesture(); rulerTip(context) }
             detectDragGestures(
@@ -155,18 +163,22 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                     scale = if (timing.heldBeforeMoving(android.os.SystemClock.uptimeMillis(), viewConfiguration.longPressTimeoutMillis)) FINE_FACTOR else 1f
                     axes = if (state.playing) SnapAxis(emptyList()) to SnapAxis(emptyList()) else start()
                     origin = now.location; travel = Offset.Zero; shown = Offset.Zero; straight = TrackpadAlignment()
-                    state.snapGuides = if (deep || state.playing) emptyList() else axes.first.guidesAt(0f) + axes.second.guidesAt(0f)
+                    dragAxis = axis.takeIf { it == 2 || now.positionDimensionsSeparated }
+                    state.snapGuides = if (dragAxis == 2 || state.playing) emptyList() else axes.first.guidesAt(0f) + axes.second.guidesAt(0f)
                 },
                 onDragEnd = ::done, onDragCancel = ::done,
             ) { change, drag ->
                 change.consume()
-                if (deep) {
-                    travel += drag / density * scale
-                    state.editSelected(key = "move-z") { l -> l.updatePosition(origin[0], origin[1], origin[2] - travel.y) }
+                travel += drag / density * scale
+                if (dragAxis == 2) {
+                    state.editSelected(key = "move-z") { l -> l.withTransform("location", l.location[0], l.location[1], origin[2] - travel.y) }
                     return@detectDragGestures
                 }
-                travel += drag / density * scale
-                val aligned = if (state.playing) travel else straight.constrain(travel)
+                val aligned = when (dragAxis) {
+                    0 -> Offset(travel.x, 0f)
+                    1 -> Offset(0f, travel.y)
+                    else -> if (state.playing) travel else straight.constrain(travel)
+                }
                 val snapped = if (state.playing) aligned else Offset(
                     if (aligned.x == 0f) 0f else axes.first.map(aligned.x),
                     if (aligned.y == 0f) 0f else axes.second.map(aligned.y),
@@ -176,7 +188,11 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 val guides = if (state.playing) emptyList() else axes.first.guidesAt(snapped.x) + axes.second.guidesAt(snapped.y)
                 if (guides.any { it !in state.snapGuides }) tick(HapticFeedbackType.SegmentTick)
                 state.snapGuides = if (state.playing) emptyList() else guides
-                if (step != Offset.Zero) state.editSelected(key = "move") { l -> l.updatePosition(origin[0] + snapped.x, origin[1] + snapped.y, l.location[2]) }
+                if (step != Offset.Zero) state.editSelected(key = "move") { l ->
+                    val x = if (dragAxis == 1) l.location[0] else origin[0] + snapped.x
+                    val y = if (dragAxis == 0) l.location[1] else origin[1] + snapped.y
+                    l.withTransform("location", x, y, l.location[2])
+                }
             }
         }),
     ) {
@@ -186,14 +202,14 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
-                        l.updatePosition(v[0], v[1], v[2])
+                        l.withTransform("location", *v)
                     }
                 },
                 onReset = { which ->
                     state.editSelected { l ->
                         val home = state.scene.centred(l, state.sampleMs).location
                         val v = l.location.copyOf().also { it[which] = home[which] }
-                        l.updatePosition(v[0], v[1], v[2])
+                        l.withTransform("location", *v)
                     }
                 },
             )
@@ -201,7 +217,12 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             TrackpadCorners()
             Box(if (deskLayout) Modifier.fillMaxWidth().height(app.absentmotion.ui.editor.PanelHeight) else Modifier.matchParentSize(), Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    TrackpadHint(stringResource(if (depth) R.string.drag_to_move_along_z else R.string.drag_here_to_move_the_layer), Modifier)
+                    val hint = when {
+                        depth -> stringResource(R.string.drag_to_move_along_z)
+                        separated -> stringResource(R.string.position_drag_axis, "XYZ"[activeAxis].toString())
+                        else -> stringResource(R.string.drag_here_to_move_the_layer)
+                    }
+                    TrackpadHint(hint, Modifier)
                     if (onFlip != null && !depth) FlipHint(stringResource(R.string.transform_double_tap_pivot))
                 }
             }

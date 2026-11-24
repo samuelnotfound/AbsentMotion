@@ -99,6 +99,34 @@ internal fun XmlNode.withAxis(index: Int, track: XmlNode): XmlNode =
     copy(children = children.filterNot { it.name == "axis" && it["index"]?.toIntOrNull() == index } +
         track.copy(name = "axis").with("index", index.toString()))
 
+internal fun XmlNode.joinPositionAxes(): XmlNode? {
+    val axes = children.filter { it.name == "axis" }
+    if (axes.isEmpty()) return this
+    val indices = axes.map { it["index"]?.toIntOrNull() }
+    if (indices.any { it == null || it !in 0..2 } || indices.toSet().size != axes.size) return null
+    if (axes.any { axis ->
+            axis.attrs.keys.any { it != "index" && it != "value" } ||
+                axis.children.any { it.name != "kf" || it.children.isNotEmpty() }
+        }) return null
+
+    val legacyKeys = children.filter { it.name == "kf" }
+    if (legacyKeys.any { key -> key.children.isNotEmpty() || key.attrs.keys.any { it !in KnownKeyAttributes } }) return null
+    if ((listOf(this["value"]) + legacyKeys.map { it["v"] }).any { (it?.count { char -> char == ',' } ?: 0) > 2 }) return null
+
+    val tracks = (0..2).map { axisTrack(it, PropRef.Location.axisDefaults()) }
+    val keys = tracks.map { it.keyframes }
+    val shared = keys.firstOrNull { it.isNotEmpty() }.orEmpty()
+    val structure = shared.map { it.copy(v = "") }
+    if (keys.any { it.isNotEmpty() && it.map { key -> key.copy(v = "") } != structure }) return null
+
+    val joined = copy(children = children.filterNot { it.name == "axis" || it.name == "kf" })
+    val values = tracks.map { it["value"] ?: "0" }
+    if (shared.isEmpty()) return joined.with("value", values.joinToString(","))
+    return joined.withKeyframes(shared.mapIndexed { index, key ->
+        key.copy(v = keys.indices.joinToString(",") { axis -> keys[axis].getOrNull(index)?.v ?: values[axis] })
+    })
+}
+
 internal fun PropRef.axisDefaults(): String = when (copy(component = null)) {
     PropRef.Scale -> "1,1"
     else -> "0,0,0"

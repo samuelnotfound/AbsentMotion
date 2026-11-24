@@ -108,6 +108,42 @@ class KeyScopeTest {
         assertEquals(EditorPanel.EditShape, inlineEditorPanel(shape, PropRef.shape("size")))
     }
 
+    @Test fun positionUsesOneVectorKeyUntilDimensionsAreSeparated() {
+        val location = XmlNode("location", children = listOf(kf(10, "20,60,0"), kf(45, "20,80,0")))
+        val base = layer()
+        val original = base.copy(node = base.node.withChild("transform", XmlNode("transform", children = listOf(location))))
+        val at = original.at(scene.frameTime(20), scene.fps)
+        val x = PropRef.Location.copy(component = 0)
+        val y = PropRef.Location.copy(component = 1)
+
+        val combined = at.withTransform("location", 20f, 90f, 0f)
+        assertEquals(false, combined.positionDimensionsSeparated)
+        assertEquals(listOf(10, 20, 45), combined.keys(PropRef.Location))
+        assertEquals(listOf(10, 20, 45), combined.keys(x))
+        assertEquals(listOf(10, 20, 45), combined.keys(y))
+
+        val separated = at.withPositionDimensionsSeparated(true)!!.withTransform("location", 20f, 90f, 0f)
+        assertEquals(true, separated.positionDimensionsSeparated)
+        assertEquals(listOf(10, 45), separated.keys(x))
+        assertEquals(listOf(10, 20, 45), separated.keys(y))
+        assertEquals(null, separated.withPositionDimensionsSeparated(false))
+    }
+
+    @Test fun positionAxesWithMatchingKeysJoinWithoutChangingTheMotion() {
+        val location = XmlNode("location", children = listOf(kf(10, "20,60,30"), kf(45, "40,80,30")))
+        val base = layer()
+        val original = base.copy(node = base.node.withChild("transform", XmlNode("transform", children = listOf(location))))
+        val at = original.at(scene.frameTime(10), scene.fps)
+        val edited = at.withPositionDimensionsSeparated(true)!!.withTransform("location", 30f, at.location[1], at.location[2])
+        val joined = edited.withPositionDimensionsSeparated(false)!!
+        assertEquals(false, joined.positionDimensionsSeparated)
+        assertEquals(listOf(10, 45), joined.keys(PropRef.Location))
+        for (frame in 0..50) {
+            val time = scene.frameTime(frame)
+            assertEquals(edited.at(time, scene.fps).location.toList(), joined.at(time, scene.fps).location.toList())
+        }
+    }
+
     @Test fun editingOneAxisInTheNativePanelDoesNotAddKeysToOtherAxes() {
         val location = XmlNode("location", children = listOf(kf(10, "20,60,0"), kf(45, "20,80,0")))
         val original = layer().copy(node = layer().node.withChild("transform", XmlNode("transform", children = listOf(location))))
