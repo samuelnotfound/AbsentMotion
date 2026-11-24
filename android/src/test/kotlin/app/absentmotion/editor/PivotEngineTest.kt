@@ -95,7 +95,7 @@ class PivotEngineTest {
     @Test fun aSpatialPivotCanMoveInDepthWithoutMovingTheArtwork() {
         val layer = layer(1, prop("location", 0f to "260,360,25"), prop("scale", 0f to "1.2,0.65"),
             prop("rotation", 0f to "35"), prop("tilt", 0f to "30,-42"))
-        val scene = sceneOf(layer.with("threeD", "true").with("collapseTransforms", "true"))
+        val scene = sceneOf(layer.with("threeD", "true"))
         val moved = scene.withPivotMoved(1, 500, 12f, -8f, z = 60f)
         assertEquals(listOf(12f, -8f, 60f), moved.layer(1)!!.pivot.toList())
         assertStays(scene, moved, listOf(1), frames)

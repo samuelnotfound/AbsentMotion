@@ -265,15 +265,15 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
         "false" -> false
         else -> canToggle3D && (hasDepthComponent("location", 2) || hasDepthComponent("tilt", 0) || hasDepthComponent("tilt", 1))
     }
-    internal val canChooseRenderSpace: Boolean get() = canToggle3D && kind != "nullobj"
+    internal val canChooseRenderSpace: Boolean get() = kind == "embedScene"
     internal val collapsesTransforms: Boolean get() = canChooseRenderSpace &&
         (node["collapseTransforms"]?.let { it == "true" } ?: (node["renderSpace"] == "scene"))
-    internal val rendersIn3D: Boolean get() = if (canChooseRenderSpace) collapsesTransforms else uses3D
-    internal val applies3DTransforms: Boolean get() = uses3D && rendersIn3D
+    internal val rendersIn3D: Boolean get() = uses3D || collapsesTransforms
+    internal val applies3DTransforms: Boolean get() = uses3D
 
     internal fun withThreeD(on: Boolean): Layer = copy(node = node.with("threeD", on.toString()))
 
-    internal fun withCollapsedTransforms(on: Boolean): Layer = copy(node = node.with("collapseTransforms", on.toString()))
+    internal fun withCollapsedTransforms(on: Boolean): Layer = if (canChooseRenderSpace) copy(node = node.with("collapseTransforms", on.toString())) else this
 
     private fun hasDepthComponent(name: String, component: Int): Boolean {
         val property = node.child("transform")?.child(name) ?: return false

@@ -76,8 +76,14 @@ internal class TimelineGroupRow(
     fun indent(state: EditorState): Dp = if (selected(state) && state.showsLayerInspector) 0.dp else (groups.size.coerceAtMost(4) * 14 + 8).dp
     fun selected(state: EditorState): Boolean = state.selectedId == layer.id && state.selectedGroups == groups
     fun showsLayerControls(state: EditorState, expanded: Boolean): Boolean = expanded || (selected(state) && state.showsLayerInspector)
-    fun sidebarWidth(state: EditorState, expanded: Boolean): Dp =
-        indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (showsLayerControls(state, expanded)) 5 else 2)
+    fun sidebarWidth(state: EditorState, expanded: Boolean): Dp {
+        val icons = when {
+            !showsLayerControls(state, expanded) -> 2
+            layer.isPlainGroup -> 5
+            else -> 4
+        }
+        return indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * icons
+    }
     fun clipLaneStart(state: EditorState, expanded: Boolean): Dp = sidebarWidth(state, expanded) + GroupClipGap
 
     fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
@@ -182,11 +188,11 @@ internal fun TimelineGroupContents(
                             PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
                                 size = 14.dp, description = dimension)
                         }
-                        val toggleCollapse = if (!state.lookOnly && row.editable && layer.canChooseRenderSpace) Modifier.inlineTap {
-                            state.editGroupMember(row) { it.withCollapsedTransforms(!it.collapsesTransforms) }
-                        } else Modifier
-                        Box(Modifier.size(GroupIconWidth).then(toggleCollapse), contentAlignment = Alignment.Center) {
-                            if (layer.canChooseRenderSpace) {
+                        if (layer.isPlainGroup) {
+                            val toggleCollapse = if (!state.lookOnly && row.editable) Modifier.inlineTap {
+                                state.editGroupMember(row) { it.withCollapsedTransforms(!it.collapsesTransforms) }
+                            } else Modifier
+                            Box(Modifier.size(GroupIconWidth).then(toggleCollapse), contentAlignment = Alignment.Center) {
                                 val label = stringResource(if (layer.collapsesTransforms) R.string.layer_expand_transforms else R.string.layer_collapse_transforms)
                                 val tint = if (layer.collapsesTransforms) Am.Accent else Am.OnDarkDim
                                 PanelIcon(PanelIcons.Brightness, tint, size = 14.dp, description = label)

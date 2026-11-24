@@ -208,7 +208,10 @@ internal fun Scene.grouped(ids: Set<Long>, blend: String?, id: Long, label: Stri
     }
     val attrs = linkedMapOf("id" to "$id", "label" to label, "startTime" to "$start", "endTime" to "$end")
     if (top in stranded) attrs["clippingMask"] = "true"
-    if (keep3D) attrs["threeD"] = "true"
+    if (keep3D) {
+        attrs["threeD"] = "true"
+        attrs["collapseTransforms"] = "true"
+    }
     val group = groupNode(attrs, nested, end - start)
     return Scene(flat.node.copy(children = flat.node.children.mapNotNull { node ->
         val layerId = if (node.name in Scene.LAYER_TAGS) Layer(node).id else null

@@ -164,13 +164,13 @@ int main() {
             <embedScene id="20" collapseTransforms="true" startTime="100" endTime="999">
                 <transform><location value="50,50,0"/></transform>
                 <scene width="100" height="100" totalTime="899">
-                    <shape id="21" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="899">
+                    <shape id="21" s=".rect" fillType="color" threeD="true" startTime="0" endTime="899">
                         <transform><location value="50,50,-40"/></transform><fillColor value="#ffffffff"/>
                         <property name="size" type="vec2" value="30,30"/>
                     </shape>
                 </scene>
             </embedScene>
-            <shape id="22" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="999">
+            <shape id="22" s=".rect" fillType="color" threeD="true" collapseTransforms="false" startTime="0" endTime="999">
                 <transform><location value="50,50,80"/></transform><fillColor value="#ffffffff"/>
                 <property name="size" type="vec2" value="30,30"/>
             </shape>
@@ -179,11 +179,24 @@ int main() {
         const bool parsedGroup = am::ParseScene(collapsedXml, &nested, &error);
         Expect(parsedGroup && am::TopLayerAt(nested, 200, 50, 50, {}) == 20,
                "collapsed children share scene depth with layers outside their group");
-        if (parsedGroup && !nested.layers.empty()) {
-            nested.layers[0].renderSpace = am::RenderSpace::Flat;
+        if (parsedGroup && nested.layers.size() == 2) {
+            Expect(nested.layers[1].spatial(), "regular layers use their 3D switch for scene rendering");
+            nested.layers[0].renderSpace = am::RenderSpace::Automatic;
             Expect(am::TopLayerAt(nested, 200, 50, 50, {}) == 22,
                    "a flat group stays in its position in the layer stack");
         }
+        am::Scene rotatedGroup;
+        const auto rotatedGroupXml = R"xml(<scene width="100" height="100" totalTime="999">
+            <embedScene id="30" threeD="true" collapseTransforms="false" startTime="0" endTime="999">
+                <transform><location value="50,50,0"/><tilt value="20,35"/></transform>
+                <scene width="100" height="100" totalTime="999"/>
+            </embedScene>
+        </scene>)xml";
+        const bool parsedRotation = am::ParseScene(rotatedGroupXml, &rotatedGroup, &error);
+        Expect(parsedRotation && !rotatedGroup.layers.empty() && rotatedGroup.layers[0].spatial() &&
+               rotatedGroup.layers[0].renderSpace == am::RenderSpace::Automatic &&
+               am::EffectivePlacement(rotatedGroup.layers, rotatedGroup.layers[0], now).tilt != SkM44(),
+               "a flat group keeps its own 3D rotation");
         am::Layer tilted = camera;
         tilted.tilt.value = {20, 35};
         am::Layer near = spatial(11, 0);

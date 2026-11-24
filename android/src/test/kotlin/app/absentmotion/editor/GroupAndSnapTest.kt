@@ -63,7 +63,9 @@ class GroupAndSnapTest {
         val spatial = source.grouped(setOf(1, 2), null, 9, "G", keep3D = true).group()
         val flat = source.grouped(setOf(1, 2), null, 9, "G", keep3D = false).group()
         assertTrue(spatial.uses3D)
+        assertTrue(spatial.collapsesTransforms)
         assertFalse(flat.uses3D)
+        assertFalse(flat.collapsesTransforms)
         assertEquals(spatial.nested, flat.nested)
         val inner = flat.nested!!
         assertEquals("dynamicResolution", inner.precompose)
@@ -71,33 +73,42 @@ class GroupAndSnapTest {
         assertTrue(inner.layer(1)!!.uses3D)
     }
 
-    @Test fun renderingAndTransformControlsAreIndependentAndSaved() {
-        val legacy = Layer(layer(1, 0, 999)).withTransform("location", 540f, 960f, 30f)
+    @Test fun regularLayersUseTheCubeForRenderingAndKeepPastOverridesInXml() {
+        val legacy = Layer(layer(1, 0, 999, extra = mapOf("collapseTransforms" to "false")))
+            .withTransform("location", 540f, 960f, 30f)
         assertNull(legacy.node["threeD"])
-        assertTrue(legacy.uses3D)
-        assertFalse(legacy.rendersIn3D)
-
-        val flat = legacy.withCollapsedTransforms(false)
-        assertTrue(flat.uses3D)
-        assertFalse(flat.rendersIn3D)
-        assertFalse(flat.applies3DTransforms)
-        assertTrue(flat.withCollapsedTransforms(true).applies3DTransforms)
-
-        val controlsOff = legacy.withCollapsedTransforms(true).withThreeD(false)
-        assertFalse(controlsOff.uses3D)
-        assertTrue(controlsOff.rendersIn3D)
-        assertFalse(controlsOff.applies3DTransforms)
-        assertEquals(30f, controlsOff.location[2])
-        assertTrue(controlsOff.withThreeD(true).applies3DTransforms)
+        assertFalse(legacy.canChooseRenderSpace)
+        assertTrue(legacy.applies3DTransforms)
+        assertFalse(legacy.withThreeD(false).rendersIn3D)
+        assertEquals(30f, legacy.withThreeD(false).location[2])
 
         val plain = Layer(layer(2, 0, 999))
         assertFalse(plain.rendersIn3D)
-        assertFalse(plain.withThreeD(true).rendersIn3D)
-        val roundTrip = Scene.parse(scene(flat.node, controlsOff.withId(3).node).toXml())
-        assertFalse(roundTrip.layer(1)!!.rendersIn3D)
-        assertTrue(roundTrip.layer(1)!!.uses3D)
-        assertTrue(roundTrip.layer(3)!!.rendersIn3D)
-        assertFalse(roundTrip.layer(3)!!.uses3D)
+        assertTrue(plain.withThreeD(true).rendersIn3D)
+        val roundTrip = Scene.parse(scene(legacy.node).toXml()).layer(1)!!
+        assertEquals("false", roundTrip.node["collapseTransforms"])
+        assertTrue(roundTrip.rendersIn3D)
+    }
+
+    @Test fun aGroupCanCollapseTransformsIndependentlyOfTheCube() {
+        val group = scene(layer(1, 0, 999)).grouped(setOf(1), null, 2, "G").group()
+        assertTrue(group.canChooseRenderSpace)
+        val flat = group.withThreeD(true).withCollapsedTransforms(false).withTilt(24f, -12f)
+        assertTrue(flat.uses3D)
+        assertFalse(flat.collapsesTransforms)
+        assertTrue(flat.applies3DTransforms)
+        assertTrue(flat.rendersIn3D)
+        assertFalse(flat.withThreeD(false).rendersIn3D)
+
+        val collapsed = group.withCollapsedTransforms(true)
+        assertTrue(collapsed.rendersIn3D)
+        assertFalse(collapsed.applies3DTransforms)
+        val roundTrip = Scene.parse(scene(flat.node, collapsed.withId(3).node).toXml())
+        val parent = roundTrip.layer(2)!!
+        assertFalse(parent.collapsesTransforms)
+        assertTrue(parent.applies3DTransforms)
+        assertEquals(24f, parent.tilt[0])
+        assertTrue(roundTrip.layer(3)!!.collapsesTransforms)
     }
 
     @Test fun groupingKeepsMasksClippingTheirLayerAndLeavesCamerasOutside() {

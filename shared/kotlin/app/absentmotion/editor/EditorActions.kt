@@ -136,7 +136,7 @@ fun EditorState.toggleLayer3D(id: Long) {
 }
 
 internal fun EditorState.toggleCollapseTransforms(id: Long) {
-    if (lookOnly || scene.layer(id)?.let { it.canChooseRenderSpace && !it.locked } != true) return
+    if (lookOnly || scene.layer(id)?.let { it.isPlainGroup && !it.locked } != true) return
     edit { it.update(id) { layer -> layer.withCollapsedTransforms(!layer.collapsesTransforms) } }
 }
 
