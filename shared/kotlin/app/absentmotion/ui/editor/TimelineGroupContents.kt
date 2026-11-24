@@ -54,7 +54,7 @@ private val GroupRowHeight = 28.dp
 
 internal class TimelineGroupRow(
     val layer: Layer, val owner: Scene, val groups: List<Long>, private val clocks: List<Pair<Layer, Int>>,
-    val details: List<InlineSection>? = null, val add: Boolean = false,
+    val details: List<InlineSection>? = null,
 ) {
     val path get() = groups + layer.id
     val height get() = GroupRowHeight + (details?.let(::inlineDetailsHeight) ?: 0.dp)
@@ -96,7 +96,6 @@ internal fun timelineGroupRows(
         val child = parent.nested ?: return
         val childPath = path + parent.id
         val childClocks = clocks + (parent to owner.fps)
-        add(TimelineGroupRow(parent, owner, path, clocks, add = true))
         for (layer in child.layers.asReversed()) {
             val path = childPath + layer.id
             val open = expanded(path)
@@ -115,75 +114,64 @@ internal fun timelineGroupRows(
 internal fun TimelineGroupContents(
     state: EditorState, rows: List<TimelineGroupRow>, selection: InlineKeySelection,
     xAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
-    onOpen: (TimelineGroupRow, PropRef?) -> Unit, onAdd: (TimelineGroupRow) -> Unit,
+    onOpen: (TimelineGroupRow, PropRef?) -> Unit,
     onToggleEffect: (List<Long>, InlineSection) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        for (row in rows) key(row.path, row.add) {
-            val indent = (row.groups.size.coerceAtMost(4) * 14 + if (row.add) 28 else 8).dp
-            if (row.add) {
-                if (row.editable && !state.lookOnly) {
-                    val add = stringResource(R.string.add_layer)
-                    Row(Modifier.height(GroupRowHeight).padding(start = indent).inlineTap { onAdd(row) },
-                        verticalAlignment = Alignment.CenterVertically) {
-                        PanelIcon(ChromeIcons.Plus, Am.Accent, size = 15.dp)
-                        Text(add, Modifier.padding(start = 6.dp, end = 10.dp), color = Am.Accent, fontSize = 11.sp)
-                    }
-                } else Box(Modifier.height(GroupRowHeight))
-            } else {
-                val layer = row.layer
-                Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(Am.TimelineBg.copy(alpha = 0.65f))) {
-                    Canvas(Modifier.matchParentSize()) {
-                        val range = row.visibleRange()
-                        if (range.isEmpty()) return@Canvas
-                        val left = xAt(range.first.toDouble()).coerceIn(0f, size.width)
-                        val right = xAt(range.last + 1.0).coerceIn(0f, size.width)
-                        val height = 14.dp.toPx()
-                        if (right > left) drawRoundRect(if (layer.isPlainGroup) Color(0xFFE88C3B) else Am.LayerBar,
-                            Offset(left, (size.height - height) / 2), Size(right - left, height), CornerRadius(2.dp.toPx()), alpha = if (layer.hidden) 0.27f else 0.58f)
-                    }
-                    Row(Modifier.width(if (isExpanded(row.path)) 210.dp else 166.dp).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.88f)).padding(start = indent),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        val open = isExpanded(row.path)
-                        Box(Modifier.size(26.dp).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
-                            PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
-                                if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
-                        }
-                        if (open) {
-                            val lockLabel = stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock)
-                            val lockAction = if (!state.lookOnly && row.parentsUnlocked) Modifier.inlineTap {
-                                state.editGroupMember(row) { it.withLock(if (it.node["lock"] == null) "all" else null) }
-                            } else Modifier
-                            Box(Modifier.size(22.dp).then(lockAction), contentAlignment = Alignment.Center) {
-                                PanelIcon(if (layer.locked || layer.timingLocked) TimelineIcons.Lock else TimelineIcons.LockOpen,
-                                    Am.OnDarkDim, size = 13.dp, description = lockLabel)
-                            }
-                            val dimension = stringResource(R.string.three_d_layer)
-                            val toggle3d = if (!state.lookOnly && row.editable && layer.canToggle3D) Modifier.inlineTap {
-                                state.editGroupMember(row) { it.copy(node = it.node.with("threeD", if (it.uses3D) null else "true")) }
-                            } else Modifier
-                            Box(Modifier.size(22.dp).then(toggle3d), contentAlignment = Alignment.Center) {
-                                PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
-                                    size = 14.dp, description = dimension)
-                            }
-                        }
-                        LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
-                        Text(layer.shownName(), Modifier.weight(1f).then(if (row.editable && !state.lookOnly) Modifier.inlineTap { onOpen(row, null) } else Modifier)
-                            .padding(start = 5.dp, end = 5.dp), color = if (layer.hidden) Am.OnDarkDim else Am.OnDark,
-                            fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+        for (row in rows) key(row.path) {
+            val indent = (row.groups.size.coerceAtMost(4) * 14 + 8).dp
+            val layer = row.layer
+            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(Am.TimelineBg.copy(alpha = 0.65f))) {
+                Canvas(Modifier.matchParentSize()) {
+                    val range = row.visibleRange()
+                    if (range.isEmpty()) return@Canvas
+                    val left = xAt(range.first.toDouble()).coerceIn(0f, size.width)
+                    val right = xAt(range.last + 1.0).coerceIn(0f, size.width)
+                    val height = 14.dp.toPx()
+                    if (right > left) drawRoundRect(if (layer.isPlainGroup) Color(0xFFE88C3B) else Am.LayerBar,
+                        Offset(left, (size.height - height) / 2), Size(right - left, height), CornerRadius(2.dp.toPx()), alpha = if (layer.hidden) 0.27f else 0.58f)
                 }
-                row.details?.let { sections ->
-                    InlinePositionDetails(state, layer, sections, Modifier.fillMaxWidth(),
-                        xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: -Float.MAX_VALUE },
-                        selection = selection, scene = row.owner, sampleMs = row.localTime(state.sampleMs),
-                        nested = true, editable = row.editable, onOpen = { onOpen(row, it) },
-                        onToggleEffect = { onToggleEffect(row.path, it) },
-                        onEditValue = { track, value ->
-                            if (track.ref == SpeedRef) onOpen(row, track.ref)
-                            else state.editGroupValue(row, track, value)
-                        })
+                Row(Modifier.width(if (isExpanded(row.path)) 210.dp else 166.dp).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.88f)).padding(start = indent),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    val open = isExpanded(row.path)
+                    Box(Modifier.size(26.dp).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
+                        PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
+                            if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
+                    }
+                    if (open) {
+                        val lockLabel = stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock)
+                        val lockAction = if (!state.lookOnly && row.parentsUnlocked) Modifier.inlineTap {
+                            state.editGroupMember(row) { it.withLock(if (it.node["lock"] == null) "all" else null) }
+                        } else Modifier
+                        Box(Modifier.size(22.dp).then(lockAction), contentAlignment = Alignment.Center) {
+                            PanelIcon(if (layer.locked || layer.timingLocked) TimelineIcons.Lock else TimelineIcons.LockOpen,
+                                Am.OnDarkDim, size = 13.dp, description = lockLabel)
+                        }
+                        val dimension = stringResource(R.string.three_d_layer)
+                        val toggle3d = if (!state.lookOnly && row.editable && layer.canToggle3D) Modifier.inlineTap {
+                            state.editGroupMember(row) { it.copy(node = it.node.with("threeD", if (it.uses3D) null else "true")) }
+                        } else Modifier
+                        Box(Modifier.size(22.dp).then(toggle3d), contentAlignment = Alignment.Center) {
+                            PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
+                                size = 14.dp, description = dimension)
+                        }
+                    }
+                    LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
+                    Text(layer.shownName(), Modifier.weight(1f).then(if (row.editable && !state.lookOnly) Modifier.inlineTap { onOpen(row, null) } else Modifier)
+                        .padding(start = 5.dp, end = 5.dp), color = if (layer.hidden) Am.OnDarkDim else Am.OnDark,
+                        fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            row.details?.let { sections ->
+                InlinePositionDetails(state, layer, sections, Modifier.fillMaxWidth(),
+                    xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: -Float.MAX_VALUE },
+                    selection = selection, scene = row.owner, sampleMs = row.localTime(state.sampleMs),
+                    nested = true, editable = row.editable, onOpen = { onOpen(row, it) },
+                    onToggleEffect = { onToggleEffect(row.path, it) },
+                    onEditValue = { track, value ->
+                        if (track.ref == SpeedRef) onOpen(row, track.ref)
+                        else state.editGroupValue(row, track, value)
+                    })
             }
         }
     }

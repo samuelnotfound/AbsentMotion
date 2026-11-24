@@ -577,7 +577,7 @@ private fun InlineRows(view: TimelineView) {
                             onToggleEffect = { view.toggleInlineEffect(listOf(layer.id), it) })
                     }
                     TimelineGroupContents(view.state, view.groupRows(layer), view.inlineKeySelection,
-                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::addToGroup, view::toggleInlineEffect)
+                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::toggleInlineEffect)
                 }
             }
         }
@@ -852,12 +852,6 @@ private class TimelineView(val state: EditorState, density: Density, private val
             state.openInlineEditor(child, ref)
             state.inlineGroupReturnDepth = depth
         }
-    }
-
-    fun addToGroup(row: TimelineGroupRow) {
-        if (state.lookOnly || !row.editable) return
-        val depth = state.groupPath.size
-        if (enterGroups(row.path)) state.addOpen = true else state.exitTo(depth)
     }
 
     fun projectTimeX(time: Double): Float = timeScale().x(time.toFloat())
