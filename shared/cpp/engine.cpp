@@ -284,13 +284,18 @@ private:
     std::vector<VkSemaphore> fSpareSemaphores;
 
     EffectRuntime fEffects;
-    LayerEffects layerEffects() {
+    LayerEffects layerEffectCoverage() {
         LayerEffects fx;
-        fx.active = [this](const Layer& layer) { return fEffects.active(layer); };
         fx.lifted = [this](const Layer& layer) { return fEffects.lifted(layer); };
-        fx.spills = [this](const Layer& layer, double time) { return fEffects.spills(layer, time); };
         fx.behind = [this](const Layer& layer) { return fEffects.behind(layer); };
         fx.wraps = [this](const Layer& layer) { return fEffects.wraps(layer); };
+        return fx;
+    }
+
+    LayerEffects layerEffects() {
+        LayerEffects fx = this->layerEffectCoverage();
+        fx.active = [this](const Layer& layer) { return fEffects.active(layer); };
+        fx.spills = [this](const Layer& layer, double time) { return fEffects.spills(layer, time); };
         fx.steady = [this](const Layer& layer, float from, float to) { return fEffects.steady(layer, from, to); };
         fx.turn = [this](const Layer& layer, double time, SkPoint* corners) { return fEffects.turnCorners(layer, time, corners); };
         if (++fDraws % kUploadIdle == 0) std::erase_if(fUploads, [&](const auto& kept) { return kept.second.seen + kUploadIdle < fDraws; });
@@ -1458,7 +1463,8 @@ int64_t EngineImpl::hitTest(float x, float y, double timeMs) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
     SetEditorCamera(fEditorCamera);
-    return TopLayerAt(fScene, timeMs, x, y, this->masks());
+    const LayerEffects fx = this->layerEffectCoverage();
+    return TopLayerAt(fScene, timeMs, x, y, this->masks(), &fx);
 }
 
 bool EngineImpl::layerOutline(int64_t layerId, double timeMs, std::string* svg) {

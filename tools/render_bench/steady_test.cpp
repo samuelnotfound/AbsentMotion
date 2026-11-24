@@ -179,6 +179,7 @@ int main() {
         const std::string collapsedXml = R"xml(<scene width="100" height="100" totalTime="999" depthOrder="true">
             <embedScene id="20" collapseTransforms="true" startTime="100" endTime="999">
                 <transform><location value="50,50,0"/></transform>
+                <effect id="absent.blur"/>
                 <scene width="100" height="100" totalTime="899">
                     <shape id="21" s=".rect" fillType="color" threeD="true" startTime="0" endTime="899">
                         <transform><location value="50,50,-40"/></transform><fillColor value="#ffffffff"/>
@@ -194,7 +195,7 @@ int main() {
         am::Scene nested;
         const bool parsedGroup = am::ParseScene(collapsedXml, &nested, &error);
         Expect(parsedGroup && am::TopLayerAt(nested, 200, 50, 50, {}) == 20,
-               "collapsed children share scene depth with layers outside their group");
+               "collapsed children share scene depth outside their group when it has a layer-local effect");
         if (parsedGroup && nested.layers.size() == 2) {
             Expect(nested.layers[1].spatial(), "regular layers use their 3D switch for scene rendering");
             nested.layers[0].renderSpace = am::RenderSpace::Automatic;

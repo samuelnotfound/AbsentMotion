@@ -2179,20 +2179,54 @@ static void FaceForward(std::vector<Layer>* seen) {
     }
 }
 
-static bool Collapsible(const std::vector<Layer>& list, size_t i, double timeMs) {
+static bool GroupEffectsNeedSurface(const Layer& layer, const LayerEffects* effects) {
+    if (effects && ((effects->lifted && effects->lifted(layer)) || (effects->behind && effects->behind(layer)) ||
+                    (effects->wraps && effects->wraps(layer)))) return true;
+    return std::any_of(layer.effects.begin(), layer.effects.end(), [](const LayerEffect& effect) {
+        return !effect.hidden && (RepeatEffect(effect.id) || effect.id == "absent.puppet" ||
+            (MotionEffect(effect.id) && effect.id != "absent.motionblur" && effect.id != "absent.shutterblur"));
+    });
+}
+
+static bool Collapsible(const std::vector<Layer>& list, size_t i, double timeMs, const LayerEffects* effects) {
     const Layer& layer = list[i];
     if (layer.kind != "embedScene" || layer.renderSpace != RenderSpace::Scene || layer.inner().empty() ||
         !layer.activeAt(timeMs) || layer.clippingMask || (i + 1 < list.size() && list[i + 1].clippingMask)) return false;
     return IsNormal(layer.blending) && layer.fillType != "color" && (layer.innerBackground >> 24) == 0 &&
            !(layer.stroke.present && layer.stroke.enabled) && !ShadowOn(layer) &&
            std::none_of(layer.borders.begin(), layer.borders.end(), [](const Edge& border) { return border.enabled; }) &&
-           std::none_of(layer.effects.begin(), layer.effects.end(), [](const LayerEffect& effect) { return !effect.hidden; }) &&
+           !GroupEffectsNeedSurface(layer, effects) &&
            layer.opacity.get(0, layer.localTime(timeMs), 1) * MotionOpacity(layer, timeMs) >= 1;
+}
+
+static void RetimeEffectAnim(Anim& anim, const auto& retime) {
+    for (Keyframe& key : anim.keys) key.t = retime(key.t);
+    if (anim.hasLead) anim.lead.t = retime(anim.lead.t);
+    for (Anim& axis : anim.axes) RetimeEffectAnim(axis, retime);
+}
+
+static void FollowCollapsedGroupEffects(Layer* layer, const CollapsedLayer& context, double rootMs) {
+    for (const CollapsedLayer* current = &context; current; current = current->enclosing.get()) {
+        const Layer& group = *current->group;
+        if (group.effects.empty()) continue;
+        const double host = current->enclosing ? CollapsedTime(*current->enclosing, rootMs) : rootMs;
+        const double from = group.startTime + (rootMs - host);
+        const double span = (double)group.endTime - group.startTime;
+        const double own = std::max(1.0, (double)layer->endTime - layer->startTime);
+        const auto retime = [&](float t) { return (float)((from + t * span - layer->startTime) / own); };
+        for (const LayerEffect& effect : group.effects) {
+            if (effect.hidden) continue;
+            LayerEffect& copy = layer->effects.emplace_back(effect);
+            copy.owner = group.id;
+            copy.ownerStart = (int)std::clamp(std::round(from), (double)INT32_MIN, (double)INT32_MAX);
+            for (Property& prop : copy.props) RetimeEffectAnim(prop.anim, retime);
+        }
+    }
 }
 
 static void AppendCollapsed(const std::vector<Layer>& siblings, const Layer& group,
                      const std::shared_ptr<const CollapsedLayer>& enclosing, int64_t owner,
-                     double groupMs, double rootMs, int depth, std::vector<Layer>* result) {
+                     double groupMs, double rootMs, int depth, const LayerEffects* effects, std::vector<Layer>* result) {
     const double inner = NestedTime(group, groupMs);
     if (inner < 0 || !std::isfinite(inner)) return;
     const auto& members = group.inner();
@@ -2203,8 +2237,8 @@ static void AppendCollapsed(const std::vector<Layer>& siblings, const Layer& gro
         if (child.kind == "camera" || child.kind == "light" || child.kind == "nullobj" || child.kind == "audio") continue;
         const bool spatial = child.spatial() || group.has3DTransforms() || (enclosing && enclosing->spatial);
         auto context = std::make_shared<CollapsedLayer>(CollapsedLayer{&siblings, &group, &child, enclosing, owner, spatial});
-        if (depth < kMaxParentDepth && Collapsible(members, i, inner)) {
-            AppendCollapsed(members, child, context, owner, inner, rootMs, depth + 1, result);
+        if (depth < kMaxParentDepth && Collapsible(members, i, inner, effects)) {
+            AppendCollapsed(members, child, context, owner, inner, rootMs, depth + 1, effects, result);
         } else {
             Layer copy = child;
             copy.parent = 0;
@@ -2212,6 +2246,7 @@ static void AppendCollapsed(const std::vector<Layer>& siblings, const Layer& gro
             copy.endTime = (int)std::clamp<int64_t>((int64_t)child.endTime + shift, INT32_MIN, INT32_MAX);
             if (first) copy.clippingMask = false;
             copy.renderSpace = spatial ? RenderSpace::Scene : RenderSpace::Flat;
+            FollowCollapsedGroupEffects(&copy, *context, rootMs);
             copy.collapsed = std::move(context);
             result->push_back(std::move(copy));
         }
@@ -2219,14 +2254,15 @@ static void AppendCollapsed(const std::vector<Layer>& siblings, const Layer& gro
     }
 }
 
-static const std::vector<Layer>& CollapseStack(const std::vector<Layer>& list, double timeMs, std::vector<Layer>* storage) {
+static const std::vector<Layer>& CollapseStack(const std::vector<Layer>& list, double timeMs, const LayerEffects* effects,
+                                               std::vector<Layer>* storage) {
     size_t start = 0;
-    while (start < list.size() && !Collapsible(list, start, timeMs)) ++start;
+    while (start < list.size() && !Collapsible(list, start, timeMs, effects)) ++start;
     if (start == list.size()) return list;
     storage->assign(list.begin(), list.begin() + start);
     for (size_t i = start; i < list.size(); ++i) {
         const Layer& group = list[i];
-        if (Collapsible(list, i, timeMs)) AppendCollapsed(list, group, nullptr, group.id, timeMs, timeMs, 0, storage);
+        if (Collapsible(list, i, timeMs, effects)) AppendCollapsed(list, group, nullptr, group.id, timeMs, timeMs, 0, effects, storage);
         else storage->push_back(group);
     }
     return *storage;
@@ -2241,9 +2277,9 @@ static const std::vector<Layer>& SeenProject(const Scene& scene, double timeMs, 
     return *storage;
 }
 
-int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks) {
+int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks, const LayerEffects* effects) {
     std::vector<Layer> storage, expanded;
-    const auto& stack = CollapseStack(scene.layers, timeMs, &expanded);
+    const auto& stack = CollapseStack(scene.layers, timeMs, effects, &expanded);
     const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage, &stack);
     for (auto it = list.rbegin(); it != list.rend(); ++it) {
         if (depth::Inside(it->sight.cuts, {x, y}) && Contains(list, *it, timeMs, {x, y}, scene.width, scene.height, masks))
@@ -2345,10 +2381,7 @@ bool InheritEffects(const std::vector<Layer>& layers, std::vector<Layer>* out) {
                 LayerEffect& copy = l.effects.emplace_back(e);
                 copy.owner = parent->id;
                 copy.ownerStart = parent->startTime;
-                for (Property& p : copy.props) {
-                    for (Keyframe& k : p.anim.keys) k.t = retime(k.t);
-                    p.anim.lead.t = retime(p.anim.lead.t);
-                }
+                for (Property& prop : copy.props) RetimeEffectAnim(prop.anim, retime);
             }
             up = parent->parent;
         }
@@ -2412,7 +2445,7 @@ void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int
               const MediaPictures& pictures) {
     std::vector<Layer> inherited, expanded, storage;
     const auto& withEffects = InheritEffects(listed, &inherited) ? inherited : listed;
-    const std::vector<Layer>& source = CollapseStack(withEffects, timeMs, &expanded);
+    const std::vector<Layer>& source = CollapseStack(withEffects, timeMs, gEffects, &expanded);
     const bool pieces = gScene && gScene->depthOrder && gScene->pieceOrder;
     const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage);
     if (seen) FaceForward(&storage);
