@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.R
@@ -57,7 +58,7 @@ internal class TimelineGroupRow(
     val details: List<InlineSection>? = null,
 ) {
     val path get() = groups + layer.id
-    val height get() = GroupRowHeight + (details?.let(::inlineDetailsHeight) ?: 0.dp)
+    fun heightPx(density: Density): Int = with(density) { GroupRowHeight.roundToPx() + (details?.let { inlineDetailsHeight(it) } ?: 0) }
     val parentsUnlocked get() = clocks.none { it.first.locked }
     val editable get() = !layer.locked && parentsUnlocked
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.R
@@ -60,16 +61,18 @@ private val TreeTrunk = 17.dp
 private val TrackIndent = 30.dp
 private val TopTrackIcon = TrackIndent - TreeTrunk
 
-internal fun inlineDetailsHeight(sections: List<InlineSection>) =
-    SectionHeight * maxOf(1, sections.size) + inlineTrackHeight * sections.sumOf { it.visibleTracks.size } + DetailsSeparator
+internal fun Density.inlineDetailsHeight(sections: List<InlineSection>): Int =
+    SectionHeight.roundToPx() * maxOf(1, sections.size) +
+        inlineTrackHeight.roundToPx() * sections.sumOf { it.visibleTracks.size } + DetailsSeparator.roundToPx()
 
-internal fun inlineTrackOffset(sections: List<InlineSection>, ref: PropRef): androidx.compose.ui.unit.Dp? {
-    var y = 0.dp
+internal fun Density.inlineTrackOffset(sections: List<InlineSection>, ref: PropRef): Int? {
+    var y = 0
+    val trackHeight = inlineTrackHeight.roundToPx()
     for (section in sections) {
-        y += SectionHeight
+        y += SectionHeight.roundToPx()
         val index = section.visibleTracks.indexOfFirst { it.ref == ref }
-        if (index >= 0) return y + inlineTrackHeight * index
-        y += inlineTrackHeight * section.visibleTracks.size
+        if (index >= 0) return y + trackHeight * index
+        y += trackHeight * section.visibleTracks.size
     }
     return null
 }
