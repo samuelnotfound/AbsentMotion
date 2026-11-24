@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ import app.absentmotion.model.Layer
 import app.absentmotion.model.PropRef
 import app.absentmotion.model.Scene
 import app.absentmotion.model.valueAt
+import app.absentmotion.ui.editor.panels.PanelIcon
 import app.absentmotion.ui.editor.panels.formatFixed
 import app.absentmotion.ui.theme.Am
 
@@ -56,17 +58,18 @@ internal val inlineTrackHeight = 27.dp
 private val DetailsSeparator = 7.dp
 private val TreeTrunk = 17.dp
 private val TrackIndent = 30.dp
+private val TopTrackIcon = TrackIndent - TreeTrunk
 
 internal fun inlineDetailsHeight(sections: List<InlineSection>) =
-    SectionHeight * maxOf(1, sections.size) + inlineTrackHeight * sections.sumOf { it.tracks.size } + DetailsSeparator
+    SectionHeight * maxOf(1, sections.size) + inlineTrackHeight * sections.sumOf { it.visibleTracks.size } + DetailsSeparator
 
 internal fun inlineTrackOffset(sections: List<InlineSection>, ref: PropRef): androidx.compose.ui.unit.Dp? {
     var y = 0.dp
     for (section in sections) {
         y += SectionHeight
-        val index = section.tracks.indexOfFirst { it.ref == ref }
+        val index = section.visibleTracks.indexOfFirst { it.ref == ref }
         if (index >= 0) return y + inlineTrackHeight * index
-        y += inlineTrackHeight * section.tracks.size
+        y += inlineTrackHeight * section.visibleTracks.size
     }
     return null
 }
@@ -77,6 +80,7 @@ internal fun InlinePositionDetails(
     xOf: (Int) -> Float, selection: InlineKeySelection,
     scene: Scene = state.scene, sampleMs: Int = state.sampleMs, nested: Boolean = false, editable: Boolean = true,
     onOpen: (PropRef) -> Unit = { state.openInlineEditor(layer, it) },
+    onToggleEffect: (InlineSection) -> Unit,
     onEditValue: ((InlineTrack, Float) -> Unit)? = null,
 ) {
     val at = layer.at(sampleMs, scene.fps)
@@ -92,15 +96,24 @@ internal fun InlinePositionDetails(
                 Text(stringResource(R.string.inline_no_keyframes), color = Am.OnDarkDim, fontSize = 11.sp)
             }
             for (section in sections) {
-                val heading = section.tracks.firstNotNullOfOrNull(::editor)
+                val expansion = section.effectExpanded
+                val heading = if (expansion == null) section.visibleTracks.firstNotNullOfOrNull(::editor)
+                    else { { onToggleEffect(section) } }
                 Row(Modifier.height(SectionHeight).fillMaxWidth().then(if (heading == null) Modifier else Modifier.inlineTap(heading))
                     .drawBehind {
+                        if (section.visibleTracks.isEmpty()) return@drawBehind
                         val x = TreeTrunk.toPx()
                         drawLine(Am.Line, Offset(x, size.height - 5.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
                     }.padding(start = TreeTrunk), verticalAlignment = Alignment.CenterVertically) {
+                    if (expansion != null) {
+                        Box(Modifier.size(TopTrackIcon), contentAlignment = Alignment.Center) {
+                            PanelIcon(if (expansion) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
+                                if (expansion) Am.Accent else Am.OnDarkDim, size = 14.dp)
+                        }
+                    }
                     Text(section.label, color = Am.OnDark, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                for ((index, track) in section.tracks.withIndex()) key(track.ref) {
+                for ((index, track) in section.visibleTracks.withIndex()) key(track.ref) {
                     val openEditor = editor(track)
                     val raw = at.element(track.ref)?.valueAt(at.t) ?: track.default
                     val value = raw?.toFloatOrNull()?.times(track.multiplier)
@@ -115,7 +128,7 @@ internal fun InlinePositionDetails(
                             .drawBehind {
                                 val x = TreeTrunk.toPx()
                                 val middle = size.height / 2f
-                                val end = if (index == section.tracks.lastIndex) middle else size.height
+                                val end = if (index == section.visibleTracks.lastIndex) middle else size.height
                                 drawLine(Am.Line, Offset(x, 0f), Offset(x, end), 1.dp.toPx())
                                 drawLine(Am.Line, Offset(x, middle), Offset(TrackIndent.toPx() - 4.dp.toPx(), middle), 1.dp.toPx())
                             }.padding(start = TrackIndent, end = 9.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -573,10 +573,11 @@ private fun InlineRows(view: TimelineView) {
                     val sections = view.inlineSections(layer)
                     if (sections.isNotEmpty() || !layer.isPlainGroup) {
                         InlinePositionDetails(view.state, layer, sections, Modifier.fillMaxWidth(),
-                            xOf = view::inlineKeyX, selection = view.inlineKeySelection)
+                            xOf = view::inlineKeyX, selection = view.inlineKeySelection,
+                            onToggleEffect = { view.toggleInlineEffect(listOf(layer.id), it) })
                     }
                     TimelineGroupContents(view.state, view.groupRows(layer), view.inlineKeySelection,
-                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::addToGroup)
+                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::addToGroup, view::toggleInlineEffect)
                 }
             }
         }
@@ -786,6 +787,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     fun showsLayerControls(layer: Layer): Boolean = layer.id == state.selectedId || layer.id in MultiSelect.ids || inlinePosition(layer)
     fun rowHeaderWidth(layer: Layer): Float = if (!deskLayout && showsLayerControls(layer)) headerWidth + ExpandedControls.px else headerWidth
     private var inlinePositions by mutableStateOf<Set<List<Long>>>(emptySet())
+    private var inlineEffects by mutableStateOf<Set<Pair<List<Long>, String>>>(emptySet())
     val inlineKeySelection = InlineKeySelection()
     val hasInlinePositions: Boolean get() = layers.any(::inlinePosition)
 
@@ -793,7 +795,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     private val sections by derivedStateOf {
         layers.filter(::inlinePosition).associate {
             val active = state.inlineProperty.takeIf { _ -> it.id == state.selectedId }
-            it.id to inlineTrackSections(it, catalog, active)
+            it.id to inlineTrackSections(it, catalog, active) { effect -> inlineEffectExpanded(listOf(it.id), effect) }
         }
     }
 
@@ -801,9 +803,27 @@ private class TimelineView(val state: EditorState, density: Density, private val
 
     fun inlinePosition(layer: Layer): Boolean = expandedPath(listOf(layer.id))
 
+    private fun inlineEffectExpanded(path: List<Long>, effect: String): Boolean =
+        (state.groupPath + path to effect) in inlineEffects
+
+    fun toggleInlineEffect(path: List<Long>, section: InlineSection) {
+        val key = state.groupPath + path to section.id
+        if (key in inlineEffects) {
+            inlineEffects = inlineEffects - key
+            if (path.size == 1) {
+                val refs = section.tracks.map { it.ref }.toSet()
+                inlineKeySelection.keys = inlineKeySelection.keys.filterTo(mutableSetOf()) {
+                    it.layerId != path.single() || it.ref !in refs
+                }
+            }
+        } else {
+            inlineEffects = inlineEffects + key
+        }
+    }
+
     private val groupRows by derivedStateOf {
         layers.filter { inlinePosition(it) && it.isPlainGroup }.associate { layer ->
-            layer.id to timelineGroupRows(state.scene, layer, catalog, ::expandedPath)
+            layer.id to timelineGroupRows(state.scene, layer, catalog, ::inlineEffectExpanded, ::expandedPath)
         }
     }
 
@@ -876,7 +896,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
     }
 
     private fun inlineFrames(layer: Layer): List<Int> =
-        inlineSections(layer).flatMap { section -> section.tracks.flatMap { it.frames(state.scene, layer) } }
+        inlineSections(layer).flatMap { section -> section.visibleTracks.flatMap { it.frames(state.scene, layer) } }
 
     fun inlineKeyframes(): List<Int> = layers.filter(::inlinePosition).flatMap(::inlineFrames)
         .filter { it in 0..state.scene.lastFrame }.distinct().sorted()
@@ -905,7 +925,7 @@ private class TimelineView(val state: EditorState, density: Density, private val
                 if (at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
             }
         }
-        for (section in inlineSections(layer)) for (track in section.tracks) {
+        for (section in inlineSections(layer)) for (track in section.visibleTracks) {
             if (track.linked(layer)) continue
             val offset = inlineTrackOffset(inlineSections(layer), track.ref) ?: continue
             val center = top + rowH + offset.px + inlineTrackHeight.px / 2
