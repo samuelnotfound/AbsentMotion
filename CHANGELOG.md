@@ -33,6 +33,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Fixed
 
+- **Transform pads**. Corner marks follow the edges of the pad as the editor resizes.
 - **Curve editor**. Add or remove keyframes from the curve panel. The panel stays open and dims its curve controls when the playhead moves outside a keyframe interval.
 - **Preview caching**. Changing the work area keeps valid frames and renders only the missing frames on the next pre-render.
 - **Timeline visibility**. Choosing a property shows its keyframes on the clip bar and keeps the preview at its usual size. The playhead stays above expanded tracks. The transition shortcut returns when the last dropdown closes and the playhead is at a cut.
