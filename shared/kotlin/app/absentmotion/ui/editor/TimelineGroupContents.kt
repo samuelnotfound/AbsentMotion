@@ -89,7 +89,8 @@ internal class TimelineGroupRow(
 }
 
 internal fun timelineGroupRows(
-    host: Scene, group: Layer, catalog: EffectCatalog, expanded: (List<Long>) -> Boolean,
+    host: Scene, group: Layer, catalog: EffectCatalog,
+    effectExpanded: (List<Long>, String) -> Boolean = { _, _ -> false }, expanded: (List<Long>) -> Boolean,
 ): List<TimelineGroupRow> = buildList {
     fun visit(parent: Layer, owner: Scene, path: List<Long>, clocks: List<Pair<Layer, Int>>) {
         val child = parent.nested ?: return
@@ -97,8 +98,12 @@ internal fun timelineGroupRows(
         val childClocks = clocks + (parent to owner.fps)
         add(TimelineGroupRow(parent, owner, path, clocks, add = true))
         for (layer in child.layers.asReversed()) {
-            val open = expanded(childPath + layer.id)
-            val details = if (open) inlineTrackSections(layer, catalog, effectControls = true).takeIf { it.isNotEmpty() || !layer.isPlainGroup } else null
+            val path = childPath + layer.id
+            val open = expanded(path)
+            val details = if (open) {
+                inlineTrackSections(layer, catalog, effectControls = true) { effectExpanded(path, it) }
+                    .takeIf { it.isNotEmpty() || !layer.isPlainGroup }
+            } else null
             add(TimelineGroupRow(layer, child, childPath, childClocks, details))
             if (open && layer.isPlainGroup) visit(layer, child, childPath, childClocks)
         }
@@ -111,6 +116,7 @@ internal fun TimelineGroupContents(
     state: EditorState, rows: List<TimelineGroupRow>, selection: InlineKeySelection,
     xAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
     onOpen: (TimelineGroupRow, PropRef?) -> Unit, onAdd: (TimelineGroupRow) -> Unit,
+    onToggleEffect: (List<Long>, InlineSection) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         for (row in rows) key(row.path, row.add) {
@@ -172,6 +178,7 @@ internal fun TimelineGroupContents(
                         xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: -Float.MAX_VALUE },
                         selection = selection, scene = row.owner, sampleMs = row.localTime(state.sampleMs),
                         nested = true, editable = row.editable, onOpen = { onOpen(row, it) },
+                        onToggleEffect = { onToggleEffect(row.path, it) },
                         onEditValue = { track, value ->
                             if (track.ref == SpeedRef) onOpen(row, track.ref)
                             else state.editGroupValue(row, track, value)

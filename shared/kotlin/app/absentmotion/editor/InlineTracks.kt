@@ -36,9 +36,16 @@ internal data class InlineTrack(
     } == true
 }
 
-internal data class InlineSection(val id: String, val label: String, val tracks: List<InlineTrack>)
+internal data class InlineSection(
+    val id: String, val label: String, val tracks: List<InlineTrack>, val effectExpanded: Boolean? = null,
+) {
+    val visibleTracks get() = if (effectExpanded == false) emptyList() else tracks
+}
 
-internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: PropRef? = null, effectControls: Boolean = false): List<InlineSection> = buildList {
+internal fun inlineTrackSections(
+    layer: Layer, catalog: EffectCatalog, active: PropRef? = null, effectControls: Boolean = false,
+    effectExpanded: (String) -> Boolean = { false },
+): List<InlineSection> = buildList {
     val transform = mutableListOf<InlineTrack>()
     fun vector(ref: PropRef, title: String, axes: String, defaults: String, multiplier: Float = 1f, unit: String = "") {
         val node = layer.propertyElement(ref) ?: return
@@ -86,7 +93,10 @@ internal fun inlineTrackSections(layer: Layer, catalog: EffectCatalog, active: P
             InlineTrack(PropRef.effect(index, name), parameter?.label ?: labelOf(name), multiplier, unit,
                 parameter?.kind == "choice", parameter?.missingDefault)
         }
-        if (tracks.isNotEmpty()) add(InlineSection("effect-$index", definition?.name ?: labelOf(id.substringAfterLast('.')), tracks))
+        val sectionId = "effect-$index-$id"
+        if (tracks.isNotEmpty()) {
+            add(InlineSection(sectionId, definition?.name ?: labelOf(id.substringAfterLast('.')), tracks, effectExpanded(sectionId)))
+        }
     }
 
     fun collect(node: XmlNode, path: String, name: String, tracks: MutableList<InlineTrack>) {
