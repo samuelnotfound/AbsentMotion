@@ -997,7 +997,8 @@ private class TimelineView(val state: EditorState, private val density: Density,
             if (ref != null && !app.absentmotion.editor.InlineTrack(ref, "").linked(layer)) {
                 for (frame in keyFrames(layer)) {
                     val at = Offset(inlineKeyX(frame), top + rowH / 2)
-                    if (at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
+                    val time = state.scene.frameStart(frame)
+                    if (time in layer.startTime..layer.endTime && at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
                 }
             }
             tracks(layer, state.scene, inlineSections(layer), top + rowH, emptyList(), ::inlineKeyX)

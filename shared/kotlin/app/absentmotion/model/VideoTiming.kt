@@ -387,9 +387,10 @@ fun Layer.withFreezeFrame(projectTime: Int, holdMs: Int, fps: Int): Layer? {
     return keyed.withVideoSpeedMap(map.withKeyframes(kept + Keyframe(t1, text) + Keyframe(t2, text) + Keyframe(t3, at.v)))
 }
 
-fun Layer.withKeyframesMoved(from: Int, to: Int, scene: Scene, scope: KeyScope? = null): Layer {
+fun Layer.withKeyframesMoved(from: Int, to: Int, scene: Scene, scope: KeyScope? = null, allowOutsideClip: Boolean = false): Layer {
     val length = endTime - startTime
-    val target = scene.frameTime(to).coerceIn(startTime, endTime)
+    val time = scene.frameTime(to)
+    val target = if (allowOutsideClip && scope?.ref != SpeedRef) time else time.coerceIn(startTime, endTime)
     if (length <= 0 || scene.frameAt(target) == from) return this
     val timing = VideoTiming(this)
     val map = node.child("speedMap").takeIf { scope?.ref == SpeedRef }

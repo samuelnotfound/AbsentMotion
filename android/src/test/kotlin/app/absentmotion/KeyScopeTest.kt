@@ -143,6 +143,27 @@ class KeyScopeTest {
         assertEquals(setOf(key.copy(frame = 0)), selection)
     }
 
+    @Test fun movingAnExpandedKeyPastEitherClipEdgeKeepsTheClipTiming() {
+        val position = XmlNode("location", children = listOf(
+            XmlNode("kf", mapOf("t" to "0", "v" to "20,10,0")),
+            XmlNode("kf", mapOf("t" to "1", "v" to "40,10,0")),
+        ))
+        val clip = shapeLayer(id = 2, start = 500, end = 999, children = listOf(XmlNode("transform", children = listOf(position))))
+        val withClip = scene.add(clip)
+        val ref = PropRef.Location
+        val first = InlineKey(clip.id, ref, 15)
+        val last = InlineKey(clip.id, ref, 29)
+        val (earlier, atStart) = InlineKeyMove(withClip, setOf(first)).apply(withClip, -10)
+        val (later, atEnd) = InlineKeyMove(earlier, setOf(last)).apply(earlier, 15)
+        val moved = later.layer(clip.id)!!
+        assertEquals(clip.startTime, moved.startTime)
+        assertEquals(clip.endTime, moved.endTime)
+        assertEquals(listOf(5, 44), moved.keys(ref))
+        assertEquals(setOf(first.copy(frame = 5)), atStart)
+        assertEquals(setOf(last.copy(frame = 44)), atEnd)
+        assertEquals(listOf(5, 44), Scene.parse(later.toXml()).layer(clip.id)!!.keys(ref))
+    }
+
     @Test fun timelinePropertiesOpenTheirNativeEditors() {
         val shape = layer()
         assertEquals(EditorPanel.MoveTransform, inlineEditorPanel(shape, PropRef.Tilt.copy(component = 1)))

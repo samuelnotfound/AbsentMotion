@@ -225,8 +225,9 @@ internal class InlineKeyMove(private val source: Scene, private val keys: Set<In
             val current = layer.keyframeTimes(KeyScope(track.second)).map(source::frameAt).distinct()
             if (!current.containsAll(frames)) return 0..0
             val remaining = current.filterNot { it in frames }
-            val start = source.frameAt(layer.startTime)
-            val end = source.frameAt(layer.endTime)
+            val clipBounded = track.second == SpeedRef || layer.startTime == layer.endTime
+            val start = if (clipBounded) source.frameAt(layer.startTime) else minOf(0, frames.min())
+            val end = if (clipBounded) source.frameAt(layer.endTime) else maxOf(source.lastFrame, frames.max())
             for (frame in frames) {
                 val before = if (keys.size == 1) start else remaining.lastOrNull { it < frame }?.plus(1) ?: start
                 val after = if (keys.size == 1) end else remaining.firstOrNull { it > frame }?.minus(1) ?: end
@@ -250,7 +251,7 @@ internal class InlineKeyMove(private val source: Scene, private val keys: Set<In
                 val frames = picked.map { it.frame }.sorted().let { if (delta > 0) it.asReversed() else it }
                 val scope = KeyScope(track.second)
                 val before = updated.keyframeTimes(scope).size
-                for (frame in frames) updated = updated.withKeyframesMoved(frame, frame + delta, source, scope)
+                for (frame in frames) updated = updated.withKeyframesMoved(frame, frame + delta, source, scope, allowOutsideClip = true)
                 if (updated.keyframeTimes(scope).size != before) return apply(scene, 0)
             }
             result = result.update(id) { updated }
