@@ -201,16 +201,19 @@ internal class SpatialGizmo(
             val cross = Offset(-direction.y, direction.x) * minOf(3.dp.toPx(), length * 0.18f)
             val base = project(pointOnAxis(axis, -reach * 0.70f))
             fun arm(a: GizmoPoint, b: GizmoPoint, positive: Boolean) {
-                fun paint() {
-                    drawLine(GizmoShadow, a.at, b.at, 4.dp.toPx(), StrokeCap.Round)
-                    drawLine(color.copy(alpha = if (positive) 1f else 0.55f), a.at, b.at, 1.6.dp.toPx(), StrokeCap.Round)
+                fun paint(alpha: Float) {
+                    val tint = color.copy(alpha = alpha * if (positive) 1f else 0.55f)
+                    drawLine(GizmoShadow.copy(alpha = GizmoShadow.alpha * alpha), a.at, b.at, 4.dp.toPx(), StrokeCap.Round)
+                    drawLine(tint, a.at, b.at, 1.6.dp.toPx(), StrokeCap.Round)
                     if (positive) {
-                        drawLine(color, back - cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
-                        drawLine(color, back + cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
+                        drawLine(tint, back - cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
+                        drawLine(tint, back + cross, tip.at, 1.6.dp.toPx(), StrokeCap.Round)
                     }
                 }
-                if (surface != null && occluded(a, b)) clipPath(surface, ClipOp.Difference) { paint() }
-                else paint()
+                if (surface != null && occluded(a, b)) {
+                    clipPath(surface, ClipOp.Difference) { paint(1f) }
+                    clipPath(surface) { paint(0.45f) }
+                } else paint(1f)
             }
             if (base != null) arm(base, pivot, false)
             arm(pivot, tip, true)
