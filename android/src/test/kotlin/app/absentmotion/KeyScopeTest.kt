@@ -10,6 +10,7 @@ import app.absentmotion.editor.InlineKey
 import app.absentmotion.editor.InlineKeyMove
 import app.absentmotion.editor.inlineNavigationStops
 import app.absentmotion.editor.inlineEditorPanel
+import app.absentmotion.editor.inlineTrackSections
 import app.absentmotion.editor.navigationStops
 import app.absentmotion.model.KeyScope
 import app.absentmotion.model.Layer
@@ -176,6 +177,25 @@ class KeyScopeTest {
         val changed = at.withTransformAxes(PropRef.Location, at.location[0], 90f, 0f)
         assertEquals(listOf(10, 45), changed.keys(PropRef.Location.copy(component = 0)))
         assertEquals(listOf(10, 20, 45), changed.keys(PropRef.Location.copy(component = 1)))
+    }
+
+    @Test fun linkedScaleShowsOneTrackWithBothAxesKeys() {
+        val scale = XmlNode("scale", children = listOf(
+            kf(10, "1,1"),
+            XmlNode("axis", mapOf("index" to "0"), listOf(kf(15, "1"), kf(25, "2"))),
+            XmlNode("axis", mapOf("index" to "1"), listOf(kf(20, "1"), kf(35, "2"))),
+        ))
+        val base = layer()
+        val layer = base.copy(node = base.node.withChild("transform", XmlNode("transform", children = listOf(scale))))
+        val ref = PropRef.Scale
+        fun tracks(of: Layer) = inlineTrackSections(of, EffectCatalog()).flatMap { it.visibleTracks }.map { it.ref }
+
+        assertEquals(listOf(ref), tracks(layer).filter { it.name == ref.name })
+        assertEquals(listOf(15, 20, 25, 35), layer.frames(KeyScope(ref)))
+        val unlinked = layer.withScaleLinked(false)
+        assertEquals(listOf(ref.copy(component = 0), ref.copy(component = 1)), tracks(unlinked).filter { it.name == ref.name })
+        assertEquals(listOf(15, 25), unlinked.keys(ref.copy(component = 0)))
+        assertEquals(listOf(20, 35), unlinked.keys(ref.copy(component = 1)))
     }
 
     @Test fun movingAndTogglingOnePositionAxisPreservesTheOther() {

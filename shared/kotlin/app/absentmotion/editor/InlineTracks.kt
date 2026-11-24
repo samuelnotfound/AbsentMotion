@@ -70,7 +70,14 @@ internal fun inlineTrackSections(
         transform += InlineTrack(PropRef.Rotation, if (layer.uses3D) "Z $rotate" else rotate, -1f, "°")
     }
     if (layer.uses3D) vector(PropRef.Tilt, rotate, "XY", "0,0", unit = "°")
-    vector(PropRef.Scale, AppText.get(R.string.panel_size), "XY", "1,1", 100f, "%")
+    val size = AppText.get(R.string.panel_size)
+    if (layer.scaleLinked) {
+        if (active?.copy(component = null) == PropRef.Scale || layer.keyframeTimes(KeyScope(PropRef.Scale)).isNotEmpty()) {
+            transform += InlineTrack(PropRef.Scale, size)
+        }
+    } else {
+        vector(PropRef.Scale, size, "XY", PropRef.Scale.axisDefaults(), 100f, "%")
+    }
     vector(PropRef.Pivot, AppText.get(R.string.a11y_tab_pivot), xyz, "0,0,0")
     vector(PropRef.Skew, AppText.get(R.string.a11y_tab_skew), "XY", "0,0", (180 / Math.PI).toFloat(), "°")
     if (active == PropRef.Opacity || layer.propertyElement(PropRef.Opacity)?.isKeyframed == true) {

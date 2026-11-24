@@ -120,7 +120,12 @@ internal fun InlinePositionDetails(
                     val openEditor = editor(track)
                     val raw = at.element(track.ref)?.valueAt(at.t) ?: track.default
                     val value = raw?.toFloatOrNull()?.times(track.multiplier)
-                    val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
+                    val display = if (track.ref == PropRef.Scale) {
+                        val (x, y) = at.scale.map { formatFixed(it * 100f, 1).removeSuffix(".0") }
+                        if (x == y) "$x%" else "$x × $y%"
+                    } else {
+                        value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
+                    }
                     val active = layer.id == state.selectedId && state.inlineProperty != null &&
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)

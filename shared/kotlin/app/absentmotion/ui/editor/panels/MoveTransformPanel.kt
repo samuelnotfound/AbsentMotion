@@ -524,7 +524,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     val linked = layer.scaleLinked
     val (measured, box) = layerBox(state, layer)
     val upright = measured?.sides?.upright == true
-    val focus = state.inlineComponent(PropRef.Scale)
+    val focus = if (linked) null else state.inlineComponent(PropRef.Scale)
     var active by remember(layer.id, focus, upright) { mutableIntStateOf(if (upright && focus != null) 1 - focus else focus ?: 0) }
     if (focus != null) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
     val percent = state.editingGroupMember
