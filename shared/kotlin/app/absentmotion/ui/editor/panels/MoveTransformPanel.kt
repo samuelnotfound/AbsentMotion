@@ -571,7 +571,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
         val field = KeypadField(if (isWidth) widthLabel else heightLabel, old, unit)
         state.keypad = KeypadRequest(listOf(field), 0) { v -> if (v[0] > 0f) stretch(v[0] / old, isWidth) }
     }
-    fun colour(which: Int) = if (linked || active == which) Am.Accent else Am.OnDark
+    fun colour(which: Int) = if (active == which || linked && !separated) Am.Accent else Am.OnDark
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.align(Alignment.TopCenter).padding(top = 42.px)) {

@@ -218,7 +218,7 @@ class KeyScopeTest {
         assertEquals(listOf(10, 20, 45), changed.keys(PropRef.Location.copy(component = 1)))
     }
 
-    @Test fun linkedScaleShowsOneTrackWithBothAxesKeys() {
+    @Test fun incompatibleScaleAxesKeepTheirOwnEditableCurvesWithTheChainOn() {
         val scale = XmlNode("scale", children = listOf(
             kf(10, "1,1"),
             XmlNode("axis", mapOf("index" to "0"), listOf(kf(15, "1"), kf(25, "2"))),
@@ -229,16 +229,23 @@ class KeyScopeTest {
         val ref = PropRef.Scale
         fun tracks(of: Layer) = inlineTrackSections(of, EffectCatalog()).flatMap { it.visibleTracks }.map { it.ref }
 
-        assertEquals(listOf(ref), tracks(layer).filter { it.name == ref.name })
+        val x = ref.copy(component = 0)
+        val y = ref.copy(component = 1)
+        assertEquals(listOf(x, y), tracks(layer).filter { it.name == ref.name })
         assertEquals(listOf(15, 20, 25, 35), layer.frames(KeyScope(ref)))
+        val at = layer.at(scene.frameTime(22), scene.fps)
+        val curve = Easing("cubicBezier", listOf(0.25f, 0f, 0.75f, 1f))
+        assertEquals(Easing.Linear, at.easing(x))
+        assertEquals(curve, at.withEasing(x, curve).easing(x))
+        assertEquals(at.keyframes(y), at.withEasing(x, curve).keyframes(y))
         val unlinked = layer.withScaleLinked(false)
-        assertEquals(listOf(ref), tracks(unlinked).filter { it.name == ref.name })
+        assertEquals(listOf(x, y), tracks(unlinked).filter { it.name == ref.name })
         val separated = unlinked.withScaleDimensionsSeparated(true)!!
         assertEquals(listOf(ref.copy(component = 0), ref.copy(component = 1)), tracks(separated).filter { it.name == ref.name })
         assertEquals(listOf(15, 25), separated.keys(ref.copy(component = 0)))
         assertEquals(listOf(20, 35), separated.keys(ref.copy(component = 1)))
         val chained = separated.withScaleLinked(true)
-        assertEquals(listOf(ref), tracks(chained).filter { it.name == ref.name })
+        assertEquals(listOf(x, y), tracks(chained).filter { it.name == ref.name })
         assertEquals(listOf(15, 20, 25, 35), chained.frames(KeyScope(ref)))
     }
 
@@ -250,6 +257,8 @@ class KeyScopeTest {
         val x = PropRef.Scale.copy(component = 0)
         val y = PropRef.Scale.copy(component = 1)
         val at = shared.at(scene.frameTime(20), scene.fps)
+        val curve = Easing("cubicBezier", listOf(0.25f, 0f, 0.75f, 1f))
+        assertEquals(curve, at.withEasing(PropRef.Scale, curve).easing(PropRef.Scale))
         val combined = at.withTransform("scale", 3f, at.scale[1])
         assertEquals(false, combined.scaleLinked)
         assertEquals(false, combined.scaleDimensionsSeparated)
@@ -262,7 +271,7 @@ class KeyScopeTest {
         assertEquals(listOf(10, 20, 25, 45), separated.keys(x))
         assertEquals(listOf(10, 20, 45), separated.keys(y))
         assertEquals(null, separated.withScaleDimensionsSeparated(false))
-        assertEquals(false, separated.withScaleLinked(true).scaleDimensionsSeparated)
+        assertEquals(true, separated.withScaleLinked(true).scaleDimensionsSeparated)
     }
 
     @Test fun aSeparatedPositionCurveWritesOnlyTheActiveAxis() {

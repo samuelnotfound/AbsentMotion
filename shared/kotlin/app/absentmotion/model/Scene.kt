@@ -429,16 +429,22 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun withScaleLinked(linked: Boolean): Layer {
         if (linked == scaleLinked) return this
-        val changed = copy(node = node.with("scaleLinked", if (linked) null else "false").with("scaleDimensionsSeparated", "false"))
-        return if (linked) changed.withScaleDimensionsSeparated(false) ?: changed else changed
+        return copy(node = node.with("scaleLinked", if (linked) null else "false"))
     }
 
+    private val sharedScale by lazy { propertyElement(PropRef.Scale)?.joinTransformAxes(PropRef.Scale) }
+
     internal val scaleDimensionsSeparated: Boolean
-        get() = !scaleLinked && (node["scaleDimensionsSeparated"]?.toBooleanStrictOrNull() ?:
-            (propertyElement(PropRef.Scale)?.children?.any { it.name == "axis" && it.isKeyframed } == true))
+        get() {
+            if (node["scaleDimensionsSeparated"] == "true") return true
+            val scale = propertyElement(PropRef.Scale) ?: return false
+            val hasAxisKeys = scale.children.any { it.name == "axis" && it.isKeyframed }
+            if (!hasAxisKeys) return false
+            return (!scaleLinked && node["scaleDimensionsSeparated"] == null) || sharedScale == null
+        }
 
     internal fun withScaleDimensionsSeparated(separated: Boolean): Layer? {
-        if (separated) return copy(node = node.with("scaleDimensionsSeparated", "true").with("scaleLinked", "false"))
+        if (separated) return copy(node = node.with("scaleDimensionsSeparated", "true"))
         val scale = propertyElement(PropRef.Scale)
         val combined = if (scale == null) this else withElement(PropRef.Scale, scale.joinTransformAxes(PropRef.Scale) ?: return null)
         return combined.copy(node = combined.node.with("scaleDimensionsSeparated", "false"))
@@ -499,7 +505,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     internal fun easingElement(ref: PropRef): XmlNode? {
         val element = element(ref) ?: return null
-        return if (ref == PropRef.Scale && !scaleDimensionsSeparated) element.joinTransformAxes(ref) else element
+        return if (ref == PropRef.Scale && !scaleDimensionsSeparated) sharedScale else element
     }
 
     fun easing(ref: PropRef): Easing? {
@@ -542,7 +548,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
             else if (n.name != "scene") n.children.forEach(::walk)
         }
         val scoped = if (scope == null) node else scopeNode(scope) ?: return emptyList()
-        if (scope?.ref == PropRef.Scale && !scaleDimensionsSeparated && scoped.children.any { it.name == "axis" }) {
+        if (scope?.ref == PropRef.Scale && scoped.children.any { it.name == "axis" }) {
             for (axis in 0..1) walk(scoped.axisTrack(axis, PropRef.Scale.axisDefaults()))
         } else {
             walk(scoped)

@@ -97,7 +97,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import app.absentmotion.editor.resetTransform
-import app.absentmotion.editor.toggleTransformDimensions
+import app.absentmotion.editor.separateTransformDimensions
 import app.absentmotion.model.PropRef
 import app.absentmotion.ui.editor.panels.Turn
 import app.absentmotion.editor.EditorState
@@ -305,8 +305,9 @@ internal fun TransformMenu(state: EditorState, tab: Int, turn: Turn?, extra: (@C
             else -> null
         }
         dimensions?.let { (ref, separated) ->
-            MenuRow(stringResource(if (separated) R.string.position_join_dimensions else R.string.position_separate_dimensions)) {
-                state.toggleTransformDimensions(ref)
+            MenuRow(stringResource(R.string.position_separate_dimensions), enabled = !separated,
+                trailing = PanelIcons.Check.takeIf { separated }) {
+                state.separateTransformDimensions(ref)
                 onDismiss()
             }
         }
