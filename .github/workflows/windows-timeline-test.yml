@@ -27,10 +27,9 @@ jobs:
 
       - name: Check out native dependencies
         run: |
-          git -c submodule.third_party/FFamp.url=https://github.com/Comett1225/FFamp.git submodule update --init --depth=1 --recursive
+          git submodule update --init --depth=1 --recursive -- third_party/ncnn third_party/whisper.cpp
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "SKIA_DIR=$env:GITHUB_WORKSPACE/third_party/skia" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "FFAMP_DEPS=$env:RUNNER_TEMP/ffamp-win" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install the native build tools
         run: |
@@ -41,12 +40,6 @@ jobs:
           $install = Start-Process -FilePath $installer -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
           if ($install.ExitCode -ne 0) { exit $install.ExitCode }
           & "$env:ProgramFiles/LLVM/bin/clang-cl.exe" --version
-
-          $nasm = Join-Path $env:RUNNER_TEMP 'nasm.zip'
-          curl.exe --fail --location --retry 3 --output $nasm 'https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Expand-Archive $nasm $env:RUNNER_TEMP
-          Join-Path $env:RUNNER_TEMP 'nasm-2.16.03' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Restore the Windows Skia libraries
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
@@ -120,19 +113,9 @@ jobs:
           if (-not $build) { throw 'FFmpeg development headers are missing' }
           "FFMPEG_DIR=$($build.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Build FFamp media dependencies
-        run: |
-          $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (-not $vs) { throw 'Visual C++ Build Tools were not found' }
-          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
-          & cmd.exe /c ('"{0}" >nul && set' -f $vcvars) | ForEach-Object {
-            if ($_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
-          }
-          & "$env:ProgramFiles/Git/bin/bash.exe" third_party/FFamp/third_party/build_windows.sh $env:FFAMP_DEPS
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Build the portable Windows app
+        env:
+          AM_WINDOWS_FFMPEG_ONLY: '1'
         working-directory: pc
         run: .\gradlew.bat createDistributable --no-daemon
 
