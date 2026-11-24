@@ -63,7 +63,7 @@ value class Scene(val node: XmlNode) {
 
     fun layerAt(id: Long, timeMs: Int): Layer? = layer(id)?.at(timeMs, fps)
 
-    fun frameStart(frame: Int): Int = (frame * 1000L / fps).toInt()
+    fun frameStart(frame: Int): Int = Math.floorDiv(frame * 1000L, fps.toLong()).toInt()
     fun frameAt(timeMs: Int): Int = frameOfMs(timeMs.toLong(), fps).toInt()
     fun frameTime(frame: Int): Int = ((2 * frame + 1) * 500L / fps).toInt()
     fun frameEnd(frame: Int): Int = frameStart(frame + 1) - 1
@@ -89,10 +89,10 @@ value class Scene(val node: XmlNode) {
     fun movedClip(layer: Layer, start: Int, keepEnd: Boolean = false): Layer {
         val moved = layer.movedTo(start)
         val count = drawnFrames(layer.startTime, layer.endTime)
-        if (count == 0 || minOf(start, layer.startTime) < 0 || drawnFrames(moved.startTime, moved.endTime) == count) return moved
+        if (count == 0 || drawnFrames(moved.startTime, moved.endTime) == count) return moved
         val from = if (keepEnd) frameStart(frameAt(moved.endTime) - count + 1) else start
         val to = if (keepEnd) moved.endTime else frameStart(frameAt(start - 1) + 1 + count) - 1
-        return if (from < 0) moved else moved.copy(node = moved.node.with("startTime", "$from").with("endTime", "$to"))
+        return moved.copy(node = moved.node.with("startTime", "$from").with("endTime", "$to"))
     }
 
     fun withTitle(title: String) = Scene(node.with("title", title))
@@ -227,7 +227,7 @@ enum class LabelColour(val id: String, val start: Int, val end: Int) {
 
 private val FOLLOWS_BELOW = setOf("absent.movealongpath", "absent.repeatalongpath")
 
-internal fun frameOfMs(timeMs: Long, fps: Int): Long = ((timeMs + 1) * fps + 999) / 1000 - 1
+internal fun frameOfMs(timeMs: Long, fps: Int): Long = Math.floorDiv((timeMs + 1) * fps - 1, 1000L)
 
 internal fun List<Layer>.isMask(index: Int): Boolean = index > 0 && this[index].node["clippingMask"] == "true"
 

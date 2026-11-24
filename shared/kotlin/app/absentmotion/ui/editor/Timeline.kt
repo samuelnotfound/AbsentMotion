@@ -697,11 +697,11 @@ internal object TimelineMath {
         return best.takeIf { abs(frameTimeMs(it, fps) - wantedMs) <= zoneMs }
     }
 
-    fun moveTarget(wantedMs: Float, spanMs: Float, spanFrames: Int, targets: Collection<Int>, fps: Int, zoneMs: Float): MoveTarget {
+    fun moveTarget(wantedMs: Float, spanMs: Float, spanFrames: Int, targets: Collection<Int>, fps: Int, zoneMs: Float, firstFrame: Int): MoveTarget {
         val snapped = listOf(0f to 0, spanMs to spanFrames).flatMap { (offsetMs, offsetFrames) ->
             targets.map { hit -> Triple(hit - offsetFrames, hit, abs(frameTimeMs(hit, fps) - wantedMs - offsetMs)) }
-        }.filter { it.first >= 0 && it.third <= zoneMs }.minByOrNull { it.third }
-        return snapped?.let { MoveTarget(it.first, it.second) } ?: MoveTarget(nearestFrame(wantedMs, fps).coerceAtLeast(0), null)
+        }.filter { it.first >= firstFrame && it.third <= zoneMs }.minByOrNull { it.third }
+        return snapped?.let { MoveTarget(it.first, it.second) } ?: MoveTarget(nearestFrame(wantedMs, fps).coerceAtLeast(firstFrame), null)
     }
 
     fun movedStart(scene: Scene, layer: Layer, frame: Int): Int =
@@ -719,11 +719,10 @@ internal object TimelineMath {
         }
     }
 
-    fun groupTarget(scene: Scene, grabbed: Layer, others: List<Layer>, found: MoveTarget): MoveTarget {
-        if (others.isEmpty()) return found
+    fun earliestClipMove(scene: Scene, grabbed: Layer, others: List<Layer>): Int {
         val first = scene.firstShownFrame(grabbed.startTime)
-        val lowest = minOf(first, others.minOf { scene.firstShownFrame(it.startTime) })
-        return if (found.frame - first >= -lowest) found else MoveTarget(first - lowest, null)
+        val earliestEnd = (listOf(grabbed) + others).minOf { scene.lastShownFrame(it.endTime) }
+        return first - earliestEnd.coerceAtLeast(0)
     }
 
     fun movedClips(scene: Scene, grabbed: Layer, others: List<Layer>, frame: Int): Scene {
@@ -1849,11 +1848,12 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val wanted = original.startTime + moveDx / pxPerMs + panBias
         val spanFrames = scene.lastShownFrame(original.endTime) + 1 - scene.firstShownFrame(original.startTime)
         val spanMs = (original.endTime + 1 - original.startTime).toFloat()
-        val found = TimelineMath.moveTarget(wanted, spanMs, spanFrames, if (deskLayout && snapDisabled) emptySet() else snapTargets, fps, SnapZone.px / pxPerMs)
-        val target = TimelineMath.groupTarget(scene, original, moveGroup, found)
+        val minimum = TimelineMath.earliestClipMove(scene, original, moveGroup)
+        val target = TimelineMath.moveTarget(wanted, spanMs, spanFrames,
+            if (deskLayout && snapDisabled) emptySet() else snapTargets, fps, SnapZone.px / pxPerMs, minimum)
         val start = TimelineMath.movedStart(scene, original, target.frame)
         showSnap(target.snap, target.snap ?: target.frame)
-        moveSlide = if (target.snap != null || target != found || wanted <= 0f) 0f else (wanted - start) * pxPerMs
+        moveSlide = if (target.snap != null || wanted < TimelineMath.frameTimeMs(minimum, fps)) 0f else (wanted - start) * pxPerMs
         val group = moveGroup
         if (scene.layer(original.id)?.startTime != start) state.edit(MOVE_EDIT) { TimelineMath.movedClips(it, original, group, target.frame) }
     }

@@ -19,7 +19,7 @@ class TimelineMoveTest {
     private val zone = 20f
 
     private fun move(wantedMs: Float, targets: Set<Int> = emptySet(), spanFrames: Int = 30, zoneMs: Float = zone) =
-        TimelineMath.moveTarget(wantedMs, spanFrames * second / fps, spanFrames, targets, fps, zoneMs)
+        TimelineMath.moveTarget(wantedMs, spanFrames * second / fps, spanFrames, targets, fps, zoneMs, 1 - spanFrames)
 
     private fun sceneWith(clip: XmlNode, rate: Int = fps) =
         Scene.create("t", 1080, 1080, rate, 0).let { Scene(it.node.copy(children = it.node.children + clip)) }
@@ -30,11 +30,14 @@ class TimelineMoveTest {
         assertEquals(MoveTarget(29, null), move(980f))
     }
 
-    @Test fun theStartNeverGoesBelowZero() {
-        assertEquals(MoveTarget(0, null), move(-250f))
+    @Test fun theStartCanGoBelowZeroWhileOneFrameRemainsVisible() {
+        assertEquals(MoveTarget(-7, null), move(-233f))
         assertEquals(MoveTarget(0, null), move(-0.4f))
-        val tailWouldNeedANegativeStart = TimelineMath.frameTimeMs(10, fps) - second
-        assertEquals(MoveTarget(0, null), move(tailWouldNeedANegativeStart, setOf(10)))
+        assertEquals(MoveTarget(-29, null), move(-2200f))
+        val tailStartsBeforeZero = TimelineMath.frameTimeMs(10, fps) - second
+        assertEquals(MoveTarget(-20, 10), move(tailStartsBeforeZero, setOf(10)))
+        val scene = Scene.create("t", 1080, 1080, fps, 0)
+        for (frame in -30..0) assertEquals(frame, scene.frameAt(scene.frameStart(frame)))
     }
 
     @Test fun theLeadingEdgeSnapsToATargetInsideTheZone() {
@@ -86,8 +89,8 @@ class TimelineMoveTest {
         assertEquals(layer.endTime, away.movedTo(TimelineMath.movedStart(scene, layer, home)).endTime)
     }
 
-    @Test fun aNearestEndTargetThatWouldStartBeforeZeroDoesNotHideAValidOne() {
-        assertEquals(MoveTarget(0, 30), move(-25f, setOf(29, 30), zoneMs = 40f))
+    @Test fun aSnapThatWouldHideTheWholeClipDoesNotHideAValidSnap() {
+        assertEquals(MoveTarget(-29, 1), move(-999f, setOf(0, 1), zoneMs = 40f))
     }
 
     @Test fun aZeroSnapZoneSnapsOnlyToAnExactEdge() {
@@ -95,11 +98,11 @@ class TimelineMoveTest {
         assertEquals(MoveTarget(60, null), move(2001f, setOf(60), zoneMs = 0f))
     }
 
-    @Test fun everyTargetKeepsTheStartOnTheTimelineAndSnapsOnlyToAnEdgeOfTheClip() {
+    @Test fun everyTargetKeepsPartOfTheClipOnTheTimelineAndSnapsOnlyToAnEdge() {
         val targets = setOf(0, 5, 29, 30, 31, 60)
         for (wanted in -2000..2500 step 3) {
             val target = move(wanted.toFloat(), targets)
-            assertTrue("$wanted", target.frame >= 0)
+            assertTrue("$wanted", target.frame >= -29)
             assertTrue("$wanted", target.snap == null || target.snap == target.frame || target.snap == target.frame + 30)
         }
     }
@@ -125,10 +128,11 @@ class TimelineMoveTest {
         assertEquals(b.endTime - b.startTime, moved.layer(2)!!.let { it.endTime - it.startTime })
         assertEquals(c, moved.layer(3))
         assertEquals(scene.layers, TimelineMath.movedClips(scene, a, listOf(b), scene.firstShownFrame(a.startTime)).layers)
-        val far = MoveTarget(0, 0)
-        assertEquals(MoveTarget(scene.firstShownFrame(b.startTime) - scene.firstShownFrame(a.startTime), null), TimelineMath.groupTarget(scene, b, listOf(a), far))
-        assertEquals(far, TimelineMath.groupTarget(scene, a, listOf(b), far))
-        assertEquals(far, TimelineMath.groupTarget(scene, b, emptyList(), far))
+        val earliest = TimelineMath.earliestClipMove(scene, b, listOf(a))
+        val movedToStart = TimelineMath.movedClips(scene, b, listOf(a), earliest)
+        assertEquals(0, scene.lastShownFrame(movedToStart.layer(1)!!.endTime))
+        assertTrue(movedToStart.layer(1)!!.startTime < 0)
+        assertEquals(scene.firstShownFrame(b.startTime) - scene.lastShownFrame(b.endTime), TimelineMath.earliestClipMove(scene, b, emptyList()))
         val targets = TimelineMath.snapTargets(scene, setOf(1L, 2L), 0)
         assertEquals(setOf(0, scene.firstShownFrame(c.startTime), scene.lastShownFrame(c.endTime) + 1), targets)
     }
