@@ -1005,7 +1005,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             val height = child.headerHeightPx(density)
             val ref = state.keyScope?.ref?.takeIf { child.selected(state) && state.showsLayerInspector }
             if (ref != null && !app.absentmotion.editor.InlineTrack(ref, "").linked(child.layer)) {
-                val headerWidth = with(density) { child.sidebarWidth(state, expandedPath(child.path)).toPx() }
+                val headerWidth = with(density) { child.clipLaneStart(state, expandedPath(child.path)).toPx() }
                 for (ms in child.layer.keyframeTimes(KeyScope(ref))) {
                     val frame = child.owner.frameAt(ms)
                     val x = xOf(frame) ?: continue
@@ -2763,11 +2763,11 @@ private fun DrawScope.drawGroupClip(
     val bottom = size.height - top
     val duration = (layer.endTime + 1f - layer.startTime).coerceAtLeast(1f)
     val scale = (right - left) / duration
-    if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, top, bottom, scale)
+    if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, top, bottom, scale, clipToLane = true)
     else drawBar(outline, left, right, top, bottom, stripe, null, layer.startTime, scale,
-        layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj")
-    layer.labelColour?.let { drawTagCorner(outline, left, top, (bottom - top) / 2, Color(it.start)) }
-    drawLabel(layer.shownName(), measurer, left, right, top, bottom, if (layer.kind == "audio") styles.audioLabel else styles.label)
+        layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj", clipToLane = true)
+    if (left >= 0f) layer.labelColour?.let { drawTagCorner(outline, left, top, (bottom - top) / 2, Color(it.start)) }
+    drawLabel(layer.shownName(), measurer, maxOf(0f, left), minOf(size.width, right), top, bottom, if (layer.kind == "audio") styles.audioLabel else styles.label)
 }
 
 private fun DrawScope.drawDeskClipFrame(left: Float, right: Float, top: Float, bottom: Float, headerWidth: Float, chosen: Boolean, hovered: Boolean, limit: Boolean?) {
@@ -2815,10 +2815,11 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     drawText(text, topLeft = Offset(left, top + (height - text.size.height) / 2))
 }
 
-private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false, nullLayer: Boolean = false) {
+private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false, nullLayer: Boolean = false, clipToLane: Boolean = false) {
     val radius = BarRadius.toPx()
-    val from = max(left, -2 * radius)
-    val to = min(right, size.width + 2 * radius)
+    val bleed = if (clipToLane) 0f else 2 * radius
+    val from = max(left, -bleed)
+    val to = min(right, size.width + bleed)
     if (from >= to) return
     drawRect(BarShadow, Offset(from, bottom - radius), Size(to - from, radius + BarShadowHeight.toPx()))
     outline.rewind()

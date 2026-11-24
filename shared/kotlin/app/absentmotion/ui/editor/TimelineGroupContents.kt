@@ -65,6 +65,7 @@ private val GroupIconWidth = 22.dp
 private val GroupDisclosureWidth = 26.dp
 private val GroupSidebarStart = 4.dp
 private val GroupSidebarEnd = 2.dp
+private val GroupClipGap = 2.dp
 
 internal class TimelineGroupRow(
     val layer: Layer, val owner: Scene, val groups: List<Long>, private val clocks: List<Pair<Layer, Int>>,
@@ -77,6 +78,8 @@ internal class TimelineGroupRow(
     fun showsLayerControls(state: EditorState, expanded: Boolean): Boolean = expanded || (selected(state) && state.showsLayerInspector)
     fun sidebarWidth(state: EditorState, expanded: Boolean): Dp =
         indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (showsLayerControls(state, expanded)) 5 else 2)
+    fun clipLaneStart(state: EditorState, expanded: Boolean): Dp = sidebarWidth(state, expanded) + GroupClipGap
+
     fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
         val right = (sidebarWidth(state, expanded) - GroupDisclosureWidth - GroupSidebarEnd).toPx()
         x >= right - GroupIconWidth.toPx() && x < right
@@ -150,7 +153,7 @@ internal fun TimelineGroupContents(
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
             Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected || checked) Am.Field else Am.TimelineBg)) {
-                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
+                GroupMemberClip(row, row.clipLaneStart(state, open), xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
                 Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
                     .clip(RoundedCornerShape(50)).background(if (checked) Am.Accent else Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -219,7 +222,7 @@ internal fun TimelineGroupContents(
 
 @Composable
 private fun GroupMemberClip(
-    row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
+    row: TimelineGroupRow, laneStart: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit, modifier: Modifier,
     selected: Boolean, scope: KeyScope?, timeMs: Int, selection: InlineKeySelection,
 ) {
@@ -235,7 +238,7 @@ private fun GroupMemberClip(
         content = {
             Canvas(Modifier.fillMaxWidth().fillMaxHeight().clipToBounds().then(tap)
                 .semantics { contentDescription = layer.shownName() }.alpha(if (layer.hidden) 0.45f else 1f)) {
-                val origin = floor(maxOf(sidebarWidth.toPx(), left()))
+                val origin = floor(maxOf(laneStart.toPx(), left()))
                 drawClip(layer, outline, left() - origin, right() - origin)
                 if (selected) {
                     val active = if (scope == null) emptySet() else layer.keyframeTimes(scope).map(row.owner::frameAt).toSet()
@@ -252,7 +255,7 @@ private fun GroupMemberClip(
     ) { measurables, constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val minimum = sidebarWidth.toPx().coerceAtMost(width.toFloat())
+        val minimum = laneStart.toPx().coerceAtMost(width.toFloat())
         val left = left().coerceIn(minimum, width.toFloat())
         val right = right().coerceIn(minimum, width.toFloat())
         if (left < right && height > 0) {
