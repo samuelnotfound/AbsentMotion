@@ -104,6 +104,7 @@ import app.absentmotion.model.cameraGesture
 import app.absentmotion.model.camera3dGesture
 import app.absentmotion.model.gradient
 import app.absentmotion.model.PropRef
+import app.absentmotion.ui.editor.panels.Turn
 import app.absentmotion.model.textAlign
 import app.absentmotion.model.withResizedTextWrap
 import app.absentmotion.model.wrapWidth
@@ -438,8 +439,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                     angle = next
                                     val angles = rotate(layer, ring.axis, next - ring.angle)
                                     state.editSelected(TRANSFORM_GIZMO) { current ->
-                                        val tilted = current.withTransformAxes(PropRef.Tilt, angles[0], angles[1])
-                                        if (abs(current.rotation - angles[2]) < 1e-4f) tilted else tilted.withRotation(angles[2])
+                                        Turn().withValues(current, angles)
                                     }
                                 }
                             }

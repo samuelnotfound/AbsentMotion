@@ -66,10 +66,16 @@ internal fun inlineTrackSections(
     } else if (active == PropRef.Location || layer.propertyElement(PropRef.Location)?.isKeyframed == true) {
         transform += InlineTrack(PropRef.Location, position)
     }
-    if (active == PropRef.Rotation || layer.propertyElement(PropRef.Rotation)?.isKeyframed == true) {
-        transform += InlineTrack(PropRef.Rotation, if (layer.uses3D) "Z $rotate" else rotate, -1f, "°")
+    if (layer.uses3D && !layer.rotationDimensionsSeparated) {
+        if (active == PropRef.RotationXYZ || layer.element(PropRef.RotationXYZ)?.isKeyframed == true) {
+            transform += InlineTrack(PropRef.RotationXYZ, rotate)
+        }
+    } else {
+        if (active == PropRef.Rotation || layer.propertyElement(PropRef.Rotation)?.isKeyframed == true) {
+            transform += InlineTrack(PropRef.Rotation, if (layer.uses3D) "Z $rotate" else rotate, -1f, "°")
+        }
+        if (layer.uses3D) vector(PropRef.Tilt, rotate, "XY", "0,0", unit = "°")
     }
-    if (layer.uses3D) vector(PropRef.Tilt, rotate, "XY", "0,0", unit = "°")
     val size = AppText.get(R.string.panel_size)
     if (!layer.scaleDimensionsSeparated) {
         if (active?.copy(component = null) == PropRef.Scale || layer.keyframeTimes(KeyScope(PropRef.Scale)).isNotEmpty()) {
@@ -157,7 +163,7 @@ private fun labelOf(name: String): String = name.replace(Regex("([a-z])([A-Z])")
 internal fun inlineEditorPanel(layer: Layer, ref: PropRef): EditorPanel? = when (ref.kind) {
     PropRef.Kind.Transform -> when (ref.copy(component = null)) {
         PropRef.Opacity -> EditorPanel.Blending
-        PropRef.Location, PropRef.Rotation, PropRef.Tilt, PropRef.Scale, PropRef.Pivot, PropRef.Skew -> EditorPanel.MoveTransform
+        PropRef.Location, PropRef.Rotation, PropRef.RotationXYZ, PropRef.Tilt, PropRef.Scale, PropRef.Pivot, PropRef.Skew -> EditorPanel.MoveTransform
         else -> null
     }
     PropRef.Kind.Effect -> EditorPanel.Effects
@@ -193,7 +199,7 @@ internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
     keyTarget = null
     inlinePanelHidden = true
     inlineProperty = ref
-    inlineTransformAxis = ref.component ?: if (ref == PropRef.Rotation) 2 else 0
+    inlineTransformAxis = ref.component ?: if (ref == PropRef.Rotation || ref == PropRef.RotationXYZ) 2 else 0
     volumeOpen = ref == GainRef
     effectIndex = if (target == EditorPanel.Effects) ref.effectIndex else -1
     panel = target

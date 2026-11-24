@@ -1,6 +1,7 @@
 package app.absentmotion.ui.editor.panels
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import app.absentmotion.ui.adaptive.deskLayout
 import app.absentmotion.ui.theme.pressShape
 import app.absentmotion.ui.editor.deskSp
@@ -89,7 +90,7 @@ import app.absentmotion.ui.HoldName
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers())
+            0 -> PositionTab(state, layer, onFlip, rulers = layer.positionDimensionsSeparated || state.settings.positionRulers())
             1, 3 -> if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)
             2 -> if (layer.kind == "camera") CameraSizeTab(state, layer) else SizeTab(state, layer)
             4 -> SkewTab(state, layer)
@@ -202,6 +203,8 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
         if (rulers) {
             TransformRulers(
                 state, ::colour, { formatFixed(at[it], 2) }, ::openKeypad, onSelect = { activeAxis = it }, depthEnabled = spatial,
+                activeAxis = activeAxis.takeIf { separated },
+                keyed = { layer.onKeyframe(PropRef.Location.copy(component = it)) },
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
@@ -787,50 +790,79 @@ private fun FlipHint(text: String) {
 
 @Composable
 private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
+    val separated = turn.effect < 0 && layer.rotationDimensionsSeparated
     val focus = if (turn.effect < 0) state.inlineProperty?.takeIf {
-        it.copy(component = null) == PropRef.Tilt || it == PropRef.Rotation
+        it.copy(component = null) == PropRef.Tilt || it == PropRef.Rotation || it == PropRef.RotationXYZ
     } else null
-    var axis by remember(layer.id, focus) { mutableIntStateOf(focus?.component ?: 2) }
+    var axis by remember(layer.id, focus, separated) { mutableIntStateOf(focus?.component ?: 2) }
+    fun target(which: Int) = when {
+        turn.effect >= 0 -> turn.target(which)
+        !separated -> KeyTarget(PropRef.RotationXYZ, "0,0,0")
+        which < 2 -> KeyTarget(PropRef.Tilt.copy(component = which), "0")
+        else -> turn.target(which)
+    }
     SideEffect {
-        state.keyTarget = if (focus != null && axis < 2) KeyTarget(PropRef.Tilt.copy(component = axis), "0")
-            else turn.target(axis)
+        state.inlineTransformAxis = axis
+        state.keyTarget = target(axis)
     }
     TurnHook(state, turn)
     val values = turn.values(layer)
     fun openKeypad(which: Int) {
         axis = which
-        val fields = transformAxisOrder.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
-        state.keypad = KeypadRequest(fields, transformAxisOrder.indexOf(which)) { v ->
-            state.editSelected { turn.withValues(it, v.toFloatArray(), independent = focus != null) }
+        val axes = if (separated) listOf(which) else transformAxisOrder
+        val fields = axes.map { KeypadField("XYZ"[it].toString(), values[it], "\u00B0") }
+        state.keypad = KeypadRequest(fields, axes.indexOf(which)) { applied ->
+            state.editSelected { current ->
+                val next = turn.values(current)
+                axes.forEachIndexed { index, component -> next[component] = applied[index] }
+                turn.withValues(current, next)
+            }
         }
     }
-    fun colour(which: Int) = if (if (focus != null) which == axis else turn.linked(which, axis)) Am.Accent else Am.OnDark
+    fun colour(which: Int) = if (turn.effect < 0 && !separated || which == axis) Am.Accent else Am.OnDark
     fun drag(which: Int, amount: Float) {
         state.editSelected(key = "axis-$which") { l ->
             val v = turn.values(l)
             v[which] += amount
-            turn.withValues(l, v, independent = focus != null)
+            turn.withValues(l, v)
         }
     }
     fun reset(which: Int) {
-        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v, independent = focus != null) } }
+        state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v) } }
     }
     TransformRulers(state, ::colour, { formatFixed(values[it], 1) + "º" }, ::openKeypad,
-        { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
+        { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset,
+        activeAxis = axis.takeIf { separated }, keyed = { layer.onKeyframe(target(it).ref) })
 }
 
 @Composable
 private fun TransformRulers(
     state: EditorState, colour: (Int) -> Color, value: (Int) -> String, onType: (Int) -> Unit,
     onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit, depthEnabled: Boolean = true,
+    activeAxis: Int? = null, keyed: (Int) -> Boolean = { false },
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.px, vertical = 12.px)) {
         for (which in transformAxisOrder) {
             val enabled = which != 2 || depthEnabled
             val tint = if (enabled) colour(which) else Am.OnDarkDim
             Row(Modifier.fillMaxWidth().weight(1f).alpha(if (enabled) 1f else 0.38f), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(62.px).fillMaxHeight().clickable(enabled = enabled) { onSelect(which) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.width(62.px).fillMaxHeight().padding(vertical = 3.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (activeAxis == which) Am.Field else Color.Transparent)
+                    .clickable(enabled = enabled) { onSelect(which) }, contentAlignment = Alignment.Center) {
                     Text("XYZ"[which].toString(), color = tint, fontSize = 13.sp)
+                    if (activeAxis != null && keyed(which)) {
+                        Canvas(Modifier.align(Alignment.TopEnd).padding(3.dp).size(5.dp, 7.dp)) {
+                            val diamond = Path().apply {
+                                moveTo(center.x, 0f)
+                                lineTo(size.width, center.y)
+                                lineTo(center.x, size.height)
+                                lineTo(0f, center.y)
+                                close()
+                            }
+                            drawPath(diamond, tint)
+                        }
+                    }
                 }
                 RulerSpinner(
                     tint,

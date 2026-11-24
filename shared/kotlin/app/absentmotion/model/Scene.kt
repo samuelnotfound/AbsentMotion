@@ -310,6 +310,42 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     val tilt: FloatArray get() = transform("tilt", 0f, 0f)
 
+    private val sharedRotation by lazy {
+        val pitch = propertyElement(PropRef.Tilt) ?: XmlNode("tilt")
+        val roll = propertyElement(PropRef.Rotation) ?: XmlNode("rotation")
+        val nodes = sequenceOf(pitch, roll) + pitch.children.asSequence().filter { it.name == "axis" }
+        if (nodes.any { node -> node.children.any { it.name == "valueLink" || (it.name == "kf" && it.children.isNotEmpty()) } }) null
+        else XmlNode(PropRef.RotationXYZ.name)
+            .withAxis(0, pitch.axisTrack(0, "0,0"))
+            .withAxis(1, pitch.axisTrack(1, "0,0"))
+            .withAxis(2, roll.axisTrack(0, "0"))
+            .joinTransformAxes(PropRef.RotationXYZ)
+    }
+
+    internal val rotationDimensionsSeparated: Boolean get() = node["rotationDimensionsSeparated"] == "true" || sharedRotation == null
+
+    internal fun withRotationDimensionsSeparated(separated: Boolean): Layer? {
+        val track = sharedRotation
+        if (!separated && track == null) return null
+        val result = if (track != null) withJoinedRotation(track) else this
+        return result.copy(node = result.node.with("rotationDimensionsSeparated", if (separated) "true" else null))
+    }
+
+    private fun withJoinedRotation(track: XmlNode): Layer {
+        fun project(ref: PropRef, components: IntRange): XmlNode {
+            val property = propertyElement(ref) ?: XmlNode(ref.name)
+            fun values(raw: String?) = raw?.split(',').orEmpty().let { parts ->
+                components.joinToString(",") { parts.getOrElse(it) { "0" } }
+            }
+            val kept = property.copy(children = property.children.filterNot { it.name == "axis" || it.name == "kf" })
+            val keys = track.keyframes
+            return if (keys.isEmpty()) kept.with("value", values(track["value"]))
+            else kept.withKeyframes(keys.map { it.copy(v = values(it.v)) })
+        }
+        return withPropertyElement(PropRef.Tilt, project(PropRef.Tilt, 0..1))
+            .withPropertyElement(PropRef.Rotation, project(PropRef.Rotation, 2..2))
+    }
+
     fun transform(name: String, vararg defaults: Float): FloatArray =
         displayNumbers[PropRef(PropRef.Kind.Transform, name)]?.copyOf(defaults.size) ?: floats(node.child("transform")?.child(name)?.valueAt(t), defaults)
 
@@ -375,11 +411,19 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
         }
     }
 
-    fun withRotation(degrees: Float) = withTransform("rotation", -degrees)
+    fun withRotation(degrees: Float): Layer {
+        if (!uses3D || rotationDimensionsSeparated) return withTransform("rotation", -degrees)
+        val angle = tilt
+        return withValue(PropRef.RotationXYZ, formatFloats(floatArrayOf(angle[0], angle[1], -degrees)))
+    }
 
     fun withSkew(x: Float, y: Float) = withTransform("skew", Math.toRadians(x.toDouble()).toFloat(), Math.toRadians(y.toDouble()).toFloat())
 
-    fun withTilt(x: Float, y: Float) = withTransform("tilt", x, y)
+    fun withTilt(x: Float, y: Float): Layer {
+        if (!uses3D) return withTransform("tilt", x, y)
+        if (rotationDimensionsSeparated) return withTransformAxes(PropRef.Tilt, x, y)
+        return withValue(PropRef.RotationXYZ, formatFloats(floatArrayOf(x, y, -rotation)))
+    }
 
     val scaleLinked: Boolean get() = node["scaleLinked"] != "false"
 
@@ -415,12 +459,13 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     internal fun propertyElement(ref: PropRef): XmlNode? = when (ref.kind) {
         PropRef.Kind.Effect -> effects.getOrNull(ref.effectIndex)?.effectProperty(ref.name)
-        PropRef.Kind.Transform -> node.child("transform")?.child(ref.name)
+        PropRef.Kind.Transform -> if (ref == PropRef.RotationXYZ) sharedRotation else node.child("transform")?.child(ref.name)
         PropRef.Kind.Child -> node.path(ref.name)
         PropRef.Kind.Property -> node.children.firstOrNull { it.name == "property" && it["name"] == ref.name }
     }
 
     internal fun withElement(ref: PropRef, element: XmlNode): Layer {
+        if (ref == PropRef.RotationXYZ) return withJoinedRotation(element)
         val index = ref.component ?: return withPropertyElement(ref, element)
         val property = propertyElement(ref) ?: XmlNode(ref.name, mapOf("value" to ref.axisDefaults()))
         if (property.children.any { it.name == "valueLink" && (it["component"]?.toIntOrNull() ?: 0) == index }) return this

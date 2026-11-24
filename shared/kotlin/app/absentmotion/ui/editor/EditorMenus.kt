@@ -287,6 +287,7 @@ internal fun TransformMenu(state: EditorState, tab: Int, turn: Turn?, extra: (@C
             layer == null -> null
             tab == 0 -> PropRef.Location to layer.positionDimensionsSeparated
             tab == SIZE_TAB && layer.kind != "camera" -> PropRef.Scale to layer.scaleDimensionsSeparated
+            tab == ROTATE_TAB && layer.uses3D && turn?.effect == -1 -> PropRef.RotationXYZ to layer.rotationDimensionsSeparated
             else -> null
         }
         dimensions?.let { (ref, separated) ->

@@ -221,7 +221,7 @@ class UiContracts(unittest.TestCase):
         self.assertLess(text.index(turn), text.index('moved && state.selectedId != null && !(canvasGesture && fingers > 1)'))
         tools = source('ui/editor/LayerTools.kt')
         self.assertIn('val turn = if (move && selected.uses3D)', tools)
-        self.assertIn('else turnFor(selected, catalog, shown, threeD = true)', tools)
+        self.assertIn('turnFor(selected, catalog, shown, threeD = true)', tools)
         panel = source('ui/editor/panels/MoveTransformPanel.kt')
         self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)', panel)
         self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])

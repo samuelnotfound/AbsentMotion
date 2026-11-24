@@ -62,13 +62,15 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
         return FloatArray(3) { (node?.effectProperty(axes[it].id)?.valueAt(layer.t) ?: axes[it].default).finiteFloat() ?: 0f }
     }
 
-    fun withValues(layer: Layer, next: FloatArray, independent: Boolean = false): Layer {
+    fun withValues(layer: Layer, next: FloatArray): Layer {
         val old = values(layer)
         val changed = BooleanArray(3) { abs(next[it] - old[it]) >= 1e-4f }
         if (effect < 0) {
-            val tilted = if (changed[0] || changed[1]) {
-                if (independent) layer.withTransformAxes(PropRef.Tilt, next[0], next[1]) else layer.withTilt(next[0], next[1])
-            } else layer
+            if (!changed.any { it }) return layer
+            if (layer.uses3D && !layer.rotationDimensionsSeparated) {
+                return layer.withValue(PropRef.RotationXYZ, formatFloats(floatArrayOf(next[0], next[1], -next[2])))
+            }
+            val tilted = if (changed[0] || changed[1]) layer.withTilt(next[0], next[1]) else layer
             return if (changed[2]) tilted.withRotation(next[2]) else tilted
         }
         if (effect !in layer.effects.indices) return layer
@@ -79,14 +81,17 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
         }
     }
 
-    fun turned(layer: Layer, drag: Offset, twist: Float, independent: Boolean = false): Layer {
+    fun turned(layer: Layer, drag: Offset, twist: Float): Layer {
         val now = values(layer)
         val step = turnStep(drag.x, drag.y, twist, now[2])
-        return withValues(layer, FloatArray(3) { now[it] + step[it] }, independent)
+        return withValues(layer, FloatArray(3) { now[it] + step[it] })
     }
 
     fun reset(layer: Layer): Layer {
         val values = FloatArray(3) { if (effect < 0) 0f else axes[it].default.finiteFloat() ?: 0f }
+        if (effect < 0 && layer.uses3D && !layer.rotationDimensionsSeparated) {
+            return layer.resetValue(PropRef.RotationXYZ, "0,0,0")
+        }
         val next = withValues(layer, values)
         val refs = if (effect < 0) listOf(PropRef.Tilt, PropRef.Rotation) else axes.map { PropRef.effect(effect, it.id) }
         return refs.foldIndexed(next) { i, l, ref ->
@@ -106,13 +111,14 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
 
 internal fun turnFor(layer: Layer, catalog: EffectCatalog, tab: Int, threeD: Boolean = false): Turn? {
     if (tab != ROTATE_TAB && tab != TILT_TAB) return null
-    if (layer.kind == "camera") return if (tab == TILT_TAB || threeD) Turn() else null
+    if (threeD) return Turn()
+    if (layer.kind == "camera") return if (tab == TILT_TAB) Turn() else null
     val turn = layer.effects.withIndex().firstNotNullOfOrNull { (i, node) ->
         val definition = catalog.find(node["id"] ?: "")?.takeIf { it.available && node["hidden"] != "true" } ?: return@firstNotNullOfOrNull null
         val axes = TURN_AXES.map { id -> definition.params.firstOrNull { it.id == id } ?: return@firstNotNullOfOrNull null }
         Turn(i, axes)
     } ?: Turn()
-    return turn.takeIf { tab == TILT_TAB || threeD || turn.effect >= 0 }
+    return turn.takeIf { tab == TILT_TAB || turn.effect >= 0 }
 }
 
 private val TURN_AXES = listOf("rotX", "rotY", "rotZ")
@@ -167,8 +173,7 @@ internal fun localRotation(values: FloatArray, axis: Int, radians: Float): Float
 internal fun TurnHook(state: EditorState, turn: Turn) {
     DisposableEffect(state, turn) {
         val mine: (Offset, Float) -> Unit = { drag, twist ->
-            val focus = state.inlineProperty?.copy(component = null)
-            state.editSelected("turn") { turn.turned(it, drag, twist, focus == PropRef.Rotation || focus == PropRef.Tilt) }
+            state.editSelected("turn") { turn.turned(it, drag, twist) }
         }
         val rotate: ((Layer, Int, Float) -> FloatArray)? = if (turn.effect < 0) { layer, axis, angle ->
             localRotation(turn.values(layer), axis, angle)

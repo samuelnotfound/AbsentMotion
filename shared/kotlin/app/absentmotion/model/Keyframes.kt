@@ -21,6 +21,7 @@ data class PropRef(val kind: Kind, val name: String, val effectIndex: Int = -1, 
         val Scale = PropRef(Kind.Transform, "scale")
         val Pivot = PropRef(Kind.Transform, "pivot")
         val Rotation = PropRef(Kind.Transform, "rotation")
+        internal val RotationXYZ = PropRef(Kind.Transform, "rotationXYZ")
         val Skew = PropRef(Kind.Transform, "skew")
         val Tilt = PropRef(Kind.Transform, "tilt")
         val Opacity = PropRef(Kind.Transform, "opacity")

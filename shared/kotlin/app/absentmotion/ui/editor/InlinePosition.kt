@@ -125,6 +125,8 @@ internal fun InlinePositionDetails(
                     val display = if (track.ref == PropRef.Scale) {
                         val (x, y) = at.scale.map { formatFixed(it * 100f, 1).removeSuffix(".0") }
                         if (x == y) "$x%" else "$x × $y%"
+                    } else if (track.ref == PropRef.RotationXYZ) {
+                        listOf(at.tilt[0], at.tilt[1], at.rotation).joinToString(" · ") { formatFixed(it, 1) + "°" }
                     } else {
                         value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
                     }

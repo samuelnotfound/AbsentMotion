@@ -242,15 +242,27 @@ internal fun EditorState.toggleTransformDimensions(ref: PropRef) {
     val separated = when (ref) {
         PropRef.Location -> !layer.positionDimensionsSeparated
         PropRef.Scale -> !layer.scaleDimensionsSeparated
+        PropRef.RotationXYZ -> !layer.rotationDimensionsSeparated
         else -> return
     }
-    val updated = if (position) layer.withPositionDimensionsSeparated(separated) else layer.withScaleDimensionsSeparated(separated)
+    val updated = when (ref) {
+        PropRef.Location -> layer.withPositionDimensionsSeparated(separated)
+        PropRef.RotationXYZ -> layer.withRotationDimensionsSeparated(separated)
+        else -> layer.withScaleDimensionsSeparated(separated)
+    }
     if (updated == null) {
-        hint(if (position) R.string.position_join_requires_matching_keys else R.string.scale_join_requires_matching_keys)
+        hint(when (ref) {
+            PropRef.Location -> R.string.position_join_requires_matching_keys
+            PropRef.RotationXYZ -> R.string.rotation_join_requires_matching_keys
+            else -> R.string.scale_join_requires_matching_keys
+        })
         return
     }
     editSelected { updated }
-    if (inlineProperty?.copy(component = null) == ref) {
+    val current = inlineProperty?.copy(component = null)
+    if (ref == PropRef.RotationXYZ && current in setOf(PropRef.RotationXYZ, PropRef.Rotation, PropRef.Tilt)) {
+        inlineProperty = if (!separated) ref else if (inlineTransformAxis == 2) PropRef.Rotation else PropRef.Tilt.copy(component = inlineTransformAxis)
+    } else if (current == ref) {
         val axis = inlineTransformAxis.coerceIn(0, if (position && layer.uses3D) 2 else 1)
         inlineProperty = if (separated) ref.copy(component = axis) else ref
     }

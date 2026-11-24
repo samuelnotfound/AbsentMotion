@@ -270,6 +270,36 @@ class KeyScopeTest {
         assertEquals(80f, removed.location[1], 0.0001f)
     }
 
+    @Test fun rotationSharesKeysUntilTheAxesAreSeparated() {
+        val xyz = PropRef.RotationXYZ
+        val x = PropRef.Tilt.copy(component = 0)
+        val y = PropRef.Tilt.copy(component = 1)
+        val z = PropRef.Rotation
+        val original = layer().withThreeD(true).withTilt(20f, 15f).withRotation(30f)
+        assertEquals(false, original.rotationDimensionsSeparated)
+        assertEquals(20f, original.tilt[0], 0.001f)
+        assertEquals(30f, original.rotation, 0.001f)
+
+        val start = original.at(scene.frameTime(10), scene.fps).withKeyframeToggled(xyz, "0,0,0")
+        val shared = start.at(scene.frameTime(45), scene.fps).withRotation(50f)
+        assertEquals(listOf(10, 45), shared.keys(xyz))
+        assertEquals(listOf(10, 45), shared.keys(x))
+        assertEquals(listOf(10, 45), shared.keys(y))
+        assertEquals(listOf(10, 45), shared.keys(z))
+        assertEquals(null, shared.node.child("transform")?.child("rotationXYZ"))
+        val moved = shared.withKeyframesMoved(45, 40, scene, KeyScope(xyz))
+        assertEquals(listOf(10, 40), moved.keys(x))
+        assertEquals(listOf(10, 40), moved.keys(z))
+
+        val split = moved.withRotationDimensionsSeparated(true)!!.at(scene.frameTime(25), scene.fps)
+        val changed = split.withTilt(split.tilt[0], 65f)
+        assertEquals(split.keyframes(x), changed.keyframes(x))
+        assertEquals(split.keyframes(z), changed.keyframes(z))
+        assertEquals(listOf(10, 25, 40), changed.keys(y))
+        assertEquals(null, changed.withRotationDimensionsSeparated(false))
+        assertEquals(false, split.withRotationDimensionsSeparated(false)!!.rotationDimensionsSeparated)
+    }
+
     @Test fun noScopeKeepsEveryKeyframeOfTheLayer() {
         assertEquals(listOf(10, 20, 30, 45, 50), layer().frames())
     }

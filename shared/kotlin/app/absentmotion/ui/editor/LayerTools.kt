@@ -127,7 +127,6 @@ import app.absentmotion.ui.editor.panels.dimmed
 import app.absentmotion.ui.editor.panels.formatPlain
 import app.absentmotion.ui.editor.panels.px
 import app.absentmotion.ui.editor.panels.turnFor
-import app.absentmotion.ui.editor.panels.Turn
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.animatedColor
 import app.absentmotion.ui.theme.Presence
@@ -478,7 +477,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val requestedTransform = requested?.copy(component = null)
     val requestedAxis = requested?.component
     val openingTab = when (requestedTransform) {
-        PropRef.Rotation, PropRef.Tilt -> ROTATE_TAB
+        PropRef.Rotation, PropRef.RotationXYZ, PropRef.Tilt -> ROTATE_TAB
         PropRef.Scale -> SIZE_TAB
         PropRef.Skew -> SKEW_TAB
         else -> 0
@@ -490,10 +489,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
     val canPivot = selected.kind != "camera"
     val shown = if (tab == 0 && pivotMode && canPivot) PIVOT_TAB else tab
     val catalog by state.engine.effects.collectAsState()
-    val turn = if (move && selected.uses3D) {
-        if (shown == ROTATE_TAB && (requestedTransform == PropRef.Tilt || requestedTransform == PropRef.Rotation)) Turn()
-        else turnFor(selected, catalog, shown, threeD = true)
-    } else null
+    val turn = if (move && selected.uses3D) turnFor(selected, catalog, shown, threeD = true) else null
     var menuOpen by remember { mutableStateOf(false) }
     val named = panel != EditorPanel.EditShape && panel != EditorPanel.Camera && panel != EditorPanel.Model && panel != EditorPanel.Light && panel != EditorPanel.Pose && !(move && shown == ROTATE_TAB && turn != null)
     val known = if (!named) null else when {
