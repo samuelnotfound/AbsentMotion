@@ -428,7 +428,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
                 }
             },
     ) {
-        InlineRows(view)
+        InlineRows(view, measurer, styles)
         HeaderPictures(view) { drawLifted(view, measurer, styles, eye, eyeOff, locks, outline, mediaPictures, appear.value) }
         RowSemantics(view)
         LockMenu(view)
@@ -559,7 +559,7 @@ private fun RowSemantics(view: TimelineView) {
 }
 
 @Composable
-private fun InlineRows(view: TimelineView) {
+private fun InlineRows(view: TimelineView, measurer: TextMeasurer, styles: TimelineStyles) {
     if (!view.hasInlinePositions) return
     val rows by remember(view) {
         derivedStateOf {
@@ -581,7 +581,11 @@ private fun InlineRows(view: TimelineView) {
                             onToggleEffect = { view.toggleInlineEffect(listOf(layer.id), it) })
                     }
                     TimelineGroupContents(view.state, view.groupRows(layer), view.inlineKeySelection,
-                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::toggleInlineEffect)
+                        view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::toggleInlineEffect,
+                        drawClip = { child, outline, left, right ->
+                            val stripe = TimelineMath.frameTimeMs(2 * TimelineMath.tickStep(view.fps, view.dpPerSecond), view.fps) * view.timeScale().pxPerMs
+                            drawGroupClip(child, outline, left, right, stripe, measurer, styles)
+                        })
                 }
             }
         },
@@ -2558,6 +2562,20 @@ private fun DrawScope.drawRow(
         }
         drawHeader(top, eye, lock, layer.labelColour, layer.id in MultiSelect.ids, layer.node["clippingMask"] == "true", headerWidth, controls)
     }
+}
+
+private fun DrawScope.drawGroupClip(
+    layer: Layer, outline: Path, left: Float, right: Float, stripe: Float, measurer: TextMeasurer, styles: TimelineStyles,
+) {
+    val top = BarInset.toPx()
+    val bottom = size.height - top
+    val duration = (layer.endTime + 1f - layer.startTime).coerceAtLeast(1f)
+    val scale = (right - left) / duration
+    if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, top, bottom, scale)
+    else drawBar(outline, left, right, top, bottom, stripe, null, layer.startTime, scale,
+        layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj")
+    layer.labelColour?.let { drawTagCorner(outline, left, top, (bottom - top) / 2, Color(it.start)) }
+    drawLabel(layer.shownName(), measurer, max(left, 0f), right, top, bottom, if (layer.kind == "audio") styles.audioLabel else styles.label)
 }
 
 private fun DrawScope.drawDeskClipFrame(left: Float, right: Float, top: Float, bottom: Float, headerWidth: Float, chosen: Boolean, hovered: Boolean, limit: Boolean?) {
