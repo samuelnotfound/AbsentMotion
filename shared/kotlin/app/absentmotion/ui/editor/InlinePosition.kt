@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.onClick
@@ -161,10 +164,12 @@ private fun InlinePositionKeys(
     Canvas(modifier) {
         val y = center.y
         val radius = 4.5.dp.toPx()
+        val diamond = Path()
         for (frame in frames) {
             val x = xOf(frame)
             if (x !in 0f..size.width) continue
-            val diamond = Path().apply {
+            diamond.apply {
+                rewind()
                 moveTo(x - radius, y)
                 lineTo(x, y - radius)
                 lineTo(x + radius, y)
@@ -172,8 +177,18 @@ private fun InlinePositionKeys(
                 close()
             }
             val selected = selection?.keys?.contains(InlineKey(layer.id, track.ref, frame)) == true
-            if (selected) drawPath(diamond, Am.Accent.copy(alpha = 0.30f), style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
-            drawPath(diamond, if (selected || state.frame == frame) Am.Accent else Am.OnDark)
+            drawTimelineKey(diamond, selected, frame == state.playheadFrame)
         }
     }
+}
+
+internal fun DrawScope.drawTimelineKey(diamond: Path, selected: Boolean, current: Boolean) {
+    val highlight = when {
+        selected -> Am.Cool
+        current -> Am.Accent
+        else -> null
+    }
+    val outline = highlight ?: Am.TimelineBg.copy(alpha = 0.7f)
+    drawPath(diamond, outline, style = Stroke((if (highlight == null) 2.dp else 3.5.dp).toPx(), join = StrokeJoin.Round))
+    drawPath(diamond, Am.OnDark)
 }
