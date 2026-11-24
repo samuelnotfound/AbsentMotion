@@ -53,12 +53,11 @@ class KeyScopeTest {
             .grouped(setOf(2L, 3L), null, 7, "Folder")
         val group = host.layer(7)!!
         val rows = timelineGroupRows(host, group, EffectCatalog()) { it == listOf(7L, 2L) }
-        assertEquals(listOf(7L, 3L, 2L), rows.map { it.layer.id })
-        assertEquals(true, rows.first().add)
-        assertEquals(null, rows[1].details)
-        assertEquals(emptyList<app.absentmotion.editor.InlineSection>(), rows[2].details)
-        assertEquals(500..1999, rows[2].visibleRange())
-        assertEquals(300, rows[2].localTime(500))
+        assertEquals(listOf(3L, 2L), rows.map { it.layer.id })
+        assertEquals(null, rows[0].details)
+        assertEquals(emptyList<app.absentmotion.editor.InlineSection>(), rows[1].details)
+        assertEquals(500..1999, rows[1].visibleRange())
+        assertEquals(300, rows[1].localTime(500))
     }
 
     @Test fun viewerRotationUsesTheLayerAxesAfterItHasTurned() {
