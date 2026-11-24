@@ -47,7 +47,7 @@ import app.absentmotion.editor.copiedLayerForStyle
 import app.absentmotion.editor.deleteChosen
 import app.absentmotion.editor.distributeSelection
 import app.absentmotion.editor.groupLayersCentred
-import app.absentmotion.editor.moveClipEdges
+import app.absentmotion.editor.moveChosenEdgeToPlayhead
 import app.absentmotion.editor.pasteStyleOnChosen
 import app.absentmotion.editor.removeAudioOfChosen
 import app.absentmotion.editor.selectedCuts
@@ -106,7 +106,6 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
     var stretch by remember { mutableStateOf<Set<Long>?>(null) }
     stretch?.let { StretchSheet(state, it) { stretch = null } }
     val some = layers.isNotEmpty()
-    val end = some && state.selectedTimeMs >= layers.maxOf { it.endTime }
     val copied = EffectClipboard.effects.isNotEmpty()
     val style = copiedLayerForStyle != null
     val noStyle = stringResource(R.string.desk_style_not_copied)
@@ -158,7 +157,8 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
         },
         MultiTile(ChromeIcons.Transition, R.string.transition_title, cuts.isNotEmpty(), noTransition, R.string.transition_add_between) { state.playing = false; transition = cuts },
         MultiTile(PanelIcons.Split, R.string.timeline_split, layers.any { owner.canSplitAt(it, state.selectedFrame) }) { state.split() },
-        MultiTile(if (end) ChromeIcons.SkipForward else ChromeIcons.SkipBack, if (end) R.string.structure_move_ends else R.string.structure_move_starts, some) { state.moveClipEdges(end, false) },
+        MultiTile(PanelIcons.MoveStartToPlayhead, R.string.structure_move_starts, some) { state.moveChosenEdgeToPlayhead(end = false) },
+        MultiTile(PanelIcons.MoveEndToPlayhead, R.string.structure_move_ends, some) { state.moveChosenEdgeToPlayhead(end = true) },
         MultiTile(SelectionIcons.Align[0], R.string.structure_align_starts, layers.size > 1, needsTwo) { state.alignClipTimes(0) },
         MultiTile(SelectionIcons.DistributeHorizontal, R.string.structure_distribute_starts, layers.size > 2, needsThree) { state.alignClipTimes(1) },
         MultiTile(SelectionIcons.Align[2], R.string.structure_align_ends, layers.size > 1, needsTwo) { state.alignClipTimes(2) },

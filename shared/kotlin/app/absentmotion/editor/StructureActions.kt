@@ -620,11 +620,26 @@ fun EditorState.moveClipEdges(end: Boolean, extend: Boolean) {
     hint(R.string.history_line_up_hint)
 }
 
+fun EditorState.moveChosenEdgeToPlayhead(end: Boolean) {
+    val ids = chosenLayers.map { it.id }
+    val target = selectedFrame
+    lastBlockMove = null
+    editSelectedScene { it.withClipEdgesAt(ids, target, end, extend = false) }
+}
+
 internal fun Scene.withBlockAt(ids: List<Long>, frame: Int, end: Boolean): Scene {
     val chosen = layers.filter { it.id in ids }
     if (chosen.isEmpty()) return this
     val shift = frameStart(frame) - if (end) chosen.maxOf { it.endTime } else chosen.minOf { it.startTime }
     return chosen.fold(this) { acc, layer -> acc.update(layer.id) { movedClip(layer, layer.startTime + shift, keepEnd = end) } }
+}
+
+internal fun Scene.withStartsAt(ids: List<Long>, frame: Int, sampleMs: Int): Scene =
+    (withTrims(ids, frame, sampleMs, true) ?: this).withClipEdgesAt(ids, frame, end = false, extend = true)
+
+fun EditorState.startChosenAtPlayhead() {
+    val ids = chosenLayers.map { it.id }
+    editSelectedScene { it.withStartsAt(ids, selectedFrame, selectedSampleMs) }
 }
 
 internal fun Scene.withEndsAt(ids: List<Long>, frame: Int, sampleMs: Int): Scene =

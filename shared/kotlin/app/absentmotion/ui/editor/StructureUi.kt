@@ -34,12 +34,12 @@ import app.absentmotion.editor.selectedCuts
 import app.absentmotion.editor.chosenLayers
 import app.absentmotion.editor.deleteChosen
 import app.absentmotion.editor.alignClipTimes
-import app.absentmotion.editor.moveClipEdges
+import app.absentmotion.editor.moveChosenEdgeToPlayhead
 import app.absentmotion.editor.split
 import app.absentmotion.model.canSplitAt
 import app.absentmotion.model.trimEndAt
-import app.absentmotion.model.trimStartAt
-import app.absentmotion.editor.trimChosen
+import app.absentmotion.editor.startChosenAtPlayhead
+import app.absentmotion.editor.withStartsAt
 import app.absentmotion.editor.endChosenAtPlayhead
 import app.absentmotion.editor.endShifts
 import app.absentmotion.model.cutBetween
@@ -316,9 +316,8 @@ internal fun MultiBar(state: EditorState, modifier: Modifier) {
     transition?.let { TransitionSheet(state, it) { transition = null } }
     animation?.let { AnimationSheet(state, it) { animation = null } }
     BoxWithConstraints(modifier.padding(6.dp)) {
-    val cell = minOf(40.dp, maxWidth / 8.7f)
+    val cell = minOf(40.dp, maxWidth / 9.7f)
     Row(Modifier.fillMaxSize().clip(RoundedCornerShape(3.dp)).background(Am.PanelInset), verticalAlignment = Alignment.CenterVertically) {
-        val end = layers.isNotEmpty() && state.selectedTimeMs >= layers.maxOf { it.endTime }
         val context = LocalContext.current
         val copied = EffectClipboard.effects
         var moreMenu by remember { mutableStateOf(false) }
@@ -368,14 +367,20 @@ internal fun MultiBar(state: EditorState, modifier: Modifier) {
                 }
             }
         }
-        BarButton(if (end) ChromeIcons.SkipForward else ChromeIcons.SkipBack, stringResource(if (end) R.string.structure_move_ends else R.string.structure_move_starts), Modifier.width(cell).fillMaxHeight(), layers.isNotEmpty()) {
-            state.moveClipEdges(end, false)
+        BarButton(PanelIcons.MoveStartToPlayhead, stringResource(R.string.structure_move_starts), Modifier.width(cell).fillMaxHeight(), layers.isNotEmpty()) {
+            state.moveChosenEdgeToPlayhead(end = false)
         }
-        BarButton(PanelIcons.TrimLeft, stringResource(R.string.a11y_trim_start), Modifier.width(cell).fillMaxHeight(), layers.any { owner.trimStartAt(it, state.selectedFrame) != null }) { state.trimChosen(true) }
+        BarButton(PanelIcons.MoveEndToPlayhead, stringResource(R.string.structure_move_ends), Modifier.width(cell).fillMaxHeight(), layers.isNotEmpty()) {
+            state.moveChosenEdgeToPlayhead(end = true)
+        }
+        val started = remember(owner, ids, state.selectedFrame, state.selectedSampleMs) { owner.withStartsAt(ids, state.selectedFrame, state.selectedSampleMs) }
+        val extendsStart = layers.any { (started.layer(it.id)?.startTime ?: it.startTime) < it.startTime }
+        BarButton(if (extendsStart) PanelIcons.ExtendLeft else PanelIcons.TrimLeft, stringResource(if (extendsStart) R.string.a11y_extend_start else R.string.a11y_trim_start),
+            Modifier.width(cell).fillMaxHeight(), started != owner) { state.startChosenAtPlayhead() }
         BarButton(PanelIcons.Split, stringResource(R.string.timeline_split), Modifier.width(cell).fillMaxHeight(), layers.any { owner.canSplitAt(it, state.selectedFrame) }) { state.split() }
         val shifts = remember(owner, ids, state.selectedFrame) { owner.endShifts(ids, state.selectedFrame, state.selectedSampleMs) }
         val grows = shifts.any { it > 0 }
-        BarButton(PanelIcons.TrimRight, stringResource(if (grows) R.string.a11y_extend_end else R.string.a11y_trim_end), Modifier.width(cell).fillMaxHeight(), shifts.any { it != 0 }) { state.endChosenAtPlayhead() }
+        BarButton(if (grows) PanelIcons.ExtendRight else PanelIcons.TrimRight, stringResource(if (grows) R.string.a11y_extend_end else R.string.a11y_trim_end), Modifier.width(cell).fillMaxHeight(), shifts.any { it != 0 }) { state.endChosenAtPlayhead() }
         Spacer(Modifier.weight(1f))
         BarButton(ChromeIcons.Transition, stringResource(R.string.transition_add_between), Modifier.width(cell).fillMaxHeight().alpha(if (cuts.isNotEmpty()) 1f else DimAlpha)) {
             if (cuts.isNotEmpty()) { state.playing = false; transition = cuts }

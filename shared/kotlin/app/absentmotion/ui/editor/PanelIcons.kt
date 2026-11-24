@@ -17,6 +17,8 @@ internal object PanelIcons {
     val Split = icon("Split", width = 1.7f, stroke = "M3 6A3 3 0 1 0 9 6A3 3 0 1 0 3 6ZM8.12 8.12L12 12M20 4L8.12 15.88M3 18A3 3 0 1 0 9 18A3 3 0 1 0 3 18ZM14.8 14.8L20 20")
     val TrimRight = icon("TrimRight", width = 1.7f, stroke = "M12 2.5L12 21.5M10.5 7.5L4.5 7.5A1.5 1.5 0 0 0 3 9L3 15A1.5 1.5 0 0 0 4.5 16.5L10.5 16.5A1.5 1.5 0 0 0 12 15L12 9A1.5 1.5 0 0 0 10.5 7.5ZM20.5 7.5" +
             "L18.7 7.5M17.2 7.5L15.4 7.5M20.5 16.5L18.7 16.5M17.2 16.5L15.4 16.5")
+    val MoveStartToPlayhead = icon("MoveStartToPlayhead", width = 1.7f, stroke = "M3 3V21M13 7.5H21V16.5H13ZM13 12H6M9 9L6 12L9 15")
+    val MoveEndToPlayhead = icon("MoveEndToPlayhead", width = 1.7f, stroke = "M21 3V21M3 7.5H11V16.5H3ZM11 12H18M15 9L18 12L15 15")
     val ExtendLeft = icon("ExtendLeft", width = 1.7f, stroke = "M13 7.5H21V16.5H13ZM13 12H3M6.5 8.5L3 12L6.5 15.5")
     val ExtendRight = icon("ExtendRight", width = 1.7f, stroke = "M11 7.5H3V16.5H11ZM11 12H21M17.5 8.5L21 12L17.5 15.5")
     val AudioMuted = icon("AudioMuted", width = 1.7f, stroke = "M11 4.702A0.7 0.7 0 0 0 9.797 4.204L6.413 7.587A1.4 1.4 0 0 1 5.416 8L3 8A1 1 0 0 0 2 9L2 15A1 1 0 0 0 3 16L5.416 16A1.4 1.4 0 0 1 6.413 16.413" +
