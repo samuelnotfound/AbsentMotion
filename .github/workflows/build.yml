@@ -22,8 +22,14 @@ on:
       - 'v*'
 
 jobs:
+  lag-test-apk:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'fix/timeline-scrub-responsiveness'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/timeline-work-area-apk.yml
+
   foss-apk:
-    if: ${{ !inputs.diagnostic }}
+    if: ${{ github.ref_name != 'fix/timeline-scrub-responsiveness' && !inputs.diagnostic }}
     runs-on: ubuntu-latest
     timeout-minutes: 170
     container: debian:trixie
@@ -73,7 +79,7 @@ jobs:
         run: python3 tools/api_floor.py android/build/outputs/apk/foss/release/*.apk
 
   compat-apk:
-    if: ${{ !inputs.diagnostic }}
+    if: ${{ github.ref_name != 'fix/timeline-scrub-responsiveness' && !inputs.diagnostic }}
     runs-on: ubuntu-latest
     timeout-minutes: 170
     container: debian:trixie
@@ -129,7 +135,7 @@ jobs:
           python3 tools/api_floor.py --abi armeabi-v7a --min 26 android/build/outputs/apk/compat32/release/*.apk
 
   x86_64-apk:
-    if: ${{ !inputs.diagnostic }}
+    if: ${{ github.ref_name != 'fix/timeline-scrub-responsiveness' && !inputs.diagnostic }}
     runs-on: ubuntu-latest
     timeout-minutes: 170
     container: debian:trixie
@@ -185,6 +191,7 @@ jobs:
           python3 tools/api_floor.py --abi x86_64 --min 26 android/build/outputs/apk/compat/release/*.apk
 
   verify:
+    if: github.ref_name != 'fix/timeline-scrub-responsiveness'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     container: debian:trixie

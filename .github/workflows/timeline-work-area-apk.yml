@@ -2,6 +2,7 @@ name: Timeline work area APK
 run-name: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'AbsentMotion Lag Test APK' || 'Timeline work area APK' }}
 
 on:
+  workflow_call:
   push:
     branches:
       - feature/expandable-layer-rows
