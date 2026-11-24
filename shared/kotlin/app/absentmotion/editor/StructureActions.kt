@@ -610,9 +610,11 @@ fun EditorState.moveClipEdges(end: Boolean, extend: Boolean) {
         editSelectedScene { it.withClipEdgesAt(ids, selectedFrame, end, extend) }
         return
     }
-    val block = scene.withBlockAt(ids, frame, end)
-    val lined = scene.withClipEdgesAt(ids, frame, end, false)
-    edit { block }
+    val owner = selectedScene
+    val target = selectedFrame
+    val block = owner.withBlockAt(ids, target, end)
+    val lined = owner.withClipEdgesAt(ids, target, end, false)
+    editSelectedScene { block }
     if (block == lined) return
     lastBlockMove = BlockMove(java.lang.ref.WeakReference(scene.node), end, frame, MultiSelect.revision)
     hint(R.string.history_line_up_hint)
@@ -635,7 +637,7 @@ internal fun Scene.endShifts(ids: List<Long>, frame: Int, sampleMs: Int): List<I
 
 fun EditorState.endChosenAtPlayhead() {
     val ids = chosenLayers.map { it.id }
-    edit { it.withEndsAt(ids, frame, sampleMs) }
+    editSelectedScene { it.withEndsAt(ids, selectedFrame, selectedSampleMs) }
 }
 
 internal fun Scene.withClipEdgesAt(ids: List<Long>, frame: Int, end: Boolean, extend: Boolean): Scene {

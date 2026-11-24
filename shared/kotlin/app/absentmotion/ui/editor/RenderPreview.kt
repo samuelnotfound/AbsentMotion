@@ -161,8 +161,8 @@ private data class CachedLayerControls(val contour: Path, val corners: List<Offs
 @Composable
 private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Float, width: Float, height: Float, visible: () -> Boolean) {
     val scene = state.scene
-    val selected = state.selectedId
-    val ids = MultiSelect.ids.toList().ifEmpty { listOfNotNull(selected) }
+    val selected = state.selectedId.takeUnless { state.editingGroupMember }
+    val ids = MultiSelect.rootIds.toList().ifEmpty { listOfNotNull(selected) }
     if (ids.isEmpty()) return
     val time = rememberUpdatedState(scene.frameStart(frame))
     var controls by remember(scene, ids, selected, state.cameraMode) { mutableStateOf(emptyList<CachedLayerControls>()) }

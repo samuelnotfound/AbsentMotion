@@ -2313,7 +2313,6 @@
     <string name="cutout_edge_photo">De rand wordt vastgelegd bij het maken van de uitsnede. Voer Achtergrond verwijderen opnieuw uit om hem te wijzigen: dat begint weer bij de originele foto.</string>
     <string name="prerender">Vooraf renderen</string>
     <string name="prerender_progress">Vooraf renderen %1$d%%</string>
-    <string name="prerender_playing">Vooraf gerenderd</string>
     <string name="prerender_outdated">De vooraf gerenderde versie is verouderd.</string>
     <string name="prerender_again">Opnieuw vooraf renderen</string>
     <string name="caption_outline_thickness">Dikte</string>

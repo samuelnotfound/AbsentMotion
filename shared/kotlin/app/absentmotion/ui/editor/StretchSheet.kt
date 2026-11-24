@@ -103,7 +103,7 @@ internal fun StretchSheet(state: EditorState, ids: Set<Long>, onClose: () -> Uni
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Action(stringResource(R.string.cancel), Modifier.weight(1f), onClick = onClose)
                         Action(stringResource(R.string.apply), Modifier.weight(1f), primary = true) {
-                            state.edit { it.stretchedTiming(ids, percent) }
+                            state.editSelectedScene { it.stretchedTiming(ids, percent) }
                             onClose()
                         }
                     }

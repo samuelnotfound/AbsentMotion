@@ -307,8 +307,9 @@ private class ModelTooLarge : Exception()
 internal fun MultiBar(state: EditorState, modifier: Modifier) {
     val layers = state.chosenLayers
     val ids = layers.map { it.id }
-    val cuts = remember(state.scene, ids) {
-        if (ids.size == 2) listOfNotNull(state.scene.cutBetween(ids[0], ids[1])?.let { it.first.id to it.second.id }) else state.scene.selectedCuts(ids.toSet())
+    val owner = state.selectedScene
+    val cuts = remember(owner, ids) {
+        if (ids.size == 2) listOfNotNull(owner.cutBetween(ids[0], ids[1])?.let { it.first.id to it.second.id }) else owner.selectedCuts(ids.toSet())
     }
     var transition by remember { mutableStateOf<List<Pair<Long, Long>>?>(null) }
     var animation by remember { mutableStateOf<Set<Long>?>(null) }
@@ -317,7 +318,7 @@ internal fun MultiBar(state: EditorState, modifier: Modifier) {
     BoxWithConstraints(modifier.padding(6.dp)) {
     val cell = minOf(40.dp, maxWidth / 8.7f)
     Row(Modifier.fillMaxSize().clip(RoundedCornerShape(3.dp)).background(Am.PanelInset), verticalAlignment = Alignment.CenterVertically) {
-        val end = layers.isNotEmpty() && state.timeMs >= layers.maxOf { it.endTime }
+        val end = layers.isNotEmpty() && state.selectedTimeMs >= layers.maxOf { it.endTime }
         val context = LocalContext.current
         val copied = EffectClipboard.effects
         var moreMenu by remember { mutableStateOf(false) }
@@ -370,9 +371,9 @@ internal fun MultiBar(state: EditorState, modifier: Modifier) {
         BarButton(if (end) ChromeIcons.SkipForward else ChromeIcons.SkipBack, stringResource(if (end) R.string.structure_move_ends else R.string.structure_move_starts), Modifier.width(cell).fillMaxHeight(), layers.isNotEmpty()) {
             state.moveClipEdges(end, false)
         }
-        BarButton(PanelIcons.TrimLeft, stringResource(R.string.a11y_trim_start), Modifier.width(cell).fillMaxHeight(), layers.any { state.scene.trimStartAt(it, state.frame) != null }) { state.trimChosen(true) }
-        BarButton(PanelIcons.Split, stringResource(R.string.timeline_split), Modifier.width(cell).fillMaxHeight(), layers.any { state.scene.canSplitAt(it, state.frame) }) { state.split() }
-        val shifts = remember(state.scene, ids, state.frame) { state.scene.endShifts(ids, state.frame, state.sampleMs) }
+        BarButton(PanelIcons.TrimLeft, stringResource(R.string.a11y_trim_start), Modifier.width(cell).fillMaxHeight(), layers.any { owner.trimStartAt(it, state.selectedFrame) != null }) { state.trimChosen(true) }
+        BarButton(PanelIcons.Split, stringResource(R.string.timeline_split), Modifier.width(cell).fillMaxHeight(), layers.any { owner.canSplitAt(it, state.selectedFrame) }) { state.split() }
+        val shifts = remember(owner, ids, state.selectedFrame) { owner.endShifts(ids, state.selectedFrame, state.selectedSampleMs) }
         val grows = shifts.any { it > 0 }
         BarButton(PanelIcons.TrimRight, stringResource(if (grows) R.string.a11y_extend_end else R.string.a11y_trim_end), Modifier.width(cell).fillMaxHeight(), shifts.any { it != 0 }) { state.endChosenAtPlayhead() }
         Spacer(Modifier.weight(1f))

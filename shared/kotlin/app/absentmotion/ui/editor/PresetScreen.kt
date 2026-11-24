@@ -110,7 +110,7 @@ fun PresetScreen(state: EditorState) {
     var pos by remember { mutableIntStateOf(0) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     val targets = remember { if (MultiSelect.active) MultiSelect.ids.toSet() else emptySet() }
-    val base = remember { (if (targets.isNotEmpty()) targets.firstOrNull() else state.selectedId)?.let { state.scene.layer(it) } }
+    val base = remember { (if (targets.isNotEmpty()) targets.firstOrNull() else state.selectedId)?.let { state.selectedScene.layer(it) } }
     BackHandler { state.presetsOpen = false }
     if (base == null) {
         SideEffect { state.presetsOpen = false }
@@ -119,7 +119,7 @@ fun PresetScreen(state: EditorState) {
     val current = presets.firstOrNull { it.id == chosen }
     val shown = remember(current) { current?.layer?.let { applyPreset(base, it) } ?: base }
     val scene = remember(shown) {
-        val node = state.scene.node
+        val node = state.selectedScene.node
         val layer = shown.node.with("parent", null).with("clippingMask", null).with("hidden", null)
         Scene(node.copy(children = node.children.filter { it.name !in Scene.LAYER_TAGS } + layer, attrs = node.attrs + ("totalTime" to "${shown.endTime}")))
     }
@@ -153,11 +153,11 @@ fun PresetScreen(state: EditorState) {
     val applyChosen: () -> Unit = {
         if (current != null) {
             if (targets.isEmpty()) state.applyPreset(current) else current.layer?.let { preset ->
-                state.edit { it.applyPresetToLayers(targets, preset, current.id) }
+                state.editSelectedScene { it.applyPresetToLayers(targets, preset, current.id) }
             }
             state.presetsOpen = false
             val message = if (targets.isEmpty()) context.getString(R.string.preset_applied)
-                else state.scene.layers.count { it.id in targets }.let { context.resources.getQuantityString(R.plurals.multi_applied_count, it, it.toString()) }
+                else state.selectedScene.layers.count { it.id in targets }.let { context.resources.getQuantityString(R.plurals.multi_applied_count, it, it.toString()) }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }

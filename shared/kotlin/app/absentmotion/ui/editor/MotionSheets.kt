@@ -176,7 +176,7 @@ internal fun TransitionSheet(state: EditorState, aId: Long, bId: Long, onClose: 
 @Composable
 internal fun TransitionSheet(state: EditorState, cuts: List<Pair<Long, Long>>, onClose: () -> Unit) {
     val (aId, bId) = cuts.first()
-    val record = state.scene.layer(bId)?.motion(MotionSlot.In)?.takeIf { it.transition && it.partner == aId }
+    val record = state.selectedScene.layer(bId)?.motion(MotionSlot.In)?.takeIf { it.transition && it.partner == aId }
     val current = TransitionKind.of(record?.id)
     var ms by remember { mutableIntStateOf(record?.ms ?: 500) }
     var note by remember { mutableStateOf<UiText?>(null) }
@@ -184,14 +184,14 @@ internal fun TransitionSheet(state: EditorState, cuts: List<Pair<Long, Long>>, o
     val pictures = rememberMotionPictures()
     fun apply(kind: TransitionKind?, key: Any? = null) {
         var told: UiText? = null
-        state.edit(key) { s ->
+        state.editSelectedScene(key) { s ->
             if (cuts.size == 1) s.withTransition(aId, bId, kind, ms).also { told = it.note }.scene
             else s.transitionCuts(cuts, kind, ms)
         }
         note = told
     }
     val clip = stringResource(R.string.transition_clip)
-    val names = listOf(aId, bId).map { id -> state.scene.layer(id)?.label?.ifEmpty { null } ?: clip }
+    val names = listOf(aId, bId).map { id -> state.selectedScene.layer(id)?.label?.ifEmpty { null } ?: clip }
     MotionSheet(stringResource(R.string.transition_title), onClose) {
         Text(if (cuts.size == 1) "${names[0]}  →  ${names[1]}" else pluralStringResource(R.plurals.multi_transition_count, cuts.size, cuts.size.toString()), Modifier.fillMaxWidth().height(24.dp), color = Am.OnDarkDim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         TileGrid(listOf<TransitionKind?>(null) + TransitionKind.entries) { kind, modifier ->
@@ -210,10 +210,10 @@ internal fun AnimationSheet(state: EditorState, id: Long, onClose: () -> Unit) =
 @Composable
 internal fun AnimationSheet(state: EditorState, ids: Set<Long>, onClose: () -> Unit) {
     val context = LocalContext.current
-    val id = ids.firstOrNull { state.scene.layer(it)?.canAnimate == true } ?: return
+    val id = ids.firstOrNull { state.selectedScene.layer(it)?.canAnimate == true } ?: return
     var tab by remember { mutableIntStateOf(0) }
     val slot = MotionSlot.entries[tab]
-    val layer = state.scene.layer(id)
+    val layer = state.selectedScene.layer(id)
     val record = layer?.motion(slot)
     val chosen = record?.takeUnless { it.transition }?.id
     val loop = slot == MotionSlot.Loop
@@ -221,8 +221,8 @@ internal fun AnimationSheet(state: EditorState, ids: Set<Long>, onClose: () -> U
     val clock = rememberClock()
     val picture = rememberMotionPictures().firstOrNull()
     fun apply(motionId: String?, key: Any? = null) {
-        val count = state.scene.layers.count { it.id in ids && it.canAnimate }
-        state.edit(key) { it.animateLayers(ids, slot, motionId, ms) }
+        val count = state.selectedScene.layers.count { it.id in ids && it.canAnimate }
+        state.editSelectedScene(key) { it.animateLayers(ids, slot, motionId, ms) }
         if (ids.size > 1 && key == null) Toast.makeText(context, context.resources.getQuantityString(R.plurals.multi_applied_count, count, count.toString()), Toast.LENGTH_SHORT).show()
     }
     MotionSheet(stringResource(R.string.animation_title), onClose) {

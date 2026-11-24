@@ -158,8 +158,8 @@ fun EditorState.trimEnd() {
 }
 
 fun EditorState.trimChosen(start: Boolean) {
-    val next = scene.withTrims(chosenLayers.map { it.id }, frame, sampleMs, start) ?: return
-    edit { next }
+    val next = selectedScene.withTrims(chosenLayers.map { it.id }, selectedFrame, selectedSampleMs, start) ?: return
+    editSelectedScene { next }
 }
 
 internal fun Scene.withTrims(ids: List<Long>, frame: Int, sampleMs: Int, start: Boolean): Scene? {

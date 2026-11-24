@@ -95,8 +95,9 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     var parentMenu by remember { mutableStateOf(false) }
     val ids = layers.map { it.id }
-    val cuts = remember(state.scene, ids) {
-        if (ids.size == 2) listOfNotNull(state.scene.cutBetween(ids[0], ids[1])?.let { it.first.id to it.second.id }) else state.scene.selectedCuts(ids.toSet())
+    val owner = state.selectedScene
+    val cuts = remember(owner, ids) {
+        if (ids.size == 2) listOfNotNull(owner.cutBetween(ids[0], ids[1])?.let { it.first.id to it.second.id }) else owner.selectedCuts(ids.toSet())
     }
     var transition by remember { mutableStateOf<List<Pair<Long, Long>>?>(null) }
     var animation by remember { mutableStateOf<Set<Long>?>(null) }
@@ -105,7 +106,7 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
     var stretch by remember { mutableStateOf<Set<Long>?>(null) }
     stretch?.let { StretchSheet(state, it) { stretch = null } }
     val some = layers.isNotEmpty()
-    val end = some && state.timeMs >= layers.maxOf { it.endTime }
+    val end = some && state.selectedTimeMs >= layers.maxOf { it.endTime }
     val copied = EffectClipboard.effects.isNotEmpty()
     val style = copiedLayerForStyle != null
     val noStyle = stringResource(R.string.desk_style_not_copied)
@@ -128,10 +129,10 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
         MultiTile(PanelIcons.Link, R.string.structure_link_parent, chosen.isNotEmpty(), parent = true) { parentMenu = true },
         MultiTile(ChromeIcons.Trash, R.string.structure_delete_selected, chosen.isNotEmpty()) { state.deleteChosen() },
     ) + SelectionIcons.Align.mapIndexed { edge, icon ->
-        MultiTile(icon, AlignLabels[edge], chosen.isNotEmpty()) { scope.launch { state.alignSelection(edge) } }
+        MultiTile(icon, AlignLabels[edge], MultiSelect.rootIds.isNotEmpty()) { scope.launch { state.alignSelection(edge) } }
     } + listOf(
-        MultiTile(SelectionIcons.DistributeVertical, R.string.structure_distribute_vertical, chosen.size > 2, needsThree) { scope.launch { state.distributeSelection(false) } },
-        MultiTile(SelectionIcons.DistributeHorizontal, R.string.structure_distribute_horizontal, chosen.size > 2, needsThree) { scope.launch { state.distributeSelection(true) } },
+        MultiTile(SelectionIcons.DistributeVertical, R.string.structure_distribute_vertical, MultiSelect.rootIds.size > 2, needsThree) { scope.launch { state.distributeSelection(false) } },
+        MultiTile(SelectionIcons.DistributeHorizontal, R.string.structure_distribute_horizontal, MultiSelect.rootIds.size > 2, needsThree) { scope.launch { state.distributeSelection(true) } },
         MultiTile(PanelIcons.Effects, R.string.effects_add_to_all, some) {
             state.playing = false
             state.effectCategory = null
@@ -156,7 +157,7 @@ internal fun DeskMulti(state: EditorState, modifier: Modifier) {
             Toast.makeText(context, context.resources.getQuantityString(R.plurals.structure_audio_removed, n, n.toString()), Toast.LENGTH_SHORT).show()
         },
         MultiTile(ChromeIcons.Transition, R.string.transition_title, cuts.isNotEmpty(), noTransition, R.string.transition_add_between) { state.playing = false; transition = cuts },
-        MultiTile(PanelIcons.Split, R.string.timeline_split, layers.any { state.scene.canSplitAt(it, state.frame) }) { state.split() },
+        MultiTile(PanelIcons.Split, R.string.timeline_split, layers.any { owner.canSplitAt(it, state.selectedFrame) }) { state.split() },
         MultiTile(if (end) ChromeIcons.SkipForward else ChromeIcons.SkipBack, if (end) R.string.structure_move_ends else R.string.structure_move_starts, some) { state.moveClipEdges(end, false) },
         MultiTile(SelectionIcons.Align[0], R.string.structure_align_starts, layers.size > 1, needsTwo) { state.alignClipTimes(0) },
         MultiTile(SelectionIcons.DistributeHorizontal, R.string.structure_distribute_starts, layers.size > 2, needsThree) { state.alignClipTimes(1) },

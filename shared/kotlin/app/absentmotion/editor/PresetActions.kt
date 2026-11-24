@@ -52,9 +52,9 @@ suspend fun EditorState.savePreset(store: PresetStore): SavedPreset? {
 }
 
 fun EditorState.applyPreset(preset: SavedPreset) {
-    val id = selectedId ?: return
+    if (selectedId == null) return
     val from = preset.layer ?: return
-    edit { s -> s.update(id) { applyPreset(it, from, preset.id) } }
+    editSelected { applyPreset(it, from, preset.id) }
 }
 
 internal fun Scene.applyPresetToLayers(ids: Set<Long>, preset: Layer, presetId: String? = null): Scene =
