@@ -131,10 +131,10 @@ private fun EditorBody(state: EditorState, onExit: () -> Unit) {
         AlertDialog(
             onDismissRequest = { state.groupAsk = null },
             title = { Text(stringResource(R.string.structure_group_space)) },
-            confirmButton = { TextButton({ choose(true) }) { Text(stringResource(R.string.structure_group_keep_3d), color = Am.Accent) } },
+            confirmButton = { DialogPill(stringResource(R.string.structure_group_keep_3d), editor = true) { choose(true) } },
             dismissButton = {
-                TextButton({ state.groupAsk = null }) { Text(stringResource(R.string.cancel), color = Am.OnDark) }
-                TextButton({ choose(false) }) { Text(stringResource(R.string.structure_group_flatten_2d), color = Am.Accent) }
+                DialogPill(stringResource(R.string.cancel), primary = false, editor = true) { state.groupAsk = null }
+                DialogPill(stringResource(R.string.structure_group_flatten_2d), primary = false, editor = true) { choose(false) }
             },
             containerColor = Am.Field, titleContentColor = Am.OnDark,
         )
