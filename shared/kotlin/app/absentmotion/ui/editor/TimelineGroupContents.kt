@@ -76,6 +76,11 @@ internal class TimelineGroupRow(
     fun selected(state: EditorState): Boolean = state.selectedId == layer.id && state.selectedGroups == groups
     fun sidebarWidth(state: EditorState, expanded: Boolean): Dp =
         indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (expanded || selected(state)) 5 else 2)
+    fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
+        val right = (sidebarWidth(state, expanded) - GroupDisclosureWidth - GroupSidebarEnd).toPx()
+        x >= right - GroupIconWidth.toPx() && x < right
+    }
+
     fun headerHeightPx(density: Density): Int = with(density) { GroupRowHeight.roundToPx() }
     fun heightPx(density: Density): Int = headerHeightPx(density) + with(density) { details?.let { inlineDetailsHeight(it) } ?: 0 }
     val parentsUnlocked get() = clocks.none { it.first.locked }
@@ -156,10 +161,6 @@ internal fun TimelineGroupContents(
                         PanelIcon(if (layer.hidden) TimelineIcons.EyeOff else TimelineIcons.Eye, Am.OnDarkDim,
                             size = 16.dp, description = visibility)
                     }
-                    Box(Modifier.size(GroupDisclosureWidth).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
-                        PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
-                            if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
-                    }
                     if (controls) {
                         val lockLabel = stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock)
                         val lockAction = if (!state.lookOnly && row.parentsUnlocked) Modifier.inlineTap {
@@ -191,6 +192,10 @@ internal fun TimelineGroupContents(
                         contentAlignment = Alignment.Center,
                     ) {
                         LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
+                    }
+                    Box(Modifier.size(GroupDisclosureWidth).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
+                        PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
+                            if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
                     }
                 }
             }

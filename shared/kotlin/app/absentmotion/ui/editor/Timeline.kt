@@ -1049,8 +1049,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
     fun groupMarqueeRow(at: Offset): TimelineGroupRow? {
         val (row, top) = groupRowAt(at) ?: return null
         if (!row.editable || state.lookOnly || at.y >= top + row.headerHeightPx(density)) return null
-        val right = with(density) { row.sidebarWidth(state, expandedPath(row.path)).toPx() }
-        return row.takeIf { at.x in right - 27.dp.px..right }
+        return row.takeIf { it.thumbnailHit(state, expandedPath(it.path), at.x, density) }
     }
 
     fun startGroupBox(row: TimelineGroupRow, at: Offset) {
