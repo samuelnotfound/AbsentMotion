@@ -203,7 +203,8 @@ internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List
 internal fun Scene.inlineNavigationStops(keys: List<Int>, layer: Layer? = null): List<Int> {
     val editEnd = lastFrame.coerceAtLeast(0)
     val bounds = layer?.let { listOf(frameAt(it.startTime), frameAt(it.endTime)) }.orEmpty()
-    return ((keys + bounds).filter { it in 0..editEnd } + listOf(0, workAreaStartFrame, workAreaEndFrame, editEnd + 1))
+    val stops = keys + bounds + bookmarks.map(::frameAt)
+    return (stops.filter { it in 0..editEnd } + listOf(0, workAreaStartFrame, workAreaEndFrame, editEnd + 1))
         .distinct().sorted()
 }
 

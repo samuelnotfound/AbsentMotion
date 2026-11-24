@@ -108,6 +108,12 @@ class KeyScopeTest {
         assertEquals(listOf(0, 60), scene.inlineNavigationStops(emptyList()))
     }
 
+    @Test fun expandedTracksKeepBookmarksInsideAndOutsideTheWorkArea() {
+        val marked = scene.withWorkArea(12, 42).withBookmarks(listOf(5, 25, 45, 50).map(scene::frameStart))
+        assertEquals(listOf(0, 5, 10, 12, 25, 30, 42, 45, 50, 60),
+            marked.inlineNavigationStops(listOf(10, 30, 45)))
+    }
+
     @Test fun selectedLayerEdgesRemainStopsWithAWorkAreaAndExpandedTracks() {
         val area = scene.withWorkArea(12, 42)
         val clip = shapeLayer(start = scene.frameStart(15), end = scene.frameStart(36))
