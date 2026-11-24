@@ -154,7 +154,7 @@ import app.absentmotion.editor.askUngroup
 import app.absentmotion.editor.EditorPanel
 import app.absentmotion.editor.MultiSelect
 import app.absentmotion.editor.EditorState
-import app.absentmotion.editor.toggleLayerRenderSpace
+import app.absentmotion.editor.toggleCollapseTransforms
 import app.absentmotion.editor.focused
 import app.absentmotion.editor.withFocused
 import app.absentmotion.editor.PreviewCache
@@ -233,7 +233,7 @@ private val TagStripWidth = 2.1.dp
 private val EyeCentre = EyeZone / 2
 private val LockCentre = EyeZone + LockZone / 2
 private val CubeLeft = EyeZone + LockZone
-private val RenderSpaceLeft = CubeLeft + ThreeDZone
+private val CollapseLeft = CubeLeft + ThreeDZone
 private val ThumbSize = 16.dp
 private fun thumbLeft(controls: Boolean) = EyeZone + (if (controls) ExpandedControls else 0.dp) + (ThumbZone - ThumbSize) / 2
 private val ClipTrim = 8.dp
@@ -538,8 +538,8 @@ private fun RowSemantics(view: TimelineView) {
     val timingLocked = stringResource(R.string.a11y_layer_timing_locked)
     val transform = stringResource(R.string.inline_keyframes)
     val threeD = stringResource(R.string.layer_3d_controls)
-    val renderIn3D = stringResource(R.string.layer_render_in_3d)
-    val renderFlat = stringResource(R.string.layer_render_flat)
+    val collapse = stringResource(R.string.layer_collapse_transforms)
+    val expand = stringResource(R.string.layer_expand_transforms)
     Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
         for (row in rows) {
             val layer = view.layerAt(row) ?: continue
@@ -556,8 +556,8 @@ private fun RowSemantics(view: TimelineView) {
                         CustomAccessibilityAction(if (layer.node["lock"] == null) lock else unlock) { view.state.toggleLock(layer.id); true }.takeIf { view.showsLayerControls(layer) },
                         CustomAccessibilityAction(transform) { view.toggleInlinePosition(layer.id); true },
                         CustomAccessibilityAction(threeD) { view.state.toggleLayer3D(layer.id); true }.takeIf { view.showsLayerControls(layer) && layer.canToggle3D && !layer.locked },
-                        CustomAccessibilityAction(if (layer.rendersIn3D) renderFlat else renderIn3D) {
-                            view.state.toggleLayerRenderSpace(layer.id); true
+                        CustomAccessibilityAction(if (layer.collapsesTransforms) expand else collapse) {
+                            view.state.toggleCollapseTransforms(layer.id); true
                         }.takeIf { view.showsLayerControls(layer) && layer.canChooseRenderSpace && !layer.locked },
                     )
                 })
@@ -653,11 +653,11 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                         app.absentmotion.ui.editor.panels.PanelIcon(
                             ChromeIcons.ObjectTab, if (layer.uses3D) Layer3DColor else Am.OnDarkDim, size = 16.dp)
                     }
-                    if (controls && layer.canChooseRenderSpace) Box(Modifier.offset { IntOffset(RenderSpaceLeft.roundToPx(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
+                    if (controls && layer.canChooseRenderSpace) Box(Modifier.offset { IntOffset(CollapseLeft.roundToPx(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
                         .size(ThreeDZone, RowHeight), contentAlignment = Alignment.Center) {
-                        val label = stringResource(if (layer.rendersIn3D) R.string.layer_render_flat else R.string.layer_render_in_3d)
-                        val tint = if (layer.rendersIn3D) Layer3DColor else Am.OnDarkDim
-                        app.absentmotion.ui.editor.panels.PanelIcon(PanelIcons.TabTilt, tint, size = 15.dp, description = label)
+                        val label = stringResource(if (layer.collapsesTransforms) R.string.layer_expand_transforms else R.string.layer_collapse_transforms)
+                        val tint = if (layer.collapsesTransforms) Layer3DColor else Am.OnDarkDim
+                        app.absentmotion.ui.editor.panels.PanelIcon(PanelIcons.Brightness, tint, size = 15.dp, description = label)
                     }
                     run {
                         val width = with(LocalDensity.current) { DisclosureZone.toPx() }
@@ -786,7 +786,7 @@ private sealed interface Hit {
     data class WorkAreaEdge(val start: Boolean) : Hit
     data class Inline(val id: Long) : Hit
     data class Cube(val id: Long) : Hit
-    data class RenderSpace(val id: Long) : Hit
+    data class CollapseTransforms(val id: Long) : Hit
     data class Eye(val id: Long) : Hit
     data class Lock(val id: Long) : Hit
     data class Locked(val id: Long) : Hit
@@ -1338,7 +1338,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val hit = at?.let { hitAt(it) }
         hoveredId = hit?.let { clipId(it) }
         resizeHover = hit is Hit.Grip || at != null && nearHeaderEdge(at.x)
-        handHover = hit is Hit.Inline || hit is Hit.Cube || hit is Hit.RenderSpace || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit == Hit.Readout || hit == Hit.Ruler
+        handHover = hit is Hit.Inline || hit is Hit.Cube || hit is Hit.CollapseTransforms || hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Bar || hit == Hit.Readout || hit == Hit.Ruler
     }
 
     fun clipId(hit: Hit): Long? = when (hit) {
@@ -1637,8 +1637,8 @@ private class TimelineView(val state: EditorState, private val density: Density,
         return when {
             at.x < EyeZone.px -> Hit.Eye(layer.id)
             controls && at.x < CubeLeft.px -> Hit.Lock(layer.id)
-            controls && at.x < RenderSpaceLeft.px -> if (layer.canToggle3D) Hit.Cube(layer.id) else Hit.Header(layer.id)
-            controls && at.x < (RenderSpaceLeft + ThreeDZone).px -> if (layer.canChooseRenderSpace) Hit.RenderSpace(layer.id) else Hit.Header(layer.id)
+            controls && at.x < CollapseLeft.px -> if (layer.canToggle3D) Hit.Cube(layer.id) else Hit.Header(layer.id)
+            controls && at.x < (CollapseLeft + ThreeDZone).px -> if (layer.canChooseRenderSpace) Hit.CollapseTransforms(layer.id) else Hit.Header(layer.id)
             at.x in (header - DisclosureZone.px)..header -> Hit.Inline(layer.id)
             at.x < header -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..zone -> Hit.Grip(layer.id, start = true)
@@ -1666,7 +1666,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
         when (hit) {
             is Hit.Inline -> if (MultiSelect.active) select(hit.id) else toggleInlinePosition(hit.id)
             is Hit.Cube -> if (MultiSelect.active) select(hit.id) else state.toggleLayer3D(hit.id)
-            is Hit.RenderSpace -> if (MultiSelect.active) select(hit.id) else state.toggleLayerRenderSpace(hit.id)
+            is Hit.CollapseTransforms -> if (MultiSelect.active) select(hit.id) else state.toggleCollapseTransforms(hit.id)
             is Hit.Eye -> if (MultiSelect.active) select(hit.id) else state.toggleHidden(hit.id)
             is Hit.Lock -> state.toggleLock(hit.id)
             is Hit.Locked -> state.hint(R.string.layer_locked_hint)
@@ -2360,7 +2360,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                             lastHeaderId = h.id; lastClickId = null; lastClickTime = change.uptimeMillis
                         }
                     }
-                    is Hit.Inline, is Hit.Cube, is Hit.RenderSpace, is Hit.Key, Hit.InlineBody, Hit.Readout -> view.tap(h)
+                    is Hit.Inline, is Hit.Cube, is Hit.CollapseTransforms, is Hit.Key, Hit.InlineBody, Hit.Readout -> view.tap(h)
                     Hit.Empty, is Hit.Row -> view.state.clearSelection()
                     else -> Unit
                 }

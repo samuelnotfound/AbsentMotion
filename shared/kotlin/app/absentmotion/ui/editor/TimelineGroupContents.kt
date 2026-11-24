@@ -179,14 +179,14 @@ internal fun TimelineGroupContents(
                             PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
                                 size = 14.dp, description = dimension)
                         }
-                        val toggleRenderSpace = if (!state.lookOnly && row.editable && layer.canChooseRenderSpace) Modifier.inlineTap {
-                            state.editGroupMember(row) { it.withRenderIn3D(!it.rendersIn3D) }
+                        val toggleCollapse = if (!state.lookOnly && row.editable && layer.canChooseRenderSpace) Modifier.inlineTap {
+                            state.editGroupMember(row) { it.withCollapsedTransforms(!it.collapsesTransforms) }
                         } else Modifier
-                        Box(Modifier.size(GroupIconWidth).then(toggleRenderSpace), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(GroupIconWidth).then(toggleCollapse), contentAlignment = Alignment.Center) {
                             if (layer.canChooseRenderSpace) {
-                                val label = stringResource(if (layer.rendersIn3D) R.string.layer_render_flat else R.string.layer_render_in_3d)
-                                val tint = if (layer.rendersIn3D) Am.Accent else Am.OnDarkDim
-                                PanelIcon(PanelIcons.TabTilt, tint, size = 14.dp, description = label)
+                                val label = stringResource(if (layer.collapsesTransforms) R.string.layer_expand_transforms else R.string.layer_collapse_transforms)
+                                val tint = if (layer.collapsesTransforms) Am.Accent else Am.OnDarkDim
+                                PanelIcon(PanelIcons.Brightness, tint, size = 14.dp, description = label)
                             }
                         }
                     }

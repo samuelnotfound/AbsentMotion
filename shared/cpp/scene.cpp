@@ -584,9 +584,9 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     const std::string spatial = StrAttr(*n, "threeD");
     l.force3d = spatial == "true";
     if (l.kind == "shape" || l.kind == "text" || l.kind == "drawing" || l.kind == "embedScene") {
-        const std::string render = StrAttr(*n, "renderSpace");
-        if (render == "scene") l.renderSpace = RenderSpace::Scene;
-        else if (render == "flat") l.renderSpace = RenderSpace::Flat;
+        const char* collapse = n->attr("collapseTransforms");
+        const bool enabled = collapse ? StrAttr(*n, "collapseTransforms") == "true" : StrAttr(*n, "renderSpace") == "scene";
+        l.renderSpace = enabled ? RenderSpace::Scene : RenderSpace::Flat;
     }
     l.mixPieces = StrAttr(*n, "mixPieces") != "false";
     if (const XmlNode* t = n->child("transform")) {

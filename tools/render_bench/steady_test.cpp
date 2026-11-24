@@ -160,6 +160,30 @@ int main() {
         Expect(output.size() == 2 && output.front().id == flatLayer.id && !output.front().sight.editorView &&
                output.back().sight.editorView, "custom views include flat layers without projecting them");
         am::SetCameraView(true);
+        const std::string collapsedXml = R"xml(<scene width="100" height="100" totalTime="999" depthOrder="true">
+            <embedScene id="20" collapseTransforms="true" startTime="100" endTime="999">
+                <transform><location value="50,50,0"/></transform>
+                <scene width="100" height="100" totalTime="899">
+                    <shape id="21" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="899">
+                        <transform><location value="50,50,-40"/></transform><fillColor value="#ffffffff"/>
+                        <property name="size" type="vec2" value="30,30"/>
+                    </shape>
+                </scene>
+            </embedScene>
+            <shape id="22" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="999">
+                <transform><location value="50,50,80"/></transform><fillColor value="#ffffffff"/>
+                <property name="size" type="vec2" value="30,30"/>
+            </shape>
+        </scene>)xml";
+        am::Scene nested;
+        const bool parsedGroup = am::ParseScene(collapsedXml, &nested, &error);
+        Expect(parsedGroup && am::TopLayerAt(nested, 200, 50, 50, {}) == 20,
+               "collapsed children share scene depth with layers outside their group");
+        if (parsedGroup && !nested.layers.empty()) {
+            nested.layers[0].renderSpace = am::RenderSpace::Flat;
+            Expect(am::TopLayerAt(nested, 200, 50, 50, {}) == 22,
+                   "a flat group stays in its position in the layer stack");
+        }
         am::Layer tilted = camera;
         tilted.tilt.value = {20, 35};
         am::Layer near = spatial(11, 0);

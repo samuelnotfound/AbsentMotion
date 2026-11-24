@@ -15,7 +15,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Expandable groups**. See and scroll through child clips and their property tracks in the parent timeline. Each child has a thumbnail in the sidebar and its name on the clip bar. Tap a child clip to edit its properties in the parent preview. Hold and drag across child thumbnails to select siblings.
 - **3D viewer controls**. Move, size, and rotate layers with handles that follow their axes. The far sides of rotation rings and movement handles remain visible through the layer. Adjust the three-axis pivot in the viewer and snap it to the layer edges, center, or zero depth.
 - **Viewer angles**. Use the active camera, choose Front, Right, or Top, or orbit in one of three custom editing views. Camera layers support move and rotation gestures on Android.
-- **Layer rendering**. The projection button beside the cube switches a layer between flat compositing and scene depth. Flat layers stay visible in camera and custom views. The cube enables XYZ transform controls.
+- **Collapse transformations**. The sun button enables scene rendering and makes eligible group members render in the parent scene. Flat layers stay visible in camera and custom views. The cube enables XYZ transform controls.
 
 ### Changed
 
@@ -23,7 +23,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Timeline navigation**. The skip buttons stop at the work-area handles and the selected layer's start and end. They also visit visible keyframes on expanded tracks or bookmarks when the tracks are closed. Faint keyframes on the selected clip are also stops. The transition shortcut returns at a cut when the disclosures close.
 - **Move & Transform**. Position opens with the move pad. Tap Move again to switch to rulers or back to the pad. The app remembers the layout. Position and 3D rotation rulers place one axis, ruler, and value on each row. Double-tap Move or Pivot to switch between the two tools. The move pad keeps nearly straight drags on one axis and snaps to the canvas guides.
 - **Transform keyframes**. Position uses a shared track by default. Choose **Separate Dimensions** to give each axis its own keys and curves. In Size, unlock the chain to set different X and Y values on one keyframe. Choose **Separate Dimensions** for independent scale keys or relink to return to one Size track. Tap an axis in a separated transform to choose which keys and curves to edit.
-- **Layer depth**. Flat layers follow timeline order and show 3D effects as part of the flat layer. The Z Position field stays visible and disabled when XYZ controls are off. Older layers keep their previous depth settings. The projection button preserves saved transforms when switching to flat rendering. New groups retain depth when any member uses 3D, and artwork can extend beyond the group bounds.
+- **Layer depth**. Flat layers follow timeline order and show 3D effects as part of the flat layer. The Z Position field stays visible and disabled when XYZ controls are off. The sun switch preserves saved transforms when switching back to flat rendering. Layers without a saved rendering override open flat. New groups retain their members’ editable transforms, and artwork can extend beyond the group bounds.
 - **Preview selection**. Outlines follow shape contours, appear on each selected layer, and stay visible during playback.
 - **Curve editor**. Add or remove a keyframe from the curve panel.
 

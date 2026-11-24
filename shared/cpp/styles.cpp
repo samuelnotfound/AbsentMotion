@@ -44,6 +44,15 @@ namespace am {
 
 thread_local const std::function<void()>* gBreak = nullptr;
 
+struct CollapsedLayer {
+    const std::vector<Layer>* siblings;
+    const Layer* group;
+    const Layer* child;
+    std::shared_ptr<const CollapsedLayer> enclosing;
+    int64_t owner;
+    bool spatial;
+};
+
 namespace {
 
 std::string AttrOf(const XmlNode& n, const char* key) {
@@ -252,7 +261,13 @@ const Layer* PathSource(const std::vector<Layer>& siblings, const Layer& l) {
     return nullptr;
 }
 
+Placement CollapsedPlacement(const CollapsedLayer& child, double timeMs);
+
 Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double timeMs, int depth, bool followPath = true, bool flat = false) {
+    if (l.collapsed) {
+        if (Placement seen; SeenPlacement(l, timeMs, &seen)) return seen;
+        return CollapsedPlacement(*l.collapsed, timeMs);
+    }
     flat = flat || !l.spatial();
     Placement own = Own(l, timeMs);
     if (flat || !l.has3DTransforms()) {
@@ -292,8 +307,32 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     return own;
 }
 
+double CollapsedTime(const CollapsedLayer& child, double timeMs) {
+    const double host = child.enclosing ? CollapsedTime(*child.enclosing, timeMs) : timeMs;
+    return NestedTime(*child.group, host);
+}
+
+Placement CollapsedPlacement(const CollapsedLayer& child, double timeMs) {
+    const double host = child.enclosing ? CollapsedTime(*child.enclosing, timeMs) : timeMs;
+    const Placement group = child.enclosing ? CollapsedPlacement(*child.enclosing, timeMs)
+                                           : Effective(*child.siblings, *child.group, host, 0);
+    Placement own = Effective(child.group->inner(), *child.child, NestedTime(*child.group, host), 0);
+    const float t = child.group->localTime(host);
+    SkMatrix skew;
+    skew.setSkew(tanf(child.group->skew.get(0, t, 0)), tanf(child.group->skew.get(1, t, 0)));
+    const SkM44 basis = Turn(group.rotation) * group.tilt * SkM44(skew) * SkM44::Scale(group.scale.fX, group.scale.fY, 1);
+    const SkV4 point = basis.map(own.location.fX - child.group->innerWidth / 2.f - group.pivot.fX,
+                                own.location.fY - child.group->innerHeight / 2.f - group.pivot.fY, own.z - group.pivotZ, 0);
+    own.location = group.location + SkVector{point.x, point.y};
+    own.z = child.spatial ? group.z + point.z : 0;
+    own.tilt = basis * Turn(own.rotation) * own.tilt;
+    own.rotation = 0;
+    return own;
+}
+
 SkMatrix MatrixOf(const Placement& p, const Layer& l, float t) {
     SkMatrix m = l.projected ? (p.space * SkM44::Translate(0, 0, -p.pivotZ)).asM33() : SkMatrix::Translate(p.location.fX, p.location.fY);
+    if (l.collapsed && !l.projected && !l.spatial()) m = (SkM44(m) * p.tilt).asM33();
     if (!l.projected) m.preRotate(p.rotation);
     m.preSkew(tanf(l.skew.get(0, t, 0)), tanf(l.skew.get(1, t, 0)));
     m.preScale(p.scale.fX, p.scale.fY);
@@ -2137,18 +2176,75 @@ static void FaceForward(std::vector<Layer>* seen) {
     }
 }
 
-static const std::vector<Layer>& SeenProject(const Scene& scene, double timeMs, std::vector<Layer>* storage) {
-    if (!SeeLayers(scene.layers, scene.width, scene.height, true, scene.fps, timeMs, scene.depthOrder, storage)) return scene.layers;
+static bool Collapsible(const std::vector<Layer>& list, size_t i, double timeMs) {
+    const Layer& layer = list[i];
+    if (layer.kind != "embedScene" || layer.renderSpace != RenderSpace::Scene || layer.inner().empty() ||
+        !layer.activeAt(timeMs) || layer.clippingMask || (i + 1 < list.size() && list[i + 1].clippingMask)) return false;
+    return IsNormal(layer.blending) && layer.fillType != "color" && (layer.innerBackground >> 24) == 0 &&
+           !(layer.stroke.present && layer.stroke.enabled) && !ShadowOn(layer) &&
+           std::none_of(layer.borders.begin(), layer.borders.end(), [](const Edge& border) { return border.enabled; }) &&
+           std::none_of(layer.effects.begin(), layer.effects.end(), [](const LayerEffect& effect) { return !effect.hidden; }) &&
+           layer.opacity.get(0, layer.localTime(timeMs), 1) * MotionOpacity(layer, timeMs) >= 1;
+}
+
+static void AppendCollapsed(const std::vector<Layer>& siblings, const Layer& group,
+                     const std::shared_ptr<const CollapsedLayer>& enclosing, int64_t owner,
+                     double groupMs, double rootMs, int depth, std::vector<Layer>* result) {
+    const double inner = NestedTime(group, groupMs);
+    if (inner < 0 || !std::isfinite(inner)) return;
+    const auto& members = group.inner();
+    const int shift = (int)std::clamp(std::round(rootMs - inner), (double)INT32_MIN, (double)INT32_MAX);
+    bool first = true;
+    for (size_t i = 0; i < members.size(); ++i) {
+        const Layer& child = members[i];
+        if (child.kind == "camera" || child.kind == "light" || child.kind == "nullobj" || child.kind == "audio") continue;
+        const bool spatial = child.spatial() || group.has3DTransforms() || (enclosing && enclosing->spatial);
+        auto context = std::make_shared<CollapsedLayer>(CollapsedLayer{&siblings, &group, &child, enclosing, owner, spatial});
+        if (depth < kMaxParentDepth && Collapsible(members, i, inner)) {
+            AppendCollapsed(members, child, context, owner, inner, rootMs, depth + 1, result);
+        } else {
+            Layer copy = child;
+            copy.parent = 0;
+            copy.startTime = (int)std::clamp<int64_t>((int64_t)child.startTime + shift, INT32_MIN, INT32_MAX);
+            copy.endTime = (int)std::clamp<int64_t>((int64_t)child.endTime + shift, INT32_MIN, INT32_MAX);
+            if (first) copy.clippingMask = false;
+            copy.renderSpace = spatial ? RenderSpace::Scene : RenderSpace::Flat;
+            copy.collapsed = std::move(context);
+            result->push_back(std::move(copy));
+        }
+        first = false;
+    }
+}
+
+static const std::vector<Layer>& CollapseStack(const std::vector<Layer>& list, double timeMs, std::vector<Layer>* storage) {
+    size_t start = 0;
+    while (start < list.size() && !Collapsible(list, start, timeMs)) ++start;
+    if (start == list.size()) return list;
+    storage->assign(list.begin(), list.begin() + start);
+    for (size_t i = start; i < list.size(); ++i) {
+        const Layer& group = list[i];
+        if (Collapsible(list, i, timeMs)) AppendCollapsed(list, group, nullptr, group.id, timeMs, timeMs, 0, storage);
+        else storage->push_back(group);
+    }
+    return *storage;
+}
+
+static const std::vector<Layer>& SeenProject(const Scene& scene, double timeMs, std::vector<Layer>* storage,
+                                             const std::vector<Layer>* expanded = nullptr) {
+    const auto& layers = expanded ? *expanded : scene.layers;
+    if (!SeeLayers(layers, scene.width, scene.height, true, scene.fps, timeMs, scene.depthOrder, storage)) return layers;
     FaceForward(storage);
     SplitSeen(storage, timeMs);
     return *storage;
 }
 
 int64_t TopLayerAt(const Scene& scene, double timeMs, float x, float y, const MediaPictures& masks) {
-    std::vector<Layer> storage;
-    const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage);
+    std::vector<Layer> storage, expanded;
+    const auto& stack = CollapseStack(scene.layers, timeMs, &expanded);
+    const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage, &stack);
     for (auto it = list.rbegin(); it != list.rend(); ++it) {
-        if (depth::Inside(it->sight.cuts, {x, y}) && Contains(list, *it, timeMs, {x, y}, scene.width, scene.height, masks)) return it->id;
+        if (depth::Inside(it->sight.cuts, {x, y}) && Contains(list, *it, timeMs, {x, y}, scene.width, scene.height, masks))
+            return it->collapsed ? it->collapsed->owner : it->id;
     }
     if (CameraViewOn()) return 0;
     for (auto it = scene.layers.rbegin(); it != scene.layers.rend(); ++it) {
@@ -2311,8 +2407,9 @@ void Collect(SkCanvas* canvas, const std::vector<Layer>& layers, const Layer& l,
 
 void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int height, bool top, double timeMs,
               const MediaPictures& pictures) {
-    std::vector<Layer> inherited, storage;
-    const std::vector<Layer>& source = InheritEffects(listed, &inherited) ? inherited : listed;
+    std::vector<Layer> inherited, expanded, storage;
+    const auto& withEffects = InheritEffects(listed, &inherited) ? inherited : listed;
+    const std::vector<Layer>& source = CollapseStack(withEffects, timeMs, &expanded);
     const bool pieces = gScene && gScene->depthOrder && gScene->pieceOrder;
     const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage);
     if (seen) FaceForward(&storage);

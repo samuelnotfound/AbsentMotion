@@ -74,15 +74,16 @@ class GroupAndSnapTest {
     @Test fun renderingAndTransformControlsAreIndependentAndSaved() {
         val legacy = Layer(layer(1, 0, 999)).withTransform("location", 540f, 960f, 30f)
         assertNull(legacy.node["threeD"])
-        assertTrue(legacy.applies3DTransforms)
+        assertTrue(legacy.uses3D)
+        assertFalse(legacy.rendersIn3D)
 
-        val flat = legacy.withRenderIn3D(false)
+        val flat = legacy.withCollapsedTransforms(false)
         assertTrue(flat.uses3D)
         assertFalse(flat.rendersIn3D)
         assertFalse(flat.applies3DTransforms)
-        assertTrue(flat.withRenderIn3D(true).applies3DTransforms)
+        assertTrue(flat.withCollapsedTransforms(true).applies3DTransforms)
 
-        val controlsOff = legacy.withThreeD(false)
+        val controlsOff = legacy.withCollapsedTransforms(true).withThreeD(false)
         assertFalse(controlsOff.uses3D)
         assertTrue(controlsOff.rendersIn3D)
         assertFalse(controlsOff.applies3DTransforms)

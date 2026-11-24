@@ -135,6 +135,7 @@ struct Retiming {
 };
 
 struct Layer;
+struct CollapsedLayer;
 
 struct EditorCamera {
     int mode = 0;
@@ -196,6 +197,7 @@ struct Layer {
     bool placed = false;
     bool projected = false;
     Sight sight;
+    std::shared_ptr<const CollapsedLayer> collapsed;
 
     float value(const char* name, int i, float t, float fallback) const;
 

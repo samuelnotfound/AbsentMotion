@@ -135,9 +135,9 @@ fun EditorState.toggleLayer3D(id: Long) {
     edit { it.update(id) { layer -> layer.withThreeD(!layer.uses3D) } }
 }
 
-internal fun EditorState.toggleLayerRenderSpace(id: Long) {
+internal fun EditorState.toggleCollapseTransforms(id: Long) {
     if (lookOnly || scene.layer(id)?.let { it.canChooseRenderSpace && !it.locked } != true) return
-    edit { it.update(id) { layer -> layer.withRenderIn3D(!layer.rendersIn3D) } }
+    edit { it.update(id) { layer -> layer.withCollapsedTransforms(!layer.collapsesTransforms) } }
 }
 
 fun EditorState.setLock(id: Long, lock: String?) = edit { it.update(id) { layer -> layer.withLock(lock) } }
