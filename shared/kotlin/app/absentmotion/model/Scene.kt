@@ -324,7 +324,22 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
     fun withFill(type: String, color: Int? = null): Layer =
         copy(node = node.with("fillType", type)).let { if (color == null) it else it.withValue(PropRef.FillColor, formatColor(color)) }
 
-    fun withTransform(name: String, vararg values: Float) = withValue(PropRef(PropRef.Kind.Transform, name), formatFloats(values))
+    fun withTransform(name: String, vararg values: Float): Layer {
+        val ref = PropRef(PropRef.Kind.Transform, name)
+        return if (ref == PropRef.Location && positionDimensionsSeparated) withTransformAxes(ref, *values)
+        else withValue(ref, formatFloats(values))
+    }
+
+    internal val positionDimensionsSeparated: Boolean
+        get() = node["positionDimensionsSeparated"] == "true" ||
+            propertyElement(PropRef.Location)?.children?.any { it.name == "axis" } == true
+
+    internal fun withPositionDimensionsSeparated(separated: Boolean): Layer? {
+        if (separated) return copy(node = node.with("positionDimensionsSeparated", "true"))
+        val location = propertyElement(PropRef.Location)
+        val combined = if (location == null) this else withElement(PropRef.Location, location.joinPositionAxes() ?: return null)
+        return combined.copy(node = combined.node.with("positionDimensionsSeparated", null))
+    }
 
     internal fun withTransformAxes(ref: PropRef, vararg values: Float): Layer {
         val before = transform(ref.name, *floats(ref.axisDefaults(), FloatArray(0)))

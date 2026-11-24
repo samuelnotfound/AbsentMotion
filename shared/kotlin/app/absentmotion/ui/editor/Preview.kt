@@ -510,7 +510,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                                 if (change.all(Float::isFinite)) {
                                     val before = layer.location
                                     state.editSelected(TRANSFORM_GIZMO) {
-                                        it.withTransformAxes(PropRef.Location, before[0] + change[0], before[1] + change[1], before[2] + change[2])
+                                        it.withTransform("location", before[0] + change[0], before[1] + change[1], before[2] + change[2])
                                     }
                                 }
                             }
