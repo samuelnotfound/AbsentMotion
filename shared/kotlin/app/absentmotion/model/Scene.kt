@@ -449,7 +449,12 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
             } else if (n.name == "kf") n["t"]?.finiteFloat()?.let { out.add(timeOf(it)) }
             else if (n.name != "scene") n.children.forEach(::walk)
         }
-        walk(if (scope == null) node else scopeNode(scope) ?: return emptyList())
+        val scoped = if (scope == null) node else scopeNode(scope) ?: return emptyList()
+        if (scope?.ref == PropRef.Scale && scaleLinked && scoped.children.any { it.name == "axis" }) {
+            for (axis in 0..1) walk(scoped.axisTrack(axis, PropRef.Scale.axisDefaults()))
+        } else {
+            walk(scoped)
+        }
         return out.toList()
     }
 
