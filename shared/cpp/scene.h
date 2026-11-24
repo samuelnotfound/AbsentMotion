@@ -379,8 +379,8 @@ void SetModel(const std::string& uri, std::shared_ptr<const Model> model);
 void DrawModel(SkCanvas* canvas, const Layer& layer, double timeMs, float alpha, const MediaPictures& pictures);
 SkRect ModelBounds(const Layer& layer, double timeMs);
 size_t ModelFaces(const Layer& layer);
-std::vector<float> ModelJoints(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs, bool depthOrder);
-Layer Sighted(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs, bool depthOrder);
+std::vector<float> ModelJoints(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs);
+Layer Sighted(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs);
 struct LayerEffects {
     std::function<bool(const Layer&)> active;
     std::function<bool(const Layer&)> lifted;

@@ -186,10 +186,10 @@ SkRect ModelBounds(const Layer& l, double timeMs) {
     return left <= right && top <= bottom ? SkRect::MakeLTRB(left - 1, top - 1, right + 1, bottom + 1) : SkRect::MakeEmpty();
 }
 
-std::vector<float> ModelJoints(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs, bool depthOrder) {
+std::vector<float> ModelJoints(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs) {
     auto found = Models().find(layer.mediaUri);
     if (found == Models().end() || !found->second->skin) return {};
-    const Layer l = Sighted(layers, layer, width, height, timeMs, depthOrder);
+    const Layer l = Sighted(layers, layer, width, height, timeMs);
     Placement p;
     if (!l.projected || !SeenPlacement(l, timeMs, &p)) return {};
     const ModelSkin& s = *found->second->skin;

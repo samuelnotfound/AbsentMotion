@@ -1451,7 +1451,7 @@ std::vector<float> EngineImpl::modelJoints(int64_t layerId, double timeMs) {
     const SceneScope scope(fScene);
     SetCameraView(fCameraView);
     const Layer* layer = fScene.layer(layerId);
-    return layer && layer->kind == "model" ? ModelJoints(fScene.layers, *layer, fScene.width, fScene.height, timeMs, fScene.depthOrder) : std::vector<float>{};
+    return layer && layer->kind == "model" ? ModelJoints(fScene.layers, *layer, fScene.width, fScene.height, timeMs) : std::vector<float>{};
 }
 
 int64_t EngineImpl::hitTest(float x, float y, double timeMs) {

@@ -605,7 +605,7 @@ JNIEXPORT jfloatArray JNICALL JNI(modelJoints)(JNIEnv* e, jobject, jlong h, jlon
     am::SetCameraView(d->cameraView);
     const auto* layer = d->scene.layer(id);
     if (!layer || layer->kind != "model") return nullptr;
-    const std::vector<float> xy = am::ModelJoints(d->scene.layers, *layer, d->scene.width, d->scene.height, t, d->scene.depthOrder);
+    const std::vector<float> xy = am::ModelJoints(d->scene.layers, *layer, d->scene.width, d->scene.height, t);
     return xy.empty() ? nullptr : floats(e, xy.data(), (int)xy.size());
 }
 JNIEXPORT jstring JNICALL JNI(layerOutline)(JNIEnv* e, jobject, jlong h, jlong id, jdouble t) {

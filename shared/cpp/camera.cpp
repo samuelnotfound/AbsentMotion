@@ -633,15 +633,18 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
     return true;
 }
 
-Layer Sighted(const std::vector<Layer>& layers, const Layer& l, int width, int height, double timeMs, bool depthOrder) {
+Layer Sighted(const std::vector<Layer>& layers, const Layer& l, int width, int height, double timeMs) {
     Layer copy = l;
-    const Layer* camera = gCameraView ? ActiveCamera(layers, timeMs) : nullptr;
+    const bool editor = EditorCameraOn() && l.spatial();
+    const Layer* camera = gCameraView && !editor && l.spatial() ? ActiveCamera(layers, timeMs) : nullptr;
     const Placement p = EffectivePlacement(layers, l, timeMs);
-    const View now = camera ? LayerView(layers, *camera, width, height, timeMs, depthOrder) : DefaultView(width, height);
+    const View view = SelectView(layers, camera, width, height, timeMs, editor);
     copy.parent = 0;
     copy.placed = true;
-    copy.sight = {&layers, &l, camera, width, height, depthOrder};
-    copy.projected = Solid(l, p) || (camera && now.tilt != SkM44() && Spatial(l, p, timeMs));
+    copy.sight = {&layers, &l, camera, width, height, editor || (camera && camera->activeAt(timeMs))};
+    copy.sight.editorView = editor;
+    copy.sight.depth = Look(view, ContentPlacement(p)).depth;
+    copy.projected = editor || Solid(l, p) || (camera && view.tilt != SkM44());
     return copy;
 }
 
