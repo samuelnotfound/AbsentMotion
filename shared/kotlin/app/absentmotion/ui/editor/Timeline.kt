@@ -853,24 +853,9 @@ private class TimelineView(val state: EditorState, private val density: Density,
         inlinePositions = if (absolute in inlinePositions) inlinePositions - setOf(absolute) else inlinePositions + setOf(absolute)
     }
 
-    private fun enterGroups(groups: List<Long>): Boolean {
-        for (id in groups) {
-            val before = state.groupPath.size
-            state.enterGroup(id)
-            if (state.groupPath.size == before) return false
-        }
-        return true
-    }
-
     fun openGroupRow(row: TimelineGroupRow, ref: app.absentmotion.model.PropRef?) {
-        if (state.lookOnly || !row.editable) return
-        val depth = state.groupPath.size
-        if (!enterGroups(row.groups)) { state.exitTo(depth); return }
-        if (ref == null) select(row.layer.id)
-        else state.scene.layer(row.layer.id)?.let { child ->
-            state.openInlineEditor(child, ref)
-            state.inlineGroupReturnDepth = depth
-        }
+        if (!row.editable || !state.selectGroupMember(row.groups, row.layer.id)) return
+        if (ref != null) state.selected?.let { state.openInlineEditor(it, ref) }
     }
 
     fun projectTimeX(time: Double): Float = timeScale().x(time.toFloat())
@@ -911,7 +896,17 @@ private class TimelineView(val state: EditorState, private val density: Density,
     private fun inlineFrames(layer: Layer): List<Int> =
         inlineSections(layer).flatMap { section -> section.visibleTracks.flatMap { it.frames(state.scene, layer) } }
 
-    fun inlineKeyframes(): List<Int> = layers.filter(::inlinePosition).flatMap(::inlineFrames)
+    private fun groupFrames(layer: Layer): List<Int> = groupRows(layer).flatMap { row ->
+        row.details.orEmpty().flatMap { section ->
+            section.visibleTracks.flatMap { track ->
+                track.frames(row.owner, row.layer).mapNotNull { frame ->
+                    row.hostTime(row.owner.frameStart(frame))?.roundToInt()?.let(state.scene::frameAt)
+                }
+            }
+        }
+    }
+
+    fun inlineKeyframes(): List<Int> = layers.filter(::inlinePosition).flatMap { inlineFrames(it) + groupFrames(it) }
         .filter { it in 0..state.scene.lastFrame }.distinct().sorted()
 
     fun inlineKeyX(frame: Int): Float = timeScale().x(state.scene.frameStart(frame).toFloat())
@@ -1149,14 +1144,38 @@ private class TimelineView(val state: EditorState, private val density: Density,
     }
 
     fun revealRow() {
-        if (!desktopDragging) state.selectedId?.let(::revealRow)
+        if (desktopDragging) return
+        if (state.editingGroupMember) revealGroupMember() else state.selectedId?.let(::revealRow)
+    }
+
+    private fun revealGroupMember() {
+        val groups = state.selectedGroups
+        val id = state.selectedId ?: return
+        val rootRow = groups.firstOrNull()?.let(::rowOf) ?: return
+        val rootLayer = layerAt(rootRow) ?: return
+        val target = groups + id
+        var top = rowTop(rootRow) + rowH
+        val sections = inlineSections(rootLayer)
+        if (sections.isNotEmpty()) top += with(density) { inlineDetailsHeight(sections) }
+        for (row in groupRows(rootLayer)) {
+            val bottom = top + row.heightPx(density)
+            if (row.path == target) {
+                keepRowVisible(top, top + row.headerHeightPx(density))
+                return
+            }
+            top = bottom
+        }
     }
 
     private fun revealRow(id: Long) {
         val row = rowOf(id) ?: return
         val top = rowTop(row)
-        val bottom = top + rowH
-        if (top < rulerH) scrollPx = scroll - (rulerH - top) else if (bottom > rowsBottom) scrollPx = scroll + (bottom - rowsBottom)
+        keepRowVisible(top, top + rowH)
+    }
+
+    private fun keepRowVisible(top: Float, bottom: Float) {
+        if (top < rulerH) scrollPx = scroll - (rulerH - top)
+        else if (bottom > rowsBottom) scrollPx = scroll + (bottom - rowsBottom)
     }
 
     fun revealPlayhead() {
@@ -1437,6 +1456,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
         if (id == null) {
             scrollBeforeSelect?.takeUnless { MultiSelect.active }?.let { scrollPx = it }
             scrollBeforeSelect = null
+            return
+        }
+        if (state.editingGroupMember) {
+            revealGroupMember()
             return
         }
         val index = layers.indexOfFirst { it.id == id }

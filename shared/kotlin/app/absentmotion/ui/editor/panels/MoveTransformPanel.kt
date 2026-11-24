@@ -133,16 +133,16 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             }
         }
     }
-    val others by produceState(emptyList<SnapOther>(), layer.id, state.scene.layers, state.timeMs, state.playing) {
+    val others by produceState(emptyList<SnapOther>(), layer.id, state.selectedScene.layers, state.timeMs, state.playing) {
         if (state.playing) return@produceState
         kotlinx.coroutines.delay(120)
-        value = state.scene.layers.filter { it.id != layer.id && it.kind != "audio" && it.activeAt(state.sampleMs) }.map { o ->
-            val at = state.scene.place(o, state.sampleMs)
+        value = state.selectedScene.layers.filter { it.id != layer.id && it.kind != "audio" && it.activeAt(state.selectedSampleMs) }.map { o ->
+            val at = state.selectedScene.place(o, state.selectedSampleMs)
             SnapOther(at.x, at.y, state.engine.layerBounds(o.id, state.timeMs))
         }
     }
     val box by produceState<FloatArray?>(null, layer.node, state.timeMs, state.playing) { if (!state.playing) value = state.engine.layerBounds(layer.id, state.timeMs) }
-    val start by rememberUpdatedState { state.scene.snapAxesFor(layer, state.sampleMs, box, others) }
+    val start by rememberUpdatedState { state.selectedScene.snapAxesFor(layer, state.selectedSampleMs, box, others) }
     val now by rememberUpdatedState(layer)
     val tick = rememberHaptic(state)
     DisposableEffect(Unit) { onDispose { state.snapGuides = emptyList() } }
@@ -207,7 +207,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 },
                 onReset = { which ->
                     state.editSelected { l ->
-                        val home = state.scene.centred(l, state.sampleMs).location
+                        val home = state.selectedScene.centred(l, state.selectedSampleMs).location
                         val v = l.location.copyOf().also { it[which] = home[which] }
                         l.withTransform("location", *v)
                     }
@@ -527,7 +527,9 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     val focus = state.inlineComponent(PropRef.Scale)
     var active by remember(layer.id, focus, upright) { mutableIntStateOf(if (upright && focus != null) 1 - focus else focus ?: 0) }
     if (focus != null) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
-    val (boxW, boxH) = box ?: (0f to 0f)
+    val percent = state.editingGroupMember
+    val (boxW, boxH) = if (percent) abs(layer.scale[0]) * 100f to abs(layer.scale[1]) * 100f else box ?: (0f to 0f)
+    val unit = if (percent) "%" else ""
     fun Layer.updateScale(x: Float, y: Float): Layer =
         if (focus == null) withTransform("scale", x, y) else withTransformAxes(PropRef.Scale, x, y)
 
@@ -550,8 +552,8 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     fun openKeypad(isWidth: Boolean) {
         active = if (isWidth) 0 else 1
         val old = if (isWidth) boxW else boxH
-        if (box == null || !(old > 0f)) return
-        val field = KeypadField(if (isWidth) widthLabel else heightLabel, old)
+        if ((!percent && box == null) || !(old > 0f)) return
+        val field = KeypadField(if (isWidth) widthLabel else heightLabel, old, unit)
         state.keypad = KeypadRequest(listOf(field), 0) { v -> if (v[0] > 0f) stretch(v[0] / old, isWidth) }
     }
     fun colour(which: Int) = if (linked || active == which) Am.Accent else Am.OnDark
@@ -559,7 +561,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.align(Alignment.TopCenter).padding(top = 42.px)) {
             Row {
-                NumberBox(formatFixed(boxW, 1), colour(0), Modifier.width(177.px).height(70.px), onSelect = { active = 0 }) { openKeypad(true) }
+                NumberBox(formatFixed(boxW, 1) + unit, colour(0), Modifier.width(177.px).height(70.px), onSelect = { active = 0 }) { openKeypad(true) }
                 Spacer(Modifier.width(14.px))
                 Box(
                     Modifier.size(70.px).clip(PanelShape).background(Am.Inactive).clickable { state.editSelected { it.withScaleLinked(!it.scaleLinked) } },
@@ -569,7 +571,7 @@ private fun SizeTab(state: EditorState, layer: Layer) {
                     HoldName(stringResource(R.string.a11y_keep_proportions))
                 }
                 Spacer(Modifier.width(14.px))
-                NumberBox(formatFixed(boxH, 1), colour(1), Modifier.width(177.px).height(70.px), onSelect = { active = 1 }) { openKeypad(false) }
+                NumberBox(formatFixed(boxH, 1) + unit, colour(1), Modifier.width(177.px).height(70.px), onSelect = { active = 1 }) { openKeypad(false) }
             }
             Row(Modifier.height(23.px)) {
                 Caption(widthLabel, Modifier.width(177.px).fillMaxHeight())
@@ -724,7 +726,8 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
                 if (activeAxis == 2 && spatial) {
                     state.setPivot(origin[0], origin[1], "pivot-pad", z = origin[2] + travel.x)
                 } else {
-                    val local = seen?.local(Pt(origin[0], origin[1]), Pt(travel.x, travel.y)) ?: return@detectDragGestures
+                    val local = if (state.editingGroupMember) Pt(travel.x, travel.y)
+                        else seen?.local(Pt(origin[0], origin[1]), Pt(travel.x, travel.y)) ?: return@detectDragGestures
                     state.setPivot(origin[0] + local.x, origin[1] + local.y, "pivot-pad")
                 }
             }

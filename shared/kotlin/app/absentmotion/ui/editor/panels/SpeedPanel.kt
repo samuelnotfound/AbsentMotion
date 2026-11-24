@@ -139,14 +139,14 @@ private fun RemapTime(state: EditorState, layer: Layer, modifier: Modifier) {
         }
         return
     }
-    val local = (state.sampleMs - layer.startTime).coerceIn(0, (layer.endTime - layer.startTime).coerceAtLeast(0))
+    val local = (state.selectedSampleMs - layer.startTime).coerceIn(0, (layer.endTime - layer.startTime).coerceAtLeast(0))
     val seconds = remember(layer.node, local) { (VideoTiming(layer).mediaMs(local.toDouble()) / 1000).toFloat() }
-    val longest = ((layer.mediaFill?.let { state.scene.media(it.uri)?.duration } ?: 0L) / 1_000_000f).coerceAtLeast(seconds)
+    val longest = ((layer.mediaFill?.let { state.selectedScene.media(it.uri)?.duration } ?: 0L) / 1_000_000f).coerceAtLeast(seconds)
     val label = stringResource(R.string.remap_clip_time)
     Column(modifier.padding(top = 8.dp), Arrangement.spacedBy(8.dp)) {
         Text(label, Modifier.padding(horizontal = 15.dp), color = Am.OnDarkDim, fontSize = 12.sp)
         Row(Modifier.padding(horizontal = 15.dp).fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-            EffectRuler(seconds, 1f / state.scene.fps, 0f, longest, true, {}, { v -> state.setNumber(RemapRef, v.coerceIn(0f, longest), "remap") }, state::endGesture,
+            EffectRuler(seconds, 1f / state.selectedScene.fps, 0f, longest, true, {}, { v -> state.setNumber(RemapRef, v.coerceIn(0f, longest), "remap") }, state::endGesture,
                 Modifier.weight(1f).fillMaxHeight(), null, state.settings.vibration)
             Box(
                 Modifier.padding(start = 8.dp).width(88.dp).height(40.dp).clip(PanelShape).background(Am.Field)
@@ -165,9 +165,9 @@ private fun RemapTime(state: EditorState, layer: Layer, modifier: Modifier) {
 @Composable
 private fun NormalSpeed(state: EditorState, layer: Layer, ai: AiTools, modifier: Modifier) {
     val speed = remember(layer.node) { layer.normalSpeed().coerceIn(SLOWEST_SPEED, FASTEST_SPEED) }
-    val inside = state.sampleMs in (layer.startTime + 1) until layer.endTime
-    val before = state.sampleMs < layer.startTime
-    val past = state.sampleMs > layer.endTime
+    val inside = state.selectedSampleMs in (layer.startTime + 1) until layer.endTime
+    val before = state.selectedSampleMs < layer.startTime
+    val past = state.selectedSampleMs > layer.endTime
     val usable = listOf(before, inside, inside, past)
     val held = remember { arrayOfNulls<Layer>(1) }
     val speedLabel = stringResource(R.string.a11y_speed)

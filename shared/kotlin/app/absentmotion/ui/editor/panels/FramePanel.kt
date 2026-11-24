@@ -32,7 +32,7 @@ import app.absentmotion.ui.HoldName
 internal fun FramePanel(state: EditorState, layer: Layer, modifier: Modifier = Modifier) {
     val count = layer.nested?.frameCount ?: return
     val picking = layer.element(FrameRef) != null
-    val shown = layer.shownFrame(state.sampleMs.toDouble(), state.scene.fps)
+    val shown = layer.shownFrame(state.selectedSampleMs.toDouble(), state.selectedScene.fps)
     val label = stringResource(R.string.layer_tool_frame)
     fun pick(frame: Int) = state.editSelected { it.withPickedFrame(Math.floorMod(frame, count)) }
     Row(modifier.padding(horizontal = 40.px), Arrangement.spacedBy(17.px, Alignment.CenterHorizontally), Alignment.CenterVertically) {

@@ -83,7 +83,7 @@ fun EditorTopBar(state: EditorState, onExit: () -> Unit, modifier: Modifier = Mo
             return
         }
     }
-    val layer = if (place == BarPlace.Project) null else state.selectedId?.let { state.scene.layer(it) }
+    val layer = if (place == BarPlace.Project) null else state.selectedLayer
     if (place == BarPlace.Layer && layer == null) {
         Box(modifier.background(Am.Button))
         return

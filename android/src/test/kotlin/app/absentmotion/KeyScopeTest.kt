@@ -2,6 +2,8 @@ package app.absentmotion
 
 import app.absentmotion.editor.EditorPanel
 import app.absentmotion.editor.grouped
+import app.absentmotion.editor.groupMemberTrack
+import app.absentmotion.editor.withFocused
 import app.absentmotion.effects.EffectCatalog
 import app.absentmotion.ui.editor.timelineGroupRows
 import app.absentmotion.editor.InlineKey
@@ -58,6 +60,23 @@ class KeyScopeTest {
         assertEquals(emptyList<app.absentmotion.editor.InlineSection>(), rows[1].details)
         assertEquals(500..1999, rows[1].visibleRange())
         assertEquals(300, rows[1].localTime(500))
+    }
+
+    @Test fun editingAGroupMemberUsesItsLocalTimeAndUpdatesTheParentScene() {
+        val host = blank.add(shapeLayer(id = 2, start = 500, end = 1999))
+            .add(shapeLayer(id = 3, start = 200, end = 2199))
+            .grouped(setOf(2L, 3L), null, 7, "Folder")
+        val groups = listOf(7L)
+        val member = host.groupMemberTrack(groups, 2)!!
+        val local = member.timeAt(500.0, activeOnly = true, quantize = false)!!.ms
+        assertEquals(300.0, local, 0.001)
+        assertEquals(500.0, member.hostTime(local)!!, 0.001)
+
+        val changed = member.scene.update(2, local.roundToInt()) { it.withFill("color", 0xFF12AB34.toInt()) }
+        val edited = host.withFocused(groups, changed)
+        assertEquals(host.layers.map { it.id }, edited.layers.map { it.id })
+        assertEquals(0xFF12AB34.toInt(), edited.groupMemberTrack(groups, 2)!!.layer.fillColor)
+        assertEquals(host.groupMemberTrack(groups, 3)!!.layer.node, edited.groupMemberTrack(groups, 3)!!.layer.node)
     }
 
     @Test fun viewerRotationUsesTheLayerAxesAfterItHasTurned() {

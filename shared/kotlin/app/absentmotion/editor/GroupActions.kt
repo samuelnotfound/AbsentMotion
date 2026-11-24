@@ -9,6 +9,7 @@ import app.absentmotion.model.keyframes
 import app.absentmotion.model.mediaUris
 import app.absentmotion.model.withKeyframes
 import app.absentmotion.model.Layer
+import app.absentmotion.model.LayerTrack
 import app.absentmotion.model.Scene
 import app.absentmotion.model.XmlNode
 import app.absentmotion.model.nestedCut
@@ -41,6 +42,19 @@ internal fun Scene.focused(path: List<Long>): Scene? {
     val have = inner.media.map { it.uri }.toSet()
     val shared = node.children.filter { it.name == "media" && it["uri"] !in have }
     return Scene(inner.node.copy(children = shared + inner.node.children))
+}
+
+internal fun Scene.groupMemberTrack(groups: List<Long>, id: Long): LayerTrack? {
+    var owner = this
+    val parents = groups.map { groupId ->
+        val group = owner.layer(groupId)?.takeIf { it.isPlainGroup && !it.locked } ?: return null
+        val parent = group to owner.fps
+        owner = group.nested ?: return null
+        parent
+    }
+    val focused = focused(groups) ?: return null
+    val layer = focused.layer(id) ?: return null
+    return LayerTrack(layer, focused, parents)
 }
 
 internal fun Scene.openablePath(path: List<Long>): List<Long> {

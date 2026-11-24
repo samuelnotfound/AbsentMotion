@@ -184,7 +184,7 @@ internal fun EffectsPanel(state: EditorState, modifier: Modifier) {
                 key(reorder.generation) {
                     effects.forEachIndexed { i, effect ->
                         EffectListRow(state, reorder, i, effects.size, effect, catalog.find(effect["id"] ?: ""), cards) { from, to ->
-                            state.edit { it.update(id, state.sampleMs) { l -> l.moveEffect(from, to) } }
+                            if (state.selectedId == id) state.editSelected { it.moveEffect(from, to) }
                         }
                     }
                 }

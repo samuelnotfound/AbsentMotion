@@ -277,7 +277,7 @@ class UiContracts(unittest.TestCase):
 
     def test_single_group_duplicate_remaps_children(self):
         text = source('editor/EditorActions.kt').split('fun EditorState.duplicateSelected()', 1)[1].split('fun EditorState.toggleHidden', 1)[0]
-        self.assertIn('copyLayers(listOf(scene.pinnedPath(layer)), preserveOutsideParents = true, newId = scene::freeLayerId)', text)
+        self.assertIn('copyLayers(listOf(selectedScene.pinnedPath(layer)), preserveOutsideParents = true, newId = project::freeLayerId)', text)
 
     def test_share_labels_match_export_names(self):
         text = source('ui/export/ExportDone.kt')
@@ -332,7 +332,7 @@ class UiContracts(unittest.TestCase):
         self.assertIn('MenuRow(stringResource(R.string.effects_paste_all), enabled = copied.isNotEmpty()', bar)
         self.assertIn('pasteEffectsOnSelection(state, context)', bar)
         self.assertEqual('Paste All Effects', english('effects_paste_all'))
-        self.assertIn('if (targets > 0 && effects.isNotEmpty()) edit { it.withEffectsPasted(ids, effects) }', source('editor/EditorActions.kt'))
+        self.assertIn('if (targets > 0 && effects.isNotEmpty()) editSelectedScene { it.withEffectsPasted(ids, effects) }', source('editor/EditorActions.kt'))
         self.assertIn('it.id in ids && it.canAnimate', source('model/Effects.kt'))
         self.assertIn('EffectClipboard.copy(layer.effects, ticked)', source('ui/editor/panels/EffectsPanel.kt'))
 

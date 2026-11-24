@@ -75,14 +75,11 @@ fun EditorState.stepBack(): Boolean {
         selectedId == null -> if (inGroup) exitGroup() else return false
         easingOpen -> easingOpen = false
         inlineProperty != null -> {
-            val returnDepth = inlineGroupReturnDepth
-            inlineGroupReturnDepth = null
             inlineProperty = null
             panel = EditorPanel.Tools
             effectIndex = -1
             volumeOpen = false
             keyTarget = null
-            returnDepth?.let(::exitTo)
         }
         panel == EditorPanel.Effects && effectIndex >= 0 -> effectIndex = -1
         panel != EditorPanel.Tools -> panel = EditorPanel.Tools
@@ -115,15 +112,17 @@ fun EditorState.selectAll() {
 
 fun EditorState.deleteSelected() {
     val id = selectedId ?: return
-    edit { it.unparentChildrenOf(setOf(id), sampleMs).remove(id) }
+    editSelectedScene { it.unparentChildrenOf(setOf(id), selectedSampleMs).remove(id) }
     deselectLayer()
 }
 
 fun EditorState.duplicateSelected() {
     val layer = selected ?: return
-    val copy = copyLayers(listOf(scene.pinnedPath(layer)), preserveOutsideParents = true, newId = scene::freeLayerId).single().withLabel(AppText.get(R.string.edit_layer_copy_name, layer.label))
-    edit { it.addAbove(copy, layer.id) }
-    selectedId = copy.id
+    val groups = selectedGroups
+    val copy = copyLayers(listOf(selectedScene.pinnedPath(layer)), preserveOutsideParents = true, newId = project::freeLayerId)
+        .single().withLabel(AppText.get(R.string.edit_layer_copy_name, layer.label))
+    editSelectedScene { it.addAbove(copy, layer.id) }
+    if (groups.isEmpty()) selectedId = copy.id else selectGroupMember(groups, copy.id)
 }
 
 fun EditorState.toggleHidden(id: Long) = edit { it.update(id) { layer -> layer.withHidden(!layer.hidden) } }
@@ -141,12 +140,12 @@ fun EditorState.toggleLock(id: Long) {
 }
 
 fun EditorState.trimStart() {
-    val trimmed = selected?.let { scene.trimStartAt(it, frame) } ?: return
+    val trimmed = selected?.let { selectedScene.trimStartAt(it, selectedFrame) } ?: return
     editSelected { trimmed }
 }
 
 fun EditorState.trimEnd() {
-    val trimmed = selected?.let { scene.trimEndAt(it, frame) } ?: return
+    val trimmed = selected?.let { selectedScene.trimEndAt(it, selectedFrame) } ?: return
     editSelected { trimmed }
 }
 
@@ -167,9 +166,10 @@ internal fun Scene.withTrims(ids: List<Long>, frame: Int, sampleMs: Int, start: 
 }
 
 fun EditorState.split() {
-    val next = scene.withSplits(chosenLayers.map { it.id }, frame, sampleMs) ?: return
-    edit { next }
-    if (scene.node !== next.node) return
+    val next = selectedScene.withSplits(chosenLayers.map { it.id }, selectedFrame, selectedSampleMs) ?: return
+    val before = scene.node
+    editSelectedScene { next }
+    if (scene.node === before) return
     MultiSelect.clear()
     deselectLayer()
 }
@@ -200,9 +200,12 @@ internal fun Scene.inlineNavigationStops(keys: List<Int>, layer: Layer? = null):
 }
 
 private fun EditorState.stops(): List<Int> = if (timelineDetailsOpen) {
-    scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty(), selected)
+    val boundaries = if (editingGroupMember) selectedLayer?.let { layer ->
+        listOfNotNull(parentFrameForSelectedTime(layer.startTime), parentFrameForSelectedTime(layer.endTime))
+    }.orEmpty() else emptyList()
+    scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty() + boundaries, selectedLayer.takeUnless { editingGroupMember })
 } else {
-    scene.navigationStops(selected, keyScope)
+    scene.navigationStops(selectedLayer.takeUnless { editingGroupMember }, keyScope)
 }
 
 fun EditorState.skipBack() {
@@ -215,7 +218,7 @@ fun EditorState.skipForward() {
         next?.let(::stepTo)
         return
     }
-    val layerEnd = selected?.endTime?.let(scene::frameAt)
+    val layerEnd = selectedLayer?.endTime?.let(::parentFrameForSelectedTime)
     if (next == null || (next >= scene.lastFrame && next != layerEnd)) parkAtEnd() else stepTo(next)
 }
 
@@ -236,7 +239,7 @@ internal fun EditorState.togglePositionDimensions() {
 
 fun EditorState.resetTransform(tabs: List<Int>) {
     if (tabs == listOf(5)) return resetPivot()
-    editSelected { scene.resetTransform(it, sampleMs, tabs) }
+    editSelected { selectedScene.resetTransform(it, selectedSampleMs, tabs) }
 }
 
 internal fun Layer.resetValue(ref: PropRef, value: String): Layer {
@@ -267,7 +270,7 @@ fun EditorState.toggleKeyframe() {
                 layer.withEffect(target.ref.effectIndex) { it.withEffectProperty(target.ref.name, target.type, target.default, layer.t, layer.snap) }
             else -> layer
         }
-        if (target.ref == SpeedRef) present.withSpeedKeyframeToggled(sampleMs, scene.fps)
+        if (target.ref == SpeedRef) present.withSpeedKeyframeToggled(selectedSampleMs, selectedScene.fps)
         else present.withKeyframeToggled(target.ref, target.default).let { if (target.ref == FrameRef) it.withFrameHold() else it }
     }
 }
@@ -296,7 +299,7 @@ private fun EditorState.stretchFrame(direction: Int): Int? {
     if (end < 1 || end > keys.lastIndex || element.stretchAt(layer.snap) < 0) return null
     val middle = (keys[end - 1].t + keys[end].t) / 2
     val time = if (ref == SpeedRef) layer.startTime + VideoTiming(layer).localMs(middle.toDouble() / 1_000_000).roundToInt() else layer.timeOf(middle)
-    return scene.frameAt(time)
+    return parentFrameForSelectedTime(time)
 }
 
 private var copiedCurve: Easing? = null
@@ -339,29 +342,29 @@ object EffectClipboard {
 }
 
 fun EditorState.addEffectToChosen(ids: Set<Long>, skip: (Layer) -> Boolean = { false }, make: (Layer) -> XmlNode): Int {
-    val targets = scene.effectTargets(ids).filterNot(skip)
-    if (targets.isNotEmpty()) edit { s -> targets.fold(s) { acc, target -> acc.update(target.id) { it.addEffect(make(it)) } } }
+    val targets = selectedScene.effectTargets(ids).filterNot(skip)
+    if (targets.isNotEmpty()) editSelectedScene { s -> targets.fold(s) { acc, target -> acc.update(target.id) { it.addEffect(make(it)) } } }
     return targets.size
 }
 
 fun EditorState.removeAudioOfChosen(): Int {
     val ids = chosenLayers.filter { it.mediaFill?.video == true }.map { it.id }
-    if (ids.isNotEmpty()) edit { s -> ids.fold(s) { acc, id -> acc.update(id) { it.copy(node = it.node.withChild("gain", XmlNode("gain", mapOf("value" to formatFloats(floatArrayOf(0f)))))) } } }
+    if (ids.isNotEmpty()) editSelectedScene { s -> ids.fold(s) { acc, id -> acc.update(id) { it.copy(node = it.node.withChild("gain", XmlNode("gain", mapOf("value" to formatFloats(floatArrayOf(0f)))))) } } }
     return ids.size
 }
 
 fun EditorState.pasteStyleOnChosen(parts: Set<StylePart>): Int {
     val from = copiedLayerForStyle ?: return 0
     val ids = chosenLayers.map { it.id }
-    if (ids.isNotEmpty()) edit { s -> ids.fold(s) { acc, id -> acc.withPastedStyle(id, sampleMs, from, copiedMediaForStyle, parts) } }
+    if (ids.isNotEmpty()) editSelectedScene { s -> ids.fold(s) { acc, id -> acc.withPastedStyle(id, selectedSampleMs, from, copiedMediaForStyle, parts) } }
     return ids.size
 }
 
 fun EditorState.pasteEffectsOnChosen(): Pair<Int, Int> {
     val ids = chosenLayers.map { it.id }.toSet()
-    val targets = scene.effectTargets(ids).size
+    val targets = selectedScene.effectTargets(ids).size
     val effects = EffectClipboard.effects
-    if (targets > 0 && effects.isNotEmpty()) edit { it.withEffectsPasted(ids, effects) }
+    if (targets > 0 && effects.isNotEmpty()) editSelectedScene { it.withEffectsPasted(ids, effects) }
     return targets to ids.size - targets
 }
 
@@ -378,11 +381,11 @@ internal val copiedMediaForStyle: List<MediaDeclaration> get() = copiedMedia
 
 val EditorState.chosenLayers: List<Layer>
     get() = if (MultiSelect.active) scene.layers.filter { it.id in MultiSelect.ids }
-    else listOfNotNull(selectedId?.let { scene.layer(it) })
+    else listOfNotNull(selectedLayer)
 
 fun EditorState.copySelected() {
-    copiedLayers = scene.layersToCopy(chosenLayers.map { it.id }.toSet())
-    copiedMedia = scene.media
+    copiedLayers = selectedScene.layersToCopy(chosenLayers.map { it.id }.toSet())
+    copiedMedia = selectedScene.media
 }
 
 internal fun Scene.layersToCopy(ids: Set<Long>): List<Layer> {
@@ -408,7 +411,7 @@ fun EditorState.duplicateChosen() {
 fun EditorState.deleteChosen() {
     val ids = chosenLayers.map { it.id }.toSet()
     if (ids.isEmpty()) return
-    edit { s -> ids.fold(s.unparentChildrenOf(ids, sampleMs)) { acc, id -> acc.remove(id) } }
+    editSelectedScene { s -> ids.fold(s.unparentChildrenOf(ids, selectedSampleMs)) { acc, id -> acc.remove(id) } }
     MultiSelect.clear()
     deselectLayer()
 }
@@ -427,7 +430,10 @@ fun EditorState.changeSettings(width: Int, height: Int, fps: Int, bgColor: Int) 
 
 fun EditorState.rename(title: String) = edit { it.withTitle(title) }
 
-fun EditorState.renameLayer(id: Long, label: String) = edit { it.update(id) { layer -> layer.withLabel(label) } }
+fun EditorState.renameLayer(id: Long, label: String) {
+    if (editingGroupMember && id == selectedId) editSelected { it.withLabel(label) }
+    else edit { it.update(id) { layer -> layer.withLabel(label) } }
+}
 
 fun EditorState.addImage(media: MediaDeclaration) {
     val layer = scene.imageLayer(media, frame, settings.defaultLayerDuration) ?: return

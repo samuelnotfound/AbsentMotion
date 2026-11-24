@@ -4,6 +4,7 @@ import android.view.Choreographer
 import androidx.annotation.StringRes
 import app.absentmotion.R
 import app.absentmotion.ai.withMattesFollowing
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -25,6 +26,7 @@ import app.absentmotion.model.nestedHostTime
 import app.absentmotion.model.nestedTime
 import app.absentmotion.model.withValueLinksFollowing
 import app.absentmotion.model.withOutlinesFollowing
+import kotlin.math.roundToInt
 
 enum class EditorPanel(@StringRes val title: Int) {
     Tools(0), Speed(R.string.edit_panel_time_remapping), MoveTransform(R.string.edit_panel_transform), ColorFill(R.string.edit_panel_fill_color),
@@ -143,6 +145,17 @@ class EditorState(
         if (!lookOnly) engine.setScene(scene)
     }
 
+    internal fun enterSelectedGroup() {
+        val id = selectedId ?: return
+        val groups = selectedGroups
+        for (group in groups) {
+            val depth = groupPath.size
+            enterGroup(group)
+            if (groupPath.size == depth) return
+        }
+        enterGroup(id)
+    }
+
     fun exitGroup() {
         val id = groupPath.lastOrNull() ?: return
         endGesture()
@@ -187,17 +200,52 @@ class EditorState(
         }
 
     private var selection by mutableStateOf<Long?>(null)
+    internal var selectedGroups by mutableStateOf<List<Long>>(emptyList())
+        private set
+
+    private val selectedGroupTrack by derivedStateOf {
+        val id = selection
+        val groups = selectedGroups
+        if (id == null || groups.isEmpty()) null else scene.groupMemberTrack(groups, id)
+    }
+
+    internal val editingGroupMember get() = selectedGroups.isNotEmpty()
+    internal val selectedScene: Scene get() = selectedGroupTrack?.scene ?: scene
+    internal val selectedLayer: Layer?
+        get() = if (editingGroupMember) selectedGroupTrack?.layer else selectedId?.let(scene::layer)
+
+    private fun selectedLocalMs(ms: Int): Int =
+        selectedGroupTrack?.timeAt(ms.toDouble(), activeOnly = false, quantize = false)?.ms?.roundToInt() ?: ms
+
+    internal val selectedSampleMs: Int get() = selectedLocalMs(sampleMs)
+    internal val selectedTimeMs: Int get() = selectedLocalMs(timeMs)
+    internal val selectedFrame: Int get() = if (editingGroupMember) selectedScene.frameAt(selectedSampleMs) else frame
+
+    internal fun parentFrameForSelectedTime(ms: Int): Int? {
+        if (!editingGroupMember) return scene.frameAt(ms)
+        return selectedGroupTrack?.hostTime(ms.toDouble())?.roundToInt()?.let(scene::frameAt)
+    }
+
+    internal fun selectGroupMember(groups: List<Long>, id: Long): Boolean {
+        if (lookOnly || scene.groupMemberTrack(groups, id)?.layer?.locked != false) return false
+        playing = false
+        MultiSelect.clear()
+        deselectLayer()
+        selectedId = id
+        selectedGroups = groups
+        return true
+    }
 
     var selectedId: Long?
         get() = selection
         set(value) {
             if (value != null && value != selection && scene.layer(value)?.locked == true) return hint(R.string.layer_locked_hint)
             if (value != selection) { Glide.interrupt(); if (liveRecording != null) endGesture() }
+            if (value != selection) selectedGroups = emptyList()
             selection = value
             if (inlinePanelHidden) {
                 inlinePanelHidden = false
                 inlineProperty = null
-                inlineGroupReturnDepth = null
                 easingOpen = false
                 keyTarget = null
             }
@@ -374,7 +422,7 @@ class EditorState(
 
     private val history = EditHistory({ root }, ::apply)
 
-    val selected: Layer? get() = selectedId?.let { scene.layerAt(it, sampleMs) }
+    val selected: Layer? get() = selectedLayer?.at(selectedSampleMs, selectedScene.fps)
 
     val timeMs: Int get() = scene.frameStart(frame)
 
@@ -384,7 +432,6 @@ class EditorState(
     var timelineDetailsOpen by mutableStateOf(false)
     var inlineProperty by mutableStateOf<PropRef?>(null)
         internal set
-    internal var inlineGroupReturnDepth: Int? = null
     var inlineTransformAxis by mutableIntStateOf(0)
     val showsLayerInspector get() = selectedId != null && (!inlinePanelHidden || inlineProperty != null)
     internal var inlineKeyframes: (() -> List<Int>)? = null
@@ -540,9 +587,26 @@ class EditorState(
         record(recording.render(scene, true))
     }
 
-    fun editSelected(key: Any? = null, change: (Layer) -> Layer) {
+    internal fun editSelectedScene(key: Any? = null, pivot: Long? = null, change: (Scene) -> Scene) {
+        val groups = selectedGroups
+        if (groups.isEmpty()) {
+            edit(key, pivot, change)
+            return
+        }
         val id = selectedId ?: return
-        edit(key) { it.update(id, sampleMs, change) }
+        edit(key) { parent ->
+            val owner = parent.groupMemberTrack(groups, id)?.scene ?: return@edit parent
+            val next = change(owner)
+            if (next == owner) return@edit parent
+            lockRefusal(owner, next, false)?.let { hint(it); return@edit parent }
+            parent.withFocused(groups, next.withValueLinksFollowing(owner).withMattesFollowing(owner).withOutlinesFollowing(owner))
+        }
+    }
+
+    fun editSelected(key: Any? = null, change: (Layer) -> Layer) {
+        val layer = selectedLayer ?: return
+        val time = selectedSampleMs.let { if (editingGroupMember) it.coerceIn(layer.startTime, layer.endTime) else it }
+        editSelectedScene(key) { it.update(layer.id, time, change) }
     }
 
     val historyNotes = mutableStateListOf<HistoryNote>()
@@ -592,7 +656,7 @@ class EditorState(
         }
         canUndo = history.canUndo
         canRedo = history.canRedo
-        if (selectedId != null && now.layer(selectedId!!)?.locked != false) {
+        if (selectedId != null && (selectedLayer?.locked != false || editingGroupMember && groupPath != oldPath)) {
             selectedId = null
             panel = EditorPanel.Tools
             effectIndex = -1

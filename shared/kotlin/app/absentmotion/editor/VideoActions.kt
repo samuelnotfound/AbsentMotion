@@ -33,8 +33,8 @@ fun Scene.videoLayer(media: MediaDeclaration, frame: Int): Layer? {
 
 fun EditorState.retimeVideo(start: Boolean) {
     val layer = selected ?: return
-    var newStart = if (start) timeMs else layer.startTime
-    var newEnd = if (start) layer.endTime else scene.frameEnd(frame)
+    var newStart = if (start) selectedTimeMs else layer.startTime
+    var newEnd = if (start) layer.endTime else selectedScene.frameEnd(selectedFrame)
     if (layer.node.child("speedMap")?.isKeyframed != true) {
         val timing = VideoTiming(layer)
         val span = timing.mediaMs((layer.endTime - layer.startTime).toDouble()) - timing.mediaMs(0.0)
@@ -44,46 +44,48 @@ fun EditorState.retimeVideo(start: Boolean) {
         if (newEnd - newStart < shortest) { if (start) newStart = newEnd - shortest else newEnd = newStart + shortest }
     }
     val duration = newEnd - newStart
-    if (duration < 1 || !scene.showsAnyFrame(newStart, newEnd)) return
-    edit { it.update(layer.id) { current -> current.retimedVideo(newStart, newEnd) } }
+    if (duration < 1 || !selectedScene.showsAnyFrame(newStart, newEnd)) return
+    editSelectedScene { it.update(layer.id) { current -> current.retimedVideo(newStart, newEnd) } }
 }
 
 fun EditorState.setVideoSpeed(value: Float, original: Layer) {
     if (selectedId != original.id || value.isNaN() || original.remapped) return
     val speed = value.coerceIn(SLOWEST_SPEED, FASTEST_SPEED)
     val changed = original.withNormalSpeed(speed)
-    if (!scene.showsAnyFrame(changed.startTime, changed.endTime)) return
-    edit("video-speed") { it.update(original.id) { changed } }
+    if (!selectedScene.showsAnyFrame(changed.startTime, changed.endTime)) return
+    editSelectedScene("video-speed") { it.update(original.id) { changed } }
 }
 
 fun EditorState.applySpeedCurve(points: List<CurvePoint>?) {
     val layer = selected ?: return
-    val media = VideoTiming(layer).mediaMs((sampleMs - layer.startTime).toDouble())
-    val inside = sampleMs in layer.startTime..layer.endTime
+    val media = VideoTiming(layer).mediaMs((selectedSampleMs - layer.startTime).toDouble())
+    val inside = selectedSampleMs in layer.startTime..layer.endTime
     val changed = layer.withSpeedCurve(points)
-    if (!scene.showsAnyFrame(changed.startTime, changed.endTime)) return
-    edit { it.update(layer.id) { current -> current.withSpeedCurve(points) } }
+    if (!selectedScene.showsAnyFrame(changed.startTime, changed.endTime)) return
+    editSelectedScene { it.update(layer.id) { current -> current.withSpeedCurve(points) } }
     val after = selected ?: return
-    if (inside) frame = scene.frameAt(after.startTime + VideoTiming(after).localMs(media).roundToInt())
-        .coerceIn(scene.frameAt(after.startTime), scene.frameAt(after.endTime))
+    if (inside) {
+        val local = (after.startTime + VideoTiming(after).localMs(media).roundToInt()).coerceIn(after.startTime, after.endTime)
+        parentFrameForSelectedTime(local)?.let { frame = it }
+    }
 }
 
 val EditorState.keyLayer: Layer? get() = selected?.let {
-    if (keyTarget?.ref == SpeedRef) it.atVideoTime(sampleMs, scene.fps) else it
+    if (keyTarget?.ref == SpeedRef) it.atVideoTime(selectedSampleMs, selectedScene.fps) else it
 }
 
 internal fun EditorState.editKeyValue(key: Any? = null, change: (Layer) -> Layer) {
     if (keyTarget?.ref != SpeedRef) { editSelected(key, change); return }
     editSelected(key) { original ->
-        val changed = change(original.atVideoTime(sampleMs, scene.fps))
+        val changed = change(original.atVideoTime(selectedSampleMs, selectedScene.fps))
         original.withVideoSpeedMap(changed.node.child("speedMap") ?: XmlNode("speedMap", mapOf("value" to (changed.node["speed"] ?: "1"))))
     }
 }
 
 fun EditorState.freezeFrame(seconds: Float) {
     val layer = selected ?: return
-    val frozen = layer.withFreezeFrame(sampleMs, (seconds * 1000).toInt().coerceIn(100, 30_000), scene.fps) ?: return
-    edit { it.update(layer.id) { frozen } }
+    val frozen = layer.withFreezeFrame(selectedSampleMs, (seconds * 1000).toInt().coerceIn(100, 30_000), selectedScene.fps) ?: return
+    editSelectedScene { it.update(layer.id) { frozen } }
 }
 
 fun EditorState.turnOnRemap() = editSelected { layer ->

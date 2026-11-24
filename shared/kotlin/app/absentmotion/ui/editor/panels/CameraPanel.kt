@@ -98,7 +98,7 @@ internal fun CameraPanel(state: EditorState, layer: Layer, modifier: Modifier = 
     val initialTab = tabs.indexOfFirst { rows -> rows.any { it.ref == requested } }.coerceAtLeast(0)
     var tab by remember(requested) { mutableIntStateOf(initialTab) }
     var active by remember(requested) { mutableIntStateOf(tabs[initialTab].indexOfFirst { it.ref == requested }.coerceAtLeast(0)) }
-    val size = max(state.scene.width, state.scene.height)
+    val size = max(state.selectedScene.width, state.selectedScene.height)
     val perspective = layer.node["type"] != "orthographic"
 
     val rows = tabs[tab]
@@ -127,17 +127,17 @@ internal fun CameraPanel(state: EditorState, layer: Layer, modifier: Modifier = 
             Column(Modifier.fillMaxSize().deskVerticalScroll()) {
                 when (tab) {
                     0 -> {
-                        SwitchRow(stringResource(R.string.depth_order), state.scene.depthOrder) { on -> state.edit { it.withDepthOrder(on) } }
-                        if (!deskLayout && state.scene.depthOrder) {
+                        SwitchRow(stringResource(R.string.depth_order), state.selectedScene.depthOrder) { on -> state.editSelectedScene { it.withDepthOrder(on) } }
+                        if (!deskLayout && state.selectedScene.depthOrder) {
                             SwitchRow(stringResource(R.string.transform_3d_rotation), state.settings.rotate3d) { on -> state.settings.rotate3d = on }
                         }
                         val desk = deskLayout
                         @Composable fun SortRow() {
-                            if (state.scene.depthOrder) Row(Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (state.selectedScene.depthOrder) Row(Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.depth_sort), Modifier.weight(1f), color = Am.OnDark, fontSize = 14.sp, maxLines = 1)
-                                Choice(stringResource(R.string.depth_sort_layer), !state.scene.pieceOrder, Modifier.width(96.dp)) { state.edit { it.withPieceOrder(false) } }
+                                Choice(stringResource(R.string.depth_sort_layer), !state.selectedScene.pieceOrder, Modifier.width(96.dp)) { state.editSelectedScene { it.withPieceOrder(false) } }
                                 Spacer(Modifier.width(6.dp))
-                                Choice(stringResource(R.string.depth_sort_piece), state.scene.pieceOrder, Modifier.width(96.dp)) { state.edit { it.withPieceOrder(true) } }
+                                Choice(stringResource(R.string.depth_sort_piece), state.selectedScene.pieceOrder, Modifier.width(96.dp)) { state.editSelectedScene { it.withPieceOrder(true) } }
                             }
                         }
                         if (!desk) SortRow()
@@ -225,8 +225,8 @@ private fun ViewCone(angle: Float, perspective: Boolean, modifier: Modifier) {
 
 @Composable
 internal fun CameraSizeTab(state: EditorState, layer: Layer) {
-    val (frameW, frameH) = layer.cameraFrame(state.scene.width, state.scene.height)
-    val size = max(state.scene.width, state.scene.height)
+    val (frameW, frameH) = layer.cameraFrame(state.selectedScene.width, state.selectedScene.height)
+    val size = max(state.selectedScene.width, state.selectedScene.height)
     val fov = layer.cameraFov
     val drag = remember { floatArrayOf(60f, 0f) }
     val widthLabel = stringResource(R.string.transform_width)

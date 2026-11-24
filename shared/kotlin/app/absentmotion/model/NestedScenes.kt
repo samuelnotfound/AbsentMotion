@@ -94,6 +94,16 @@ internal class LayerTrack(val layer: Layer, val scene: Scene, val parents: List<
     val startMs: Int get() = parents.firstOrNull()?.first?.startTime ?: layer.startTime
     val endMs: Int get() = (parents.firstOrNull()?.first?.endTime ?: layer.endTime) + 1
 
+    fun hostTime(localMs: Double): Double? {
+        var time = localMs
+        for (i in parents.indices.reversed()) {
+            val parent = parents[i].first
+            time = clocks[i].hostTime(time)
+            if (time < parent.startTime || time >= parent.endTime + 1.0) return null
+        }
+        return time.takeIf { it.isFinite() }
+    }
+
     fun timeAt(rootMs: Double, activeOnly: Boolean, quantize: Boolean = true): SceneTime? {
         var time = SceneTime(rootMs)
         for (i in parents.indices) {

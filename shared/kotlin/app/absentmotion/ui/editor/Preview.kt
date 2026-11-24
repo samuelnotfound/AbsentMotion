@@ -129,7 +129,7 @@ internal val EditorState.livePanel get() = if (showsLayerInspector) panel else E
 
 private val EditorState.gizmoProperty: PropRef?
     get() = keyTarget?.ref?.copy(component = null)?.takeIf {
-        livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen
+        livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen && !editingGroupMember
     }
 
 internal fun previewFrame(width: Float, height: Float, reserve: Float, sceneW: Float, sceneH: Float, zoom: Float, pan: Offset): Triple<Float, Float, Float> {
@@ -372,7 +372,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val down = awaitFirstDown()
                     tapGeneration++
                     if (deskLayout && app.absentmotion.platform.textFieldFocused()) focusManager.clearFocus()
-                    val canvasGesture = (state.selectedId == null && MultiSelect.ids.isEmpty()) || state.panZoomMode || state.livePanel == EditorPanel.Crop
+                    val canvasGesture = state.editingGroupMember || (state.selectedId == null && MultiSelect.ids.isEmpty()) || state.panZoomMode || state.livePanel == EditorPanel.Crop
                     val multi = MultiSelect.ids.takeIf { it.isNotEmpty() && state.selectedId == null && !canvasGesture && !state.playing && state.drawing == null }
                     val multiFrom = multi?.let { state.scene }
                     val multiQuad = multi?.let { multiBox }?.let { b -> listOf(Offset(b[0], b[1]), Offset(b[2], b[1]), Offset(b[2], b[3]), Offset(b[0], b[3])).map { it * currentScale + currentOffset } }
@@ -383,7 +383,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     var fingers = 1
                     var drifted = false
                     val starts = HashMap<PointerId, Offset>()
-                    val startLayer = state.selected
+                    val startLayer = state.selected.takeUnless { state.editingGroupMember }
                     val shownQuad = quad
                     val frameQuad = shownQuad?.let { q -> startLayer?.let { uncroppedQuad(q, it) } ?: q }
                     val startQuad = (if (state.livePanel == EditorPanel.ColorFill || state.livePanel == EditorPanel.EditText) frameQuad else shownQuad)?.takeUnless { state.playing }

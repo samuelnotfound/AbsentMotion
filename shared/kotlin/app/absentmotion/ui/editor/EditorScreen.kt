@@ -99,7 +99,7 @@ private fun EditorBody(state: EditorState, onExit: () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    if (!deskLayout && !wide && state.panel == EditorPanel.EditText && state.selectedId?.let { state.scene.layer(it) }?.kind == "text") {
+    if (!deskLayout && !wide && state.panel == EditorPanel.EditText && state.selectedLayer?.kind == "text") {
         PhoneScreen(plain = true) { TextEditor(state) }
         return
     }

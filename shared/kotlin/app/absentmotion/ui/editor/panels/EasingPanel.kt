@@ -140,7 +140,7 @@ private fun LeftColumn(state: EditorState, segment: Easing?, basic: Boolean, ove
     val linked = ref != null && layer?.propertyElement(ref)?.children?.any {
         it.name == "valueLink" && (ref.component == null || (it["component"]?.toIntOrNull() ?: 0) == ref.component)
     } == true
-    val canKey = ref != null && layer != null && !layer.locked && !linked && state.sampleMs in layer.startTime..layer.endTime
+    val canKey = ref != null && layer != null && !layer.locked && !linked && state.selectedSampleMs in layer.startTime..layer.endTime
     Column(modifier) {
         Cell(onClick = { state.easingOpen = false }) { PanelIcon(PanelIcons.Back, Am.OnDark, size = 26.dp, description = stringResource(R.string.topbar_back)); HoldName(stringResource(R.string.topbar_back)) }
         RecordingKeyframeButton(state, Modifier.weight(1f).fillMaxWidth(), canKey, { state.toggleKeyframe() }) {

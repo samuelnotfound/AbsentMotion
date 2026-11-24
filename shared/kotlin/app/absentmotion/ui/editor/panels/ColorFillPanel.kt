@@ -96,10 +96,11 @@ private fun FillTabs(state: EditorState, layer: Layer, modifier: Modifier) {
     val context = LocalContext.current
     val scope = LocalEditorScope.current
     val id = layer.id
+    val groups = state.selectedGroups
     val picker = rememberMediaPicker { uri ->
         if (uri != null) scope.launch {
             val media = mediaDeclaration(context, uri)?.takeIf { !it.type.startsWith("video/") || it.duration > 0 }
-            if (media == null) unsupportedPick(context, uri) else state.fillWithMedia(id, state.keepCopy(context, media))
+            if (media == null) unsupportedPick(context, uri) else state.fillWithMedia(id, groups, state.keepCopy(context, media))
         }
     }
     Row(modifier.clip(PanelShape), Arrangement.spacedBy(3.px)) {
@@ -116,8 +117,11 @@ private fun FillTabs(state: EditorState, layer: Layer, modifier: Modifier) {
     }
 }
 
-private fun EditorState.fillWithMedia(id: Long, media: MediaDeclaration) {
-    edit { scene -> scene.withMedia(media).update(id) { it.withMediaFill(media) } }
+private fun EditorState.fillWithMedia(id: Long, groups: List<Long>, media: MediaDeclaration) {
+    if (groups.isEmpty()) edit { scene -> scene.withMedia(media).update(id) { it.withMediaFill(media) } }
+    else if (selectedId == id && selectedGroups == groups) {
+        editSelectedScene { scene -> scene.withMedia(media).update(id) { it.withMediaFill(media) } }
+    }
 }
 
 internal fun Layer.withMediaFill(media: MediaDeclaration): Layer {
