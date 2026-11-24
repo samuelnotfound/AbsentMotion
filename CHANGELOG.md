@@ -20,7 +20,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Changed
 
-- **Layer sidebar**. Visibility, the thumbnail, and the disclosure stay in each layer row. Select a layer or open its disclosure to see the lock and 3D controls. Open the disclosure to see the property tracks. The cube turns orange on 3D layers and toggles 3D where supported.
+- **Layer sidebar**. Visibility, the thumbnail, and the disclosure stay in each layer row. Select a layer or open its disclosure to see the lock and 3D controls. Open the disclosure to see the property tracks. The cube turns orange on 3D layers and toggles 3D where supported. Reordering collapses all disclosures and keeps the dropped layer in view.
 - **Timeline navigation**. The skip buttons visit both work-area handles and the keys on expanded tracks. They also visit the selected layer's start and end. Bookmarks remain available when the tracks are closed. Clip bars highlight the active property's keyframes while its editor is open. Outlines identify the current and selected keys on clip bars and expanded tracks.
 - **Move & Transform**. Displays X, Y, Z in that order and opens Position with the move pad by default. Position uses one set of keyframes by default. Choose **Separate Dimensions** from the Position menu to edit each axis independently. Join them again when their keyframes and curves are compatible. Tap Move again to switch between the pad and the rulers. The app remembers that choice. Double-tap Move or Pivot to switch between them. On flat layers, Z is visible and disabled.
 - **Layer tools**. Trim and Extend are offered according to the playhead position. Volume and Mute sit beside the trim tools. Group bars are orange and null bars are gray.
