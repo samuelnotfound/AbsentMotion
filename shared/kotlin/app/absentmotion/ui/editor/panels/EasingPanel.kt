@@ -70,6 +70,7 @@ import app.absentmotion.editor.hasStretch
 import app.absentmotion.editor.pasteCurve
 import app.absentmotion.editor.pasteCurveToAll
 import app.absentmotion.editor.setEasing
+import app.absentmotion.editor.toggleKeyframe
 import app.absentmotion.engine.NativeEngine
 import app.absentmotion.model.Easing
 import app.absentmotion.model.EasingCatalog
@@ -77,6 +78,7 @@ import app.absentmotion.model.EasingHandle
 import app.absentmotion.model.handles
 import app.absentmotion.model.reversed
 import app.absentmotion.ui.editor.PanelIcons
+import app.absentmotion.ui.editor.RecordingKeyframeButton
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.Presence
 import app.absentmotion.ui.theme.presence
@@ -97,12 +99,10 @@ private const val DIM = 0.35f
 
 @Composable
 internal fun EasingPanel(state: EditorState, modifier: Modifier = Modifier) {
-    val easing = state.easing
-    if (easing == null) {
-        LaunchedEffect(Unit) { state.easingOpen = false }
-        Box(modifier)
-        return
-    }
+    val segment = state.easing
+    val enabled = segment != null
+    val easing = segment ?: Easing.Linear
+    val curveAlpha = if (enabled) 1f else DIM
     val family = EasingCatalog.familyOf(easing)
     val basic = easing.type == "linear" || easing.type == "cubicBezier"
     var lockOvershoot by remember { mutableStateOf(false) }
@@ -111,14 +111,14 @@ internal fun EasingPanel(state: EditorState, modifier: Modifier = Modifier) {
     val overshoot = state.panel != EditorPanel.Speed && basic && !disableOvershoot && (state.overshoot || requiresOvershoot || lockOvershoot)
     LaunchedEffect(overshoot) { lockOvershoot = overshoot }
     Row(modifier.background(Am.Field)) {
-        LeftColumn(state, easing, basic, overshoot, {
+        LeftColumn(state, segment, basic, overshoot, {
             state.overshoot = !overshoot
             disableOvershoot = overshoot
             lockOvershoot = !overshoot
         }, Modifier.weight(168f).fillMaxHeight())
-        Graph(state, easing, overshoot, Modifier.weight(575f).fillMaxHeight())
-        Presets(state, easing, family, Modifier.weight(169f).fillMaxHeight())
-        Families(state, family, Modifier.weight(168f).fillMaxHeight())
+        Graph(state, easing, overshoot, enabled, Modifier.weight(575f).fillMaxHeight().alpha(curveAlpha))
+        Presets(state, easing, family, enabled, Modifier.weight(169f).fillMaxHeight().alpha(curveAlpha))
+        Families(state, family, enabled, Modifier.weight(168f).fillMaxHeight().alpha(curveAlpha))
     }
 }
 
@@ -131,19 +131,33 @@ private fun ColumnScope.Cell(enabled: Boolean = true, onClick: () -> Unit = {}, 
 }
 
 @Composable
-private fun LeftColumn(state: EditorState, easing: Easing, basic: Boolean, overshoot: Boolean, toggleOvershoot: () -> Unit, modifier: Modifier) {
-    var menu by remember { mutableStateOf(false) }
+private fun LeftColumn(state: EditorState, segment: Easing?, basic: Boolean, overshoot: Boolean, toggleOvershoot: () -> Unit, modifier: Modifier) {
+    val enabled = segment != null
+    var menu by remember(enabled) { mutableStateOf(false) }
+    val ref = state.keyTarget?.ref
+    val layer = state.keyLayer
+    val onKeyframe = ref != null && layer?.onKeyframe(ref) == true
+    val linked = ref != null && layer?.propertyElement(ref)?.children?.any {
+        it.name == "valueLink" && (ref.component == null || (it["component"]?.toIntOrNull() ?: 0) == ref.component)
+    } == true
+    val canKey = ref != null && layer != null && !layer.locked && !linked && state.sampleMs in layer.startTime..layer.endTime
     Column(modifier) {
         Cell(onClick = { state.easingOpen = false }) { PanelIcon(PanelIcons.Back, Am.OnDark, size = 26.dp, description = stringResource(R.string.topbar_back)); HoldName(stringResource(R.string.topbar_back)) }
-        Cell(enabled = false) {}
-        val reversed = easing.reversed()
+        RecordingKeyframeButton(state, Modifier.weight(1f).fillMaxWidth(), canKey, { state.toggleKeyframe() }) {
+            val description = stringResource(if (onKeyframe) R.string.a11y_remove_keyframe else R.string.a11y_add_keyframe)
+            PanelIcon(if (onKeyframe) PanelIcons.KeyframeRemove else PanelIcons.Keyframe,
+                if (canKey) Am.OnDark else Am.OnDark.copy(alpha = DIM), description = description)
+            HoldName(description)
+        }
+        val reversed = segment?.reversed()
         Cell(enabled = reversed != null, onClick = { reversed?.let { state.setEasing(it) } }) {
             val reverse = stringResource(R.string.a11y_reverse_curve)
             ReverseIcon(Am.OnDark, (if (reversed != null) Modifier else Modifier.dimmed()).semantics { contentDescription = reverse })
             HoldName(reverse)
         }
-        Cell(onClick = { menu = true }) {
-            PanelIcon(PanelIcons.More, Am.OnDark, size = 26.dp, description = stringResource(R.string.effects_more))
+        Cell(enabled = enabled, onClick = { menu = true }) {
+            PanelIcon(PanelIcons.More, if (enabled) Am.OnDark else Am.OnDark.copy(alpha = DIM),
+                size = 26.dp, description = stringResource(R.string.effects_more))
             HoldName(stringResource(R.string.effects_more))
             Presence(menu) { OverflowMenu(state, basic, overshoot, toggleOvershoot) { menu = false } }
         }
@@ -175,10 +189,10 @@ private fun geoOf(size: IntSize, easing: Easing, overshoot: Boolean): Geo? {
 }
 
 @Composable
-private fun Graph(state: EditorState, easing: Easing, overshoot: Boolean, modifier: Modifier) {
+private fun Graph(state: EditorState, easing: Easing, overshoot: Boolean, enabled: Boolean, modifier: Modifier) {
     val samples = remember(easing) { NativeEngine.ease(easing.toString(), FloatArray(SAMPLES) { it / (SAMPLES - 1f) }) }
     val handles = easing.handles()
-    val progress = state.keyTarget?.ref?.let { state.keyLayer?.stretchProgress(it) }
+    val progress = if (enabled) state.keyTarget?.ref?.let { state.keyLayer?.stretchProgress(it) } else null
     var size by remember { mutableStateOf(IntSize.Zero) }
     val geo = geoOf(size, easing, overshoot)
 
@@ -189,7 +203,7 @@ private fun Graph(state: EditorState, easing: Easing, overshoot: Boolean, modifi
     Box(modifier.background(GraphBg)) {
         Canvas(
             Modifier.fillMaxSize().clipToBounds().onSizeChanged { size = it }
-                .pointerInput(Unit) {
+                .then(if (enabled) Modifier.pointerInput(Unit) {
                     var grabbed = -1
                     var start = Offset.Zero
                     var position = Offset.Zero
@@ -229,7 +243,7 @@ private fun Graph(state: EditorState, easing: Easing, overshoot: Boolean, modifi
                         }
                         state.setEasing(hs[grabbed].moved(u, v), HANDLE_KEY)
                     }
-                },
+                } else Modifier),
         ) {
             if (geo != null) scale(geo.k, geo.k, Offset.Zero) { drawGraph(geo, samples, handles, progress, easing.type == "random" && "reverse" !in easing.prefixes) }
         }
@@ -306,7 +320,7 @@ private fun DrawScope.drawGraph(g: Geo, samples: FloatArray, handles: List<Easin
 }
 
 @Composable
-private fun Presets(state: EditorState, easing: Easing, family: Int, modifier: Modifier) {
+private fun Presets(state: EditorState, easing: Easing, family: Int, enabled: Boolean, modifier: Modifier) {
     Column(modifier.background(Am.Field)) {
         EasingCatalog.families[family].forEachIndexed { i, preset ->
             val lit = EasingCatalog.matches(preset.easing, easing.copy(prefixes = emptyList())) ||
@@ -314,7 +328,7 @@ private fun Presets(state: EditorState, easing: Easing, family: Int, modifier: M
             val press = remember { MutableInteractionSource() }
             val name = stringResource(if (family == 0) CurveNames[i] else preset.label)
             Box(
-                Modifier.weight(1f).fillMaxWidth().buttonLabel(name).clickable(press, null) { state.setEasing(preset.easing) }
+                Modifier.weight(1f).fillMaxWidth().buttonLabel(name).clickable(press, null, enabled = enabled) { state.setEasing(preset.easing) }
                     .padding(start = 22.px, end = 22.px, top = 11.px, bottom = 12.px)
                     .pressShape(press, TileShape).then(if (lit) Modifier.background(PresetTile) else Modifier),
                 Alignment.Center,
@@ -331,7 +345,7 @@ private val CurveNames = listOf(R.string.easing_linear, R.string.easing_ease_in,
 private val FamilyNames = listOf(R.string.easing_family_curves, R.string.easing_family_bounce, R.string.easing_family_steps)
 
 @Composable
-private fun Families(state: EditorState, family: Int, modifier: Modifier) {
+private fun Families(state: EditorState, family: Int, enabled: Boolean, modifier: Modifier) {
     Column(
         modifier.background(Am.Panel).drawBehind {
             val k = size.width / 168f
@@ -348,7 +362,7 @@ private fun Families(state: EditorState, family: Int, modifier: Modifier) {
             val press = remember { MutableInteractionSource() }
             val name = stringResource(FamilyNames[i])
             Box(
-                Modifier.weight(1f).fillMaxWidth().buttonLabel(name).alpha(if (state.panel == EditorPanel.Speed && i != 0) 0.35f else 1f).clickable(press, null, enabled = state.panel != EditorPanel.Speed || i == 0) { if (!chosen) state.setEasing(EasingCatalog.families[i][0].easing) }
+                Modifier.weight(1f).fillMaxWidth().buttonLabel(name).alpha(if (state.panel == EditorPanel.Speed && i != 0) 0.35f else 1f).clickable(press, null, enabled = enabled && (state.panel != EditorPanel.Speed || i == 0)) { if (!chosen) state.setEasing(EasingCatalog.families[i][0].easing) }
                     .padding(start = 22.px, end = 22.px, top = 11.px, bottom = 12.px)
                     .pressShape(press, TileShape).then(if (chosen) Modifier.background(PanelDark) else Modifier),
                 Alignment.Center,
