@@ -2516,22 +2516,15 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
     val endX = time.x(TimelineMath.frameTimeMs(scene.workAreaEndFrame, fps))
     val clipLeft = left.coerceIn(0f, size.width)
     clipRect(left = clipLeft, right = size.width, bottom = size.height) {
+        val top = 2.dp.toPx()
+        val height = (rulerH - CacheBarHeight.toPx() - 5.dp.toPx() - top).coerceAtLeast(1.dp.toPx())
         val from = max(startX, clipLeft)
         val to = min(endX, size.width)
-        if (to > from) {
-            drawRect(color.copy(alpha = 0.08f), Offset(from, 0f), Size(to - from, rulerH))
-            val stripTop = rulerH - CacheBarHeight.toPx() - 3.dp.toPx()
-            drawRect(color.copy(alpha = 0.72f), Offset(from, stripTop), Size(to - from, 2.dp.toPx()))
-        }
-        val stemTop = 2.dp.toPx()
-        val stemBottom = (rulerH - CacheBarHeight.toPx() - 4.dp.toPx()).coerceAtLeast(stemTop + 1.dp.toPx())
-        val stemWidth = 3.dp.toPx()
-        fun marker(x: Float) {
-            drawRoundRect(color, Offset(x - stemWidth / 2, stemTop), Size(stemWidth, stemBottom - stemTop), CornerRadius(stemWidth / 2))
-            drawCircle(color, 4.dp.toPx(), Offset(x, stemTop + 2.dp.toPx()))
-        }
-        marker(startX)
-        marker(endX)
+        if (to > from) drawRect(Am.Field.copy(alpha = 0.48f), Offset(from, top), Size(to - from, height))
+        val handle = minOf(8.dp.toPx(), ((endX - startX) / 2).coerceAtLeast(2.dp.toPx()))
+        val shape = CornerRadius(2.dp.toPx())
+        drawRoundRect(color, Offset(startX, top), Size(handle, height), shape)
+        drawRoundRect(color, Offset(endX - handle, top), Size(handle, height), shape)
     }
 }
 
