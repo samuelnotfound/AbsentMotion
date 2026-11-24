@@ -706,7 +706,15 @@ bool EchoOf(const Layer& l, double timeMs, Echo* echo) {
     return false;
 }
 
-bool ShutterBlurOf(const Layer& l, double timeMs, ShutterBlur* blur) {
+bool ShutterBlurOf(const Layer& l, double timeMs, ShutterBlur* blur, int projectAngle) {
+    if (l.motionBlur) {
+        *blur = {};
+        blur->angle = (float)std::clamp(projectAngle, 0, 360);
+        blur->samples = 8;
+        blur->fast = gFastShutter;
+        blur->adaptive = true;
+        return blur->angle > 0;
+    }
     for (const LayerEffect& e : l.effects) {
         if (e.hidden || (e.id != "absent.shutterblur" && e.id != "absent.motionblur")) continue;
         const float t = l.localTime(timeMs);

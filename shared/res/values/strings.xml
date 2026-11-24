@@ -2920,5 +2920,8 @@
     <string name="inline_keyframes">Layer keyframes</string>
     <string name="layer_3d_controls">3D transform controls</string>
     <string name="layer_expand_transforms">Restore flat rendering</string>
+    <string name="layer_enable_motion_blur">Enable layer motion blur</string>
+    <string name="layer_disable_motion_blur">Disable layer motion blur</string>
+    <string name="menu_motion_blur_shutter">Motion Blur Shutter</string>
     <string name="layer_collapse_transforms">Collapse transformations</string>
 </resources>

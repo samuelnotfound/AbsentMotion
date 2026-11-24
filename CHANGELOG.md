@@ -16,6 +16,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **3D viewer controls**. Move, size, and rotate layers with larger, clearer handles that follow their axes. The far sides of rotation rings and movement handles remain visible through the layer. Adjust the three-axis pivot in the viewer and snap it to the layer edges, center, or zero depth.
 - **Viewer angles**. Use the active camera, choose Front, Right, or Top, or orbit in one of three custom editing views. Camera layers support move and rotation gestures on Android.
 - **Collapse transformations**. Use the sun button on a group to switch between rendering its members as one surface and letting eligible members share the parent scene’s depth order. The cube enables XYZ transforms on regular layers and on the group itself in either mode. Compatible group effects follow the children while collapsed. Effects that need the combined image or backdrop use a group surface. Flat layers stay visible in camera and custom views.
+- **Timeline motion blur**. Turn on motion blur from a layer’s sidebar. Project Settings sets one shutter angle for those switches in preview and export.
 - **Clip edge actions**. With multiple clips selected, move their starts or ends to the playhead. Trim or extend either side with the adjacent controls.
 
 ### Changed

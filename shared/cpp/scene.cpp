@@ -583,6 +583,7 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     l.startTime = IntAttr(*n, "startTime", 0);
     l.endTime = std::max(l.startTime, IntAttr(*n, "endTime", 0));
     l.hidden = StrAttr(*n, "hidden") == "true";
+    l.motionBlur = l.kind != "camera" && l.kind != "nullobj" && l.kind != "light" && StrAttr(*n, "motionBlur") == "true";
     const std::string spatial = StrAttr(*n, "threeD");
     l.force3d = spatial == "true";
     if (l.kind == "embedScene") {
@@ -668,6 +669,7 @@ bool ParseScene(const std::string& xml, Scene* scene, std::string* error) {
     next.totalTime = IntAttr(*root, "totalTime", 0);
     next.depthOrder = StrAttr(*root, "depthOrder") == "true";
     next.pieceOrder = StrAttr(*root, "depthSort") == "piece";
+    next.motionBlurAngle = std::clamp(IntAttr(*root, "motionBlurAngle", 180), 0, 360);
     const char* bg = root->attr("bgcolor");
     next.bgColor = bg && *bg == '#' ? (uint32_t)strtoul(bg + 1, nullptr, 16) : 0;
     if (next.width <= 0 || next.height <= 0) {

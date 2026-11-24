@@ -7,6 +7,8 @@ import kotlin.random.Random
 
 const val NATIVE_AMVER = "1002592"
 
+private val MotionBlurLayers = setOf("shape", "text", "drawing", "model", "embedScene")
+
 @JvmInline
 value class Scene(val node: XmlNode) {
     val title: String get() = node["title"] ?: ""
@@ -18,6 +20,9 @@ value class Scene(val node: XmlNode) {
     val totalTime: Int get() = node["totalTime"]?.toIntOrNull() ?: 0
     val depthOrder: Boolean get() = node["depthOrder"] == "true"
     val pieceOrder: Boolean get() = node["depthSort"] == "piece"
+    val motionBlurAngle: Int get() = (node["motionBlurAngle"]?.toIntOrNull() ?: 180).coerceIn(0, 360)
+
+    internal fun withMotionBlurAngle(angle: Int): Scene = Scene(node.with("motionBlurAngle", angle.coerceIn(0, 360).toString()))
 
     val isElement: Boolean get() = node["type"] == "element"
 
@@ -266,6 +271,9 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
         else -> canToggle3D && (hasDepthComponent("location", 2) || hasDepthComponent("tilt", 0) || hasDepthComponent("tilt", 1))
     }
     internal val canChooseRenderSpace: Boolean get() = kind == "embedScene"
+    internal val canToggleMotionBlur: Boolean get() = kind in MotionBlurLayers
+    internal val motionBlurEnabled: Boolean get() = canToggleMotionBlur && node["motionBlur"] == "true"
+    internal fun withMotionBlur(on: Boolean): Layer = if (canToggleMotionBlur) copy(node = node.with("motionBlur", "true".takeIf { on })) else this
     internal val collapsesTransforms: Boolean get() = canChooseRenderSpace &&
         (node["collapseTransforms"]?.let { it == "true" } ?: (node["renderSpace"] == "scene"))
     internal val rendersIn3D: Boolean get() = uses3D || collapsesTransforms

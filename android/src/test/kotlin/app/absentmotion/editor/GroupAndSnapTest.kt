@@ -103,6 +103,17 @@ class GroupAndSnapTest {
         assertFalse(changed.withDepthOrder(false).focused(path)!!.depthOrder)
     }
 
+    @Test fun groupEditingUsesTheProjectMotionBlurAngle() {
+        val project = project.withMotionBlurAngle(90).grouped(setOf(2, 3), null, 77, "G")
+        val path = listOf(77L)
+        val inner = project.focused(path)!!
+        val edited = project.withFocused(path, inner.update(2) { it.withMotionBlur(true) })
+        assertTrue(edited.focused(path)!!.layer(2)!!.motionBlurEnabled)
+        assertEquals(90, edited.focused(path)!!.motionBlurAngle)
+        assertNull(edited.layer(77)!!.nested!!.node["motionBlurAngle"])
+        assertEquals(45, edited.withMotionBlurAngle(45).focused(path)!!.motionBlurAngle)
+    }
+
     @Test fun aGroupCanCollapseTransformsIndependentlyOfTheCube() {
         val group = scene(layer(1, 0, 999)).grouped(setOf(1), null, 2, "G").group()
         assertTrue(group.canChooseRenderSpace)

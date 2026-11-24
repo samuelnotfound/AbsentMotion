@@ -167,6 +167,7 @@ struct Layer {
     int startTime = 0, endTime = 0;
     bool hidden = false, video = false, force3d = false, mixPieces = true, alight = false;
     RenderSpace renderSpace = RenderSpace::Automatic;
+    bool motionBlur = false;
     Anim location, pivot, scale, rotation, skew, opacity, fillColor, tilt;
     std::vector<Property> props;
     std::vector<LayerEffect> effects;
@@ -274,7 +275,7 @@ struct ShutterBlur {
 bool MotionEffect(const std::string& id);
 bool TextEffect(const std::string& id);
 bool DrawingEffect(const std::string& id);
-bool ShutterBlurOf(const Layer& layer, double timeMs, ShutterBlur* blur);
+bool ShutterBlurOf(const Layer& layer, double timeMs, ShutterBlur* blur, int projectAngle = 180);
 void SetFastShutterBlur(bool fast);
 void SetShutterAnyTime(bool on);
 bool ShutterAnyTime();
@@ -315,6 +316,7 @@ void RepeatCopies(const Layer& layer, double timeMs, const RepeatSpace& space, s
 struct Scene {
     int width = 0, height = 0, fps = 30, totalTime = 0;
     bool depthOrder = false, pieceOrder = false;
+    int motionBlurAngle = 180;
     uint32_t bgColor = 0;
     std::vector<Layer> layers;
     std::map<std::string, int> mediaOrientation;

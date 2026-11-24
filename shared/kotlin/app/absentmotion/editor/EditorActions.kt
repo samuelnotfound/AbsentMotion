@@ -140,6 +140,11 @@ internal fun EditorState.toggleCollapseTransforms(id: Long) {
     edit { it.update(id) { layer -> layer.withCollapsedTransforms(!layer.collapsesTransforms) } }
 }
 
+internal fun EditorState.toggleLayerMotionBlur(id: Long) {
+    if (lookOnly || scene.layer(id)?.let { it.canToggleMotionBlur && !it.locked } != true) return
+    edit { it.update(id) { layer -> layer.withMotionBlur(!layer.motionBlurEnabled) } }
+}
+
 fun EditorState.setLock(id: Long, lock: String?) = edit { it.update(id) { layer -> layer.withLock(lock) } }
 
 fun EditorState.toggleLock(id: Long) {

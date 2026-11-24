@@ -48,7 +48,7 @@ internal fun Scene.focused(path: List<Long>): Scene? {
     }
     val have = inner.media.map { it.uri }.toSet()
     val shared = node.children.filter { it.name == "media" && it["uri"] !in have }
-    return Scene(inner.node.copy(children = shared + inner.node.children))
+    return Scene(inner.node.with("motionBlurAngle", node["motionBlurAngle"]).copy(children = shared + inner.node.children))
 }
 
 internal fun Scene.groupMemberTrack(groups: List<Long>, id: Long): LayerTrack? {
@@ -84,7 +84,7 @@ internal fun Scene.withFocused(path: List<Long>, edited: Scene): Scene {
     val saved = inheritedGroupSettings.fold(edited.node) { child, key ->
         if (original?.node?.get(key) == null && child[key] == host?.node?.get(key)) child.with(key, null) else child
     }
-    val inner = Scene(saved.copy(children = kept + others))
+    val inner = Scene(saved.with("motionBlurAngle", original?.node?.get("motionBlurAngle")).copy(children = kept + others))
     val placed = replaceInside(path, inner)
     val withAdded = if (added.isEmpty()) placed else Scene(placed.node.copy(children = added + placed.node.children))
     return withAdded.withoutOrphanMedia(node.mediaUris())

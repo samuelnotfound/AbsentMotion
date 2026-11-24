@@ -444,6 +444,7 @@ internal val Resolutions = listOf(
     540 to "540p (SD)", 360 to "360p", 270 to "270p", 180 to "180p",
 )
 internal val FrameRates = app.absentmotion.ui.home.FrameRates
+internal val MotionBlurAngles = listOf(0, 45, 90, 180, 270, 360)
 
 internal class BackgroundChoice(@StringRes val name: Int, val argb: Int)
 
@@ -510,7 +511,7 @@ private fun SettingsPanel(state: EditorState, onDismiss: () -> Unit, modifier: M
         change(width = w, height = h)
     }
     Column(
-        modifier.fillMaxWidth().height(if (scene.isElement) 447.dp else 377.dp).clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(MenuBg)
+        modifier.fillMaxWidth().height(if (scene.isElement) 495.dp else 425.dp).clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(MenuBg)
             .pointerInput(Unit) { detectTapGestures { } }
             .padding(horizontal = if (LocalWide.current) ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp - 420.dp) / 2).coerceAtLeast(0.dp) else 0.dp),
     ) {
@@ -550,6 +551,17 @@ private fun SettingsPanel(state: EditorState, onDismiss: () -> Unit, modifier: M
             Dropdown("${scene.fps} fps") { close ->
                 FrameRates.forEachIndexed { i, rate ->
                     PickRow("$rate fps", divider = i < FrameRates.lastIndex) { change(fps = rate); close() }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        SettingRow(stringResource(R.string.menu_motion_blur_shutter)) {
+            Dropdown("${scene.motionBlurAngle}°") { close ->
+                MotionBlurAngles.forEachIndexed { index, angle ->
+                    PickRow("$angle°", divider = index < MotionBlurAngles.lastIndex) {
+                        state.edit { it.withMotionBlurAngle(angle) }
+                        close()
+                    }
                 }
             }
         }

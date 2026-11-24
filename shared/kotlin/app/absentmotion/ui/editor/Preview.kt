@@ -179,7 +179,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     }
     val shownId = state.selectedId?.takeIf { handles != HIDDEN && !editingText } ?: 0
     var blurSettled by remember { mutableStateOf(false) }
-    val blurred = remember(state.scene) { state.scene.node.hasEffect(setOf("absent.motionblur", "absent.shutterblur")) }
+    val blurred = remember(state.scene) { state.scene.node.hasMotionBlur() }
     LaunchedEffect(state.scene, blurred) {
         snapshotFlow { state.timeMs to state.playing }.collectLatest { (_, playing) ->
             blurSettled = false
@@ -1016,5 +1016,7 @@ private fun LayerPointsOverlay(points: LayerPoints, world: FloatArray, scale: Fl
     }
 }
 
-private fun app.absentmotion.model.XmlNode.hasEffect(ids: Set<String>): Boolean =
-    (name == "effect" && this["id"] in ids && this["hidden"] != "true") || children.any { it.hasEffect(ids) }
+private fun app.absentmotion.model.XmlNode.hasMotionBlur(): Boolean =
+    this["motionBlur"] == "true" ||
+        (name == "effect" && this["hidden"] != "true" && (this["id"] == "absent.motionblur" || this["id"] == "absent.shutterblur")) ||
+        children.any { it.hasMotionBlur() }

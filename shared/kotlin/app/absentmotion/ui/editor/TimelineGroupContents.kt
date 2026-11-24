@@ -78,11 +78,8 @@ internal class TimelineGroupRow(
     fun selected(state: EditorState): Boolean = state.selectedId == layer.id && state.selectedGroups == groups
     fun showsLayerControls(state: EditorState, expanded: Boolean): Boolean = expanded || (selected(state) && state.showsLayerInspector)
     fun sidebarWidth(state: EditorState, expanded: Boolean): Dp {
-        val icons = when {
-            !showsLayerControls(state, expanded) -> 2
-            layer.isPlainGroup -> 5
-            else -> 4
-        }
+        val icons = if (!showsLayerControls(state, expanded)) 2
+            else 4 + (if (layer.isPlainGroup) 1 else 0) + (if (layer.canToggleMotionBlur) 1 else 0)
         return indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * icons
     }
     fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
@@ -195,6 +192,16 @@ internal fun TimelineGroupContents(
                                 val label = stringResource(if (layer.collapsesTransforms) R.string.layer_expand_transforms else R.string.layer_collapse_transforms)
                                 val tint = if (layer.collapsesTransforms) Am.Accent else Am.OnDarkDim
                                 PanelIcon(PanelIcons.Brightness, tint, size = 14.dp, description = label)
+                            }
+                        }
+                        if (layer.canToggleMotionBlur) {
+                            val toggleBlur = if (!state.lookOnly && row.editable) Modifier.inlineTap {
+                                state.editGroupMember(row) { it.withMotionBlur(!it.motionBlurEnabled) }
+                            } else Modifier
+                            Box(Modifier.size(GroupIconWidth).then(toggleBlur), contentAlignment = Alignment.Center) {
+                                val label = stringResource(if (layer.motionBlurEnabled) R.string.layer_disable_motion_blur else R.string.layer_enable_motion_blur)
+                                val tint = if (layer.motionBlurEnabled) Am.Accent else Am.OnDarkDim
+                                PanelIcon(PanelIcons.MotionBlur, tint, size = 14.dp, description = label)
                             }
                         }
                     }

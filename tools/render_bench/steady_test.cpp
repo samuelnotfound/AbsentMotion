@@ -202,6 +202,18 @@ int main() {
             Expect(am::TopLayerAt(nested, 200, 50, 50, {}) == 22,
                    "a flat group stays in its position in the layer stack");
         }
+        am::Scene blurred;
+        const auto blurXml = R"xml(<scene width="100" height="100" motionBlurAngle="90">
+            <shape id="24" s=".rect" motionBlur="true" startTime="0" endTime="999"/>
+        </scene>)xml";
+        am::ShutterBlur blur;
+        if (am::ParseScene(blurXml, &blurred, &error) && !blurred.layers.empty()) {
+            Expect(blurred.motionBlurAngle == 90 && am::ShutterBlurOf(blurred.layers[0], 200, &blur, blurred.motionBlurAngle) &&
+                   blur.angle == 90, "layer motion blur uses the shared shutter angle");
+            Expect(!am::ShutterBlurOf(blurred.layers[0], 200, &blur, 0), "a zero shutter angle disables the layer switch");
+        } else {
+            Expect(false, "motion blur switch scene parses");
+        }
         am::Scene rotatedGroup;
         const auto rotatedGroupXml = R"xml(<scene width="100" height="100" totalTime="999">
             <embedScene id="30" threeD="true" collapseTransforms="false" startTime="0" endTime="999">

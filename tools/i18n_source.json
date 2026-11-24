@@ -5008,6 +5008,8 @@
  "languages": "Languages",
  "layer_3d_controls": "3D transform controls",
  "layer_collapse_transforms": "Collapse transformations",
+ "layer_disable_motion_blur": "Disable layer motion blur",
+ "layer_enable_motion_blur": "Enable layer motion blur",
  "layer_expand_transforms": "Restore flat rendering",
  "layer_lock": "Lock layer",
  "layer_lock_timing": "Lock timing only",
@@ -5150,6 +5152,7 @@
  "menu_flip_vertically": "Flip Vertically",
  "menu_frame_rate": "Frame Rate",
  "menu_mark_beats": "Mark Beats",
+ "menu_motion_blur_shutter": "Motion Blur Shutter",
  "menu_no_new_beats": "No new beats found",
  "menu_paste_layers": {
   "one": "Paste Layer",

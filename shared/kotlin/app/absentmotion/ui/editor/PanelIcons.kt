@@ -81,6 +81,7 @@ internal object PanelIcons {
     val ColorWheel = icon("ColorWheel", width = 1.8f, stroke = "M3 12A9 9 0 1 0 21 12A9 9 0 1 0 3 12ZM9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12ZM12 9L12 3M14.598 13.5L19.794 16.5M9.402 13.5L4.206 16.5")
     val RgbSliders = icon("RgbSliders", width = 1.8f, stroke = "M10 5L3 5M12 19L3 19M14 3L14 7M16 17L16 21M21 12L12 12M21 19L16 19M21 5L14 5M8 10L8 14M8 12L3 12")
     val Saturation = icon("Saturation", stroke = "M12 22A7 7 0 0 0 19 15C19 13 18 11.1 16 9.5C14 7.9 12.5 5.5 12 3C11.5 5.5 10 7.9 8 9.5C6 11.1 5 13 5 15A7 7 0 0 0 12 22Z")
+    val MotionBlur = icon("MotionBlur", width = 1.6f, stroke = "M16 7A5 5 0 1 0 16 17A5 5 0 1 0 16 7ZM4 8H9M2 12H8M4 16H9")
     val Brightness = icon("Brightness", stroke = "M8 12A4 4 0 1 0 16 12A4 4 0 1 0 8 12ZM12 2L12 4M12 20L12 22M4.93 4.93L6.34 6.34M17.66 17.66L19.07 19.07M2 12L4 12M20 12L22 12M6.34 17.66L4.93 19.07" +
             "M19.07 4.93L17.66 6.34")
     val Opacity = icon("Opacity", stroke = "M3.4 12A8.6 8.6 0 1 0 20.6 12A8.6 8.6 0 1 0 3.4 12Z", fill = "M8.4 8.4L12 8.4L12 12L8.4 12ZM12 12L15.6 12L15.6 15.6L12 15.6Z")

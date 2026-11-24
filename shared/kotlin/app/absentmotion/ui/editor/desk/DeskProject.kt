@@ -143,6 +143,11 @@ internal fun DeskSettings(state: EditorState, modifier: Modifier = Modifier, hea
             }
         }
         DeskSetting(stringResource(R.string.menu_frame_rate)) { DeskSelect("${scene.fps} fps", FrameRates.map { "$it fps" }) { change(fps = FrameRates[it]) } }
+        DeskSetting(stringResource(R.string.menu_motion_blur_shutter)) {
+            DeskSelect("${scene.motionBlurAngle}°", MotionBlurAngles.map { "$it°" }) { index ->
+                state.edit { it.withMotionBlurAngle(MotionBlurAngles[index]) }
+            }
+        }
         DeskSetting(stringResource(R.string.menu_background)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val presets = Backgrounds.map { it.argb }

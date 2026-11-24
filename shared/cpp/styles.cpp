@@ -589,6 +589,7 @@ thread_local bool gWorld = false;
 thread_local int gGroupDepth = 0;
 
 int Fps() { return gScene ? gScene->fps : 30; }
+int MotionBlurAngle() { return gScene ? gScene->motionBlurAngle : 180; }
 
 thread_local const std::vector<Layer>* gEffectList = nullptr;
 
@@ -633,6 +634,7 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
             scene.fps = std::max(1, (int)group.retiming.fps);
             scene.depthOrder = group.innerDepthOrder.value_or(previous && previous->depthOrder);
             scene.pieceOrder = group.innerPieceOrder.value_or(previous && previous->pieceOrder);
+            scene.motionBlurAngle = MotionBlurAngle();
             if (previous) {
                 for (const double beat : previous->beats) {
                     const double inner = NestedTime(group, beat * 1000);
@@ -1795,7 +1797,7 @@ void DrawOne(SkCanvas* canvas, const std::vector<Layer>& siblings, const Layer& 
         return;
     }
     ShutterBlur shutter;
-    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter) && !SeesPrevious(siblings, l)) {
+    if (!ov.shuttered && ShutterBlurOf(l, timeMs, &shutter, MotionBlurAngle()) && !SeesPrevious(siblings, l)) {
         DrawShuttered(canvas, siblings, l, timeMs, pictures, ov, shutter);
         return;
     }
@@ -2208,6 +2210,7 @@ static void RetimeEffectAnim(Anim& anim, const auto& retime) {
 static void FollowCollapsedGroupEffects(Layer* layer, const CollapsedLayer& context, double rootMs) {
     for (const CollapsedLayer* current = &context; current; current = current->enclosing.get()) {
         const Layer& group = *current->group;
+        layer->motionBlur = layer->motionBlur || group.motionBlur;
         if (group.effects.empty()) continue;
         const double host = current->enclosing ? CollapsedTime(*current->enclosing, rootMs) : rootMs;
         const double from = group.startTime + (rootMs - host);
@@ -2394,7 +2397,7 @@ bool Mixable(const std::vector<Layer>& layers, const Layer& l, double timeMs) {
     if (std::any_of(l.borders.begin(), l.borders.end(), [](const Edge& e) { return e.enabled; })) return false;
     Echo echo;
     ShutterBlur shutter;
-    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter)) return false;
+    if (EchoOf(l, timeMs, &echo) || ShutterBlurOf(l, timeMs, &shutter, MotionBlurAngle())) return false;
     const bool effects = EffectsApply(layers, l);
     if (effects && (gEffects->lifted(l) || gEffects->behind(l) || (gEffects->spills && gEffects->spills(l, timeMs)))) return false;
     const float t = l.localTime(timeMs);
