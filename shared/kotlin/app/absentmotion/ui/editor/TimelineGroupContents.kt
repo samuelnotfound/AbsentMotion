@@ -14,15 +14,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.absentmotion.R
@@ -117,24 +124,27 @@ internal fun TimelineGroupContents(
     xAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
     onOpen: (TimelineGroupRow, PropRef?) -> Unit,
     onToggleEffect: (List<Long>, InlineSection) -> Unit,
+    drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         for (row in rows) key(row.path) {
             val indent = (row.groups.size.coerceAtMost(4) * 14 + 8).dp
             val layer = row.layer
-            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(Am.TimelineBg.copy(alpha = 0.65f))) {
-                Canvas(Modifier.matchParentSize()) {
-                    val range = row.visibleRange()
-                    if (range.isEmpty()) return@Canvas
-                    val left = xAt(range.first.toDouble()).coerceIn(0f, size.width)
-                    val right = xAt(range.last + 1.0).coerceIn(0f, size.width)
-                    val height = 14.dp.toPx()
-                    if (right > left) drawRoundRect(if (layer.isPlainGroup) Color(0xFFE88C3B) else Am.LayerBar,
-                        Offset(left, (size.height - height) / 2), Size(right - left, height), CornerRadius(2.dp.toPx()), alpha = if (layer.hidden) 0.27f else 0.58f)
-                }
-                Row(Modifier.width(if (isExpanded(row.path)) 210.dp else 166.dp).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.88f)).padding(start = indent),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    val open = isExpanded(row.path)
+            val open = isExpanded(row.path)
+            val sidebarWidth = if (open) 210.dp else 166.dp
+            val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
+            val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
+            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(Am.TimelineBg)) {
+                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize())
+                Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent), verticalAlignment = Alignment.CenterVertically) {
+                    val visibility = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
+                    val toggleVisibility = if (row.editable && !state.lookOnly) Modifier.inlineTap {
+                        state.editGroupMember(row) { it.withHidden(!it.hidden) }
+                    } else Modifier
+                    Box(Modifier.size(22.dp).then(toggleVisibility), contentAlignment = Alignment.Center) {
+                        PanelIcon(if (layer.hidden) TimelineIcons.EyeOff else TimelineIcons.Eye, Am.OnDarkDim,
+                            size = 16.dp, description = visibility)
+                    }
                     Box(Modifier.size(26.dp).inlineTap { onExpand(row.path) }, contentAlignment = Alignment.Center) {
                         PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
                             if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
@@ -157,8 +167,10 @@ internal fun TimelineGroupContents(
                                 size = 14.dp, description = dimension)
                         }
                     }
-                    LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
-                    Text(layer.shownName(), Modifier.weight(1f).then(if (row.editable && !state.lookOnly) Modifier.inlineTap { onOpen(row, null) } else Modifier)
+                    Box(Modifier.size(22.dp).then(layerTap), contentAlignment = Alignment.Center) {
+                        LayerThumbnail(layer, state.engine, Modifier.size(15.dp))
+                    }
+                    Text(layer.shownName(), Modifier.weight(1f).then(layerTap)
                         .padding(start = 5.dp, end = 5.dp), color = if (layer.hidden) Am.OnDarkDim else Am.OnDark,
                         fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -174,6 +186,43 @@ internal fun TimelineGroupContents(
                         else state.editGroupValue(row, track, value)
                     })
             }
+        }
+    }
+}
+
+@Composable
+private fun GroupMemberClip(
+    row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
+    drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit, modifier: Modifier,
+) {
+    val range = row.visibleRange()
+    if (range.isEmpty()) return
+    val layer = row.layer
+    val outline = remember { Path() }
+    fun left() = xAt(range.first.toDouble())
+    fun right() = xAt(range.last + 1.0)
+    val tap = if (onOpen == null) Modifier else Modifier.inlineTap(onOpen)
+    Layout(
+        modifier = modifier,
+        content = {
+            Canvas(Modifier.fillMaxWidth().fillMaxHeight().clipToBounds().then(tap)
+                .semantics { contentDescription = layer.shownName() }.alpha(if (layer.hidden) 0.45f else 1f)) {
+                val origin = floor(maxOf(sidebarWidth.toPx(), left()))
+                drawClip(layer, outline, left() - origin, right() - origin)
+            }
+        },
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val minimum = sidebarWidth.toPx().coerceAtMost(width.toFloat())
+        val left = left().coerceIn(minimum, width.toFloat())
+        val right = right().coerceIn(minimum, width.toFloat())
+        if (left < right && height > 0) {
+            val x = floor(left).toInt()
+            val clip = measurables.single().measure(Constraints.fixed(ceil(right).toInt() - x, height))
+            layout(width, height) { clip.place(x, 0) }
+        } else {
+            layout(width, height) {}
         }
     }
 }
