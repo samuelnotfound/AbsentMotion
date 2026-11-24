@@ -132,11 +132,29 @@ class VideoLibrary(context: Context, private val engine: EngineThread) {
         }
     }
 
-    fun previewReady(scene: Scene, timeMs: Int, playing: Boolean): Boolean =
-        scene.videoSamples(timeMs, playing, warm = false).all { installed[it.layer.id]?.matches(scene, timeMs, playing) == true }
+    private var previewScene: Scene? = null
+    private var previewTimeMs = Int.MIN_VALUE
+    private var previewTracks = emptyList<LayerTrack>()
+    private var previewSamples = emptyList<VideoSample>()
 
-    fun previewShown(scene: Scene, timeMs: Int, playing: Boolean): Boolean =
-        scene.videoSamples(timeMs, playing, warm = false).all { installed[it.layer.id]?.uri == it.layer.mediaFill?.uri }
+    private fun previewSamplesAt(scene: Scene, timeMs: Int): List<VideoSample> {
+        val changedScene = previewScene?.node !== scene.node
+        if (changedScene) {
+            previewScene = scene
+            previewTracks = scene.videoTracks()
+        }
+        if (changedScene || previewTimeMs != timeMs) {
+            previewTimeMs = timeMs
+            previewSamples = previewTracks.samplesAt(timeMs)
+        }
+        return previewSamples
+    }
+
+    fun previewReady(scene: Scene, timeMs: Int, playing: Boolean): Boolean =
+        previewSamplesAt(scene, timeMs).all { installed[it.layer.id]?.matches(scene, timeMs, playing) == true }
+
+    fun previewShown(scene: Scene, timeMs: Int): Boolean =
+        previewSamplesAt(scene, timeMs).all { installed[it.layer.id]?.uri == it.layer.mediaFill?.uri }
 
     fun refresh() { latest?.let { requests.trySend(it) } }
 
@@ -502,10 +520,15 @@ internal data class VideoSample(val track: LayerTrack, val timeMs: Double) {
 
 private const val WARM_MS = 1000
 
+private fun Scene.videoTracks(): List<LayerTrack> =
+    layerTracks().filter { track -> track.layer.mediaFill?.let { it.video && !isMissing(it.uri) } == true }
+
+private fun List<LayerTrack>.samplesAt(ms: Int): List<VideoSample> =
+    mapNotNull { track -> track.timeAt(ms.toDouble(), true)?.let { VideoSample(track, it.ms) } }
+
 internal fun Scene.videoSamples(timeMs: Int, playing: Boolean, warm: Boolean): List<VideoSample> {
-    val tracks = layerTracks().filter { track -> track.layer.mediaFill?.let { it.video && !isMissing(it.uri) } == true }
-    fun at(ms: Int, among: List<LayerTrack>) = among.mapNotNull { track -> track.timeAt(ms.toDouble(), true)?.let { VideoSample(track, it.ms) } }
-    val now = at(timeMs, tracks)
+    val tracks = videoTracks()
+    val now = tracks.samplesAt(timeMs)
     if (!warm) return now
     val rest = tracks.filter { track -> now.none { it.track === track } && track.endMs > timeMs - WARM_MS && track.startMs <= timeMs + WARM_MS }
     if (rest.isEmpty()) return now
@@ -513,7 +536,7 @@ internal fun Scene.videoSamples(timeMs: Int, playing: Boolean, warm: Boolean): L
     val steps = if (playing) listOf(1) else listOf(1, -1)
     val near = steps.flatMap { step ->
         (1..fps * WARM_MS / 1000).asSequence().map { frame + step * it }.takeWhile { it >= 0 }
-            .map { at(frameStart(it), rest) }.firstOrNull { it.isNotEmpty() }.orEmpty()
+            .map { rest.samplesAt(frameStart(it)) }.firstOrNull { it.isNotEmpty() }.orEmpty()
     }
     return now + near.distinctBy { it.layer.id }.filter { sample -> now.none { it.layer.id == sample.layer.id } }
 }

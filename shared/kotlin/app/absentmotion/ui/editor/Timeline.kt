@@ -38,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -317,8 +318,9 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
     val focus = LocalFocusManager.current
     val wide = LocalWide.current
-    val view = remember(state, density) {
-        TimelineView(state, density, scope).also { v ->
+    val mediaRevision = state.engine.mediaRevision.collectAsState()
+    val view = remember(state, density, mediaRevision) {
+        TimelineView(state, density, scope, mediaRevision).also { v ->
             v.onTick = { if (state.settings.vibration) haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
         }
     }
@@ -358,6 +360,7 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
         state.inlineKeyframes = visibleKeys
         onDispose {
             if (state.inlineKeyframes === visibleKeys) {
+                view.stopMotion()
                 state.inlineKeyframes = null
                 state.timelineDetailsOpen = false
             }
@@ -398,8 +401,9 @@ fun Timeline(state: EditorState, modifier: Modifier = Modifier) {
         modifier
             .then(if (deskLayout) Modifier else app.absentmotion.platform.wheel { delta, at, zoom ->
                 if (zoom) return@wheel view.zoomBy(1.1f.pow(-delta.y))
-                view.stopMotion(); state.playing = false
                 val horizontal = kotlin.math.abs(delta.x) > kotlin.math.abs(delta.y) || at.y < view.rulerH
+                view.stopMotion(endScrub = !horizontal)
+                state.playing = false
                 view.dragBy(if (horizontal) Drag.Scrub else Drag.Scroll, if (horizontal) Offset(-(if (delta.x != 0f) delta.x else delta.y) * 18f, 0f) else Offset(0f, -delta.y * 18f), at)
                 view.finishWheelScrub()
             })
@@ -791,7 +795,9 @@ private const val MOVE_EDIT = "clip-move"
 private const val KEYFRAME_HOLD_MS = 250L
 
 
-private class TimelineView(val state: EditorState, private val density: Density, private val scope: CoroutineScope) {
+private class TimelineView(
+    val state: EditorState, private val density: Density, private val scope: CoroutineScope, private val mediaRevision: State<Long>,
+) {
     var wide = false
     var rail = false
     private val scale = density.density
@@ -894,7 +900,12 @@ private class TimelineView(val state: EditorState, private val density: Density,
     }
 
     private fun inlineFrames(layer: Layer): List<Int> =
-        inlineSections(layer).flatMap { section -> section.visibleTracks.flatMap { it.frames(state.scene, layer) } }
+        inlineSections(layer).flatMap { section -> section.visibleTracks.flatMap { framesFor(layer, KeyScope(it.ref)) } }
+
+    private val selectedInlineFrames by derivedStateOf {
+        val selected = layers.firstOrNull { it.id == state.selectedId }
+        selected?.let { inlineFrames(it).distinct().sorted() }.orEmpty()
+    }
 
     private fun groupFrames(layer: Layer): List<Int> = groupRows(layer).flatMap { row ->
         row.details.orEmpty().flatMap { section ->
@@ -923,22 +934,28 @@ private class TimelineView(val state: EditorState, private val density: Density,
     private var keyMoveOffset = 0f
     private var keyMoveDelta: Int? = null
 
-    private fun keyPoints(row: Int, layer: Layer) = sequence {
+    private fun keyPoints(row: Int, layer: Layer, left: Float = 0f, right: Float = size.width.toFloat()) = sequence {
+        val scene = state.scene
+        val time = timeScale()
+        val first = scene.frameAt(time.time(left).toInt()) - 1
+        val after = scene.frameAt(time.time(right).toInt()) + 2
+        fun within(frames: List<Int>) = frames.subList(frames.firstFrameIndex(first), frames.firstFrameIndex(after))
+        fun keyPosition(frame: Int, y: Float) = Offset(time.x(scene.frameStart(frame).toFloat()), y)
         if (layer.locked || layer.timingLocked || state.lookOnly) return@sequence
         val top = rowTop(row)
         val ref = scopeOf(layer)?.ref
         if (ref != null && !app.absentmotion.editor.InlineTrack(ref, "").linked(layer)) {
-            for (frame in keyFrames(layer)) {
-                val at = Offset(inlineKeyX(frame), top + rowH / 2)
-                if (at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
+            for (frame in within(keyFrames(layer))) {
+                val point = keyPosition(frame, top + rowH / 2)
+                if (point.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to point)
             }
         }
         for (section in inlineSections(layer)) for (track in section.visibleTracks) {
             if (track.linked(layer)) continue
             val offset = with(density) { inlineTrackOffset(inlineSections(layer), track.ref) } ?: continue
             val center = top + rowH + offset + with(density) { inlineTrackHeight.roundToPx() } / 2f
-            for (frame in track.frames(state.scene, layer)) {
-                yield(InlineKey(layer.id, track.ref, frame) to Offset(inlineKeyX(frame), center))
+            for (frame in within(framesFor(layer, KeyScope(track.ref)))) {
+                yield(InlineKey(layer.id, track.ref, frame) to keyPosition(frame, center))
             }
         }
     }
@@ -946,7 +963,9 @@ private class TimelineView(val state: EditorState, private val density: Density,
     private fun keyAt(at: Offset, row: Int, layer: Layer): InlineKey? {
         val labelWidth = minOf(172.dp.px, size.width * 0.59f)
         if (at.y >= rowTop(row) + rowH && at.x < labelWidth) return null
-        return keyPoints(row, layer).filter { abs(it.second.y - at.y) < 10.dp.px && abs(it.second.x - at.x) < 10.dp.px }
+        val radius = 10.dp.px
+        return keyPoints(row, layer, at.x - radius, at.x + radius)
+            .filter { abs(it.second.y - at.y) < radius && abs(it.second.x - at.x) < radius }
             .minByOrNull { (it.second - at).getDistance() }?.first
     }
 
@@ -1123,6 +1142,12 @@ private class TimelineView(val state: EditorState, private val density: Density,
 
     private var followFit = true
 
+    val cacheBarRuns by derivedStateOf {
+        PreviewCache.revision
+        val resources = mediaRevision.value
+        PreviewCache.runsFor(state, onDisk = false, resources = resources) to PreviewCache.runsFor(state, onDisk = true, resources = resources)
+    }
+
     val rowsEnd: Float get() = rowsBottom
     val maxScroll: Float get() = if (hasInlinePositions) max(0f, inlineOffsets.last() - (rowsBottom - rulerH)) else TimelineMath.maxScroll(layers.size, rowH, rulerH, rowsBottom)
     private val panMax: Float get() = (endMs - visibleMs / 2f).coerceAtLeast(0f)
@@ -1188,9 +1213,14 @@ private class TimelineView(val state: EditorState, private val density: Density,
         setViewStart(viewStartMs + dx / timeScale().pxPerMs)
     }
 
-    fun seek(x: Float) {
+    fun seek(x: Float, dragging: Boolean = false) {
         state.playing = false
-        state.stepTo(TimelineMath.nearestFrame(timeScale().time(x.coerceIn(headerWidth, size.width.toFloat().coerceAtLeast(headerWidth))), fps).coerceIn(0, state.scene.lastFrame + 1))
+        val wanted = TimelineMath.nearestFrame(timeScale().time(x.coerceIn(headerWidth, size.width.toFloat().coerceAtLeast(headerWidth))), fps)
+            .coerceIn(0, state.scene.lastFrame + 1)
+        if (state.playheadFrame != wanted) {
+            if (dragging) state.timelineScrubbing = true
+            state.stepTo(wanted)
+        }
         scrubMs = null
     }
 
@@ -1409,9 +1439,13 @@ private class TimelineView(val state: EditorState, private val density: Density,
     fun keyFrames(layer: Layer): List<Int> {
         if (layer.id != state.selectedId) return emptyList()
         val scope = scopeOf(layer)
-        if (scope == null && inlinePosition(layer)) return inlineFrames(layer).distinct()
+        if (scope == null && inlinePosition(layer)) return selectedInlineFrames
+        return framesFor(layer, scope)
+    }
+
+    private fun framesFor(layer: Layer, scope: KeyScope?): List<Int> {
         val fps = state.scene.fps
-        if (keyFramesFps != fps || keyFrames.size > layers.size * 4 + 16) {
+        if (keyFramesFps != fps || keyFrames.size > maxOf(256, layers.size * 4)) {
             keyFrames.clear()
             keyFrameNodes.clear()
             keyFramesFps = fps
@@ -1710,8 +1744,9 @@ private class TimelineView(val state: EditorState, private val density: Density,
         }
     }
 
-    fun stopMotion() {
+    fun stopMotion(endScrub: Boolean = true) {
         motion?.cancel()
+        if (endScrub) state.timelineScrubbing = false
     }
 
     fun followPlayback() {
@@ -1736,7 +1771,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val to = wanted.coerceIn(0f, TimelineMath.frameTimeMs(state.scene.lastFrame + 1, fps))
         scrubFrame = TimelineMath.nearestFrame(to, fps)
         scrubMs = to
-        state.stepTo(scrubFrame)
+        if (state.playheadFrame != scrubFrame) {
+            state.timelineScrubbing = true
+            state.stepTo(scrubFrame)
+        }
         return to == wanted
     }
 
@@ -1749,6 +1787,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
     fun finishWheelScrub() { motion = scope.launch { kotlinx.coroutines.delay(120); settle() } }
 
     private suspend fun settle() {
+        state.timelineScrubbing = false
         val from = scrubMs ?: return
         if (state.playheadFrame == scrubFrame) {
             animate(from, TimelineMath.frameTimeMs(scrubFrame, fps), animationSpec = tween(120)) { value, _ -> scrubMs = value }
@@ -2183,7 +2222,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                         val delta = at - previous
                         if (abs(at.x - start.x) > abs(at.y - start.y)) view.pan(-delta.x) else view.grabScroll(delta.y)
                     }
-                    hit == Hit.Ruler || hit == Hit.Readout && moved -> view.seek(at.x)
+                    hit == Hit.Ruler || hit == Hit.Readout && moved -> view.seek(at.x, dragging = moved)
                     moved && (hit == Hit.Empty || hit is Hit.Row) -> {
                         rubbering = true
                         view.rubberTo(at)
@@ -2351,7 +2390,7 @@ private fun DrawScope.drawTimeline(view: TimelineView, measurer: TextMeasurer, s
         if (view.layers.isNotEmpty() && (state.scene.isElement || state.inGroup)) drawRetimeMarks(state.scene, time)
     }
     if (view.layers.isNotEmpty()) drawWorkArea(view, time, fps, if (desktop) view.headerWidth else 0f, view.rulerH)
-    if (view.layers.isNotEmpty() && !state.inGroup) drawCacheBar(state, time, fps, if (desktop) view.headerWidth else 0f, view.rulerH)
+    if (view.layers.isNotEmpty() && !state.inGroup) drawCacheBar(view.cacheBarRuns, time, fps, if (desktop) view.headerWidth else 0f, view.rulerH)
     val stripe = TimelineMath.frameTimeMs(2 * step, fps) * time.pxPerMs
     fun paint(row: Int, layer: Layer) {
         val rowTime = view.timeFor(layer.id, time)
@@ -2535,10 +2574,8 @@ private fun DrawScope.drawWorkArea(view: TimelineView, time: TimeScale, fps: Int
     }
 }
 
-private fun DrawScope.drawCacheBar(state: EditorState, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
-    PreviewCache.revision
-    val memory = PreviewCache.runsFor(state, onDisk = false)
-    val storage = PreviewCache.runsFor(state, onDisk = true)
+private fun DrawScope.drawCacheBar(runs: Pair<List<IntRange>, List<IntRange>>, time: TimeScale, fps: Int, left: Float, rulerH: Float) {
+    val (memory, storage) = runs
     if (memory.isEmpty() && storage.isEmpty()) return
     val height = CacheBarHeight.toPx()
     val top = rulerH - height - 1.dp.toPx()
@@ -2712,13 +2749,24 @@ private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Flo
     }
 }
 
+private fun List<Int>.firstFrameIndex(frame: Int): Int {
+    val found = binarySearch(frame)
+    return if (found < 0) -found - 1 else found
+}
+
 private fun DrawScope.drawKeyframes(frames: List<Int>, scene: Scene, time: TimeScale, left: Float, right: Float, centre: Float, outline: Path, active: Boolean, selected: Set<Int>, playhead: Int) {
     if (frames.isEmpty() || right <= left || right <= 0f || left >= size.width) return
     val half = if (active) 4.5.dp.toPx() else KeyFaint.width.toPx() / 2
-    clipRect(left = max(left, 0f), right = min(right, size.width)) {
-        for (frame in frames) {
+    val from = max(left, 0f)
+    val to = min(right, size.width)
+    val padding = half + 2.dp.toPx()
+    val first = frames.firstFrameIndex(scene.frameAt(time.time(from - padding).toInt()) - 1)
+    clipRect(left = from, right = to) {
+        for (index in first until frames.size) {
+            val frame = frames[index]
             val x = time.x(scene.frameStart(frame).toFloat())
-            if (x !in -half..size.width + half) continue
+            if (x < from - padding) continue
+            if (x > to + padding) break
             outline.rewind()
             outline.moveTo(x, centre - half)
             outline.lineTo(x + half, centre)

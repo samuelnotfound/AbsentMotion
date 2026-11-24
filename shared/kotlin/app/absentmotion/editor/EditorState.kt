@@ -424,6 +424,9 @@ class EditorState(
 
     val selected: Layer? get() = selectedLayer?.at(selectedSampleMs, selectedScene.fps)
 
+    internal var timelineScrubbing by mutableStateOf(false)
+    internal val previewGeometryTime: Int? get() = if (playing || timelineScrubbing) null else timeMs
+
     val timeMs: Int get() = scene.frameStart(frame)
 
     val sampleMs: Int get() = scene.frameTime(frame)

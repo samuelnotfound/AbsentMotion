@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,7 +119,9 @@ internal fun InlinePositionDetails(
                 }
                 for ((index, track) in section.visibleTracks.withIndex()) key(track.ref) {
                     val openEditor = editor(track)
-                    val raw = at.element(track.ref)?.valueAt(at.t) ?: track.default
+                    val element = remember(layer.node, track.ref) { layer.element(track.ref) }
+                    val frames = remember(layer.node, scene.fps, track.ref) { track.frames(scene, layer) }
+                    val raw = element?.valueAt(at.t) ?: track.default
                     val value = raw?.toFloatOrNull()?.times(track.multiplier)
                     val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
                     val active = layer.id == state.selectedId && state.inlineProperty != null &&
@@ -126,7 +129,7 @@ internal fun InlinePositionDetails(
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
                         .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
                         val currentFrame = if (nested) scene.frameAt(sampleMs) else state.playheadFrame
-                        InlinePositionKeys(layer, track, track.frames(scene, layer), currentFrame, Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
+                        InlinePositionKeys(layer, track, frames, currentFrame, Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
                         Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
                             .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
@@ -178,10 +181,10 @@ private fun InlinePositionKeys(
     layer: Layer, track: InlineTrack, frames: List<Int>, currentFrame: Int, modifier: Modifier,
     xOf: (Int) -> Float, selection: InlineKeySelection?,
 ) {
+    val diamond = remember { Path() }
     Canvas(modifier) {
         val y = center.y
         val radius = 4.5.dp.toPx()
-        val diamond = Path()
         for (frame in frames) {
             val x = xOf(frame)
             if (x !in 0f..size.width) continue

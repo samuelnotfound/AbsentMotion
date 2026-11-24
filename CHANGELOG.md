@@ -33,6 +33,8 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Fixed
 
+- **Timeline scrubbing**. Reuse cached indicator ranges and keyframe positions while the timeline moves. Refresh preview selection and snapping geometry when scrubbing stops. On Android, reuse the list of video tracks between preview frames.
+
 - **Transform pads**. Corner marks follow the edges of the pad as the editor resizes.
 - **Curve editor**. Add or remove keyframes from the curve panel. The panel stays open and dims its curve controls when the playhead moves outside a keyframe interval.
 - **Preview caching**. Changing the work area keeps valid frames and renders only the missing frames on the next pre-render.

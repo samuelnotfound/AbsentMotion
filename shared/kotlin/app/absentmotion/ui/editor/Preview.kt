@@ -129,7 +129,7 @@ internal val EditorState.livePanel get() = if (showsLayerInspector) panel else E
 
 private val EditorState.gizmoProperty: PropRef?
     get() = keyTarget?.ref?.copy(component = null)?.takeIf {
-        livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen && !editingGroupMember
+        livePanel == EditorPanel.MoveTransform && !pivotEditing && !playing && !panZoomMode && !lookOnly && !orbiting && !easingOpen && !timelineScrubbing && !editingGroupMember
     }
 
 internal fun previewFrame(width: Float, height: Float, reserve: Float, sceneW: Float, sceneH: Float, zoom: Float, pan: Offset): Triple<Float, Float, Float> {
@@ -162,7 +162,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
 
     var gesture by remember { mutableIntStateOf(IDLE) }
     var tapGeneration by remember { mutableIntStateOf(0) }
-    val editingPivot = state.pivotEditing && state.livePanel == EditorPanel.MoveTransform
+    val editingPivot = state.pivotEditing && state.livePanel == EditorPanel.MoveTransform && !state.timelineScrubbing
     val handles = when {
         state.drawing != null -> state.drawing!!.handlesCode
         state.livePanel == EditorPanel.Crop -> HIDDEN
@@ -234,7 +234,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
             gizmoContour = null
         }
         if (cropping && shownChange == null) return@LaunchedEffect
-        snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
+        snapshotFlow { state.previewGeometryTime }.collectLatest { timeMs ->
             if (timeMs == null) return@collectLatest
             val id = state.selectedId
             val corners = id?.let { state.engine.layerQuad(it, timeMs) }
@@ -258,7 +258,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     val multiIds = MultiSelect.ids
     LaunchedEffect(multiIds, scene, mediaRevision, state.cameraMode, editorCamera) {
         if (multiIds.isEmpty()) { multiBox = null; return@LaunchedEffect }
-        snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
+        snapshotFlow { state.previewGeometryTime }.collectLatest { timeMs ->
             if (timeMs == null) return@collectLatest
             val boxes = multiIds.mapNotNull { state.engine.layerBounds(it, timeMs) }
             multiBox = if (boxes.isEmpty()) null else floatArrayOf(boxes.minOf { it[0] }, boxes.minOf { it[1] }, boxes.maxOf { it[2] }, boxes.maxOf { it[3] })
@@ -276,9 +276,13 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
 
     val scope = rememberCoroutineScope()
     val tick = rememberHaptic(state)
-    val snapScene by produceState<SnapScene?>(null, state.selectedId, state.scene.layers, state.timeMs, state.playing) {
-        val id = state.selectedId ?: return@produceState
-        if (state.playing) return@produceState
+    val geometryTime = state.previewGeometryTime
+    val snapScene by produceState<SnapScene?>(null, state.selectedId, state.scene, geometryTime) {
+        val id = state.selectedId
+        if (id == null || geometryTime == null) {
+            value = null
+            return@produceState
+        }
         delay(120)
         value = state.snapScene(id)
     }
@@ -289,7 +293,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     val screenDensity = LocalDensity.current.density
     val focusManager = LocalFocusManager.current
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val edgeQuad = quad.takeUnless { state.playing }
+    val edgeQuad = quad.takeUnless { state.playing || state.timelineScrubbing }
     val edgePoints = if (edgeQuad == null || state.selectedId == null) emptyList() else {
         val corners = List(4) { Offset(edgeQuad[2 * it], edgeQuad[2 * it + 1]) * scale + Offset(dx, dy) }
         if (state.livePanel == EditorPanel.Crop) state.selected?.takeIf { it.cropIndex >= 0 }?.let { cropHandles(corners, it.cropBox()) }.orEmpty() else handlesOf(corners)
@@ -718,7 +722,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
         }
         Presence(state.cameraTip && !LocalWide.current) { CameraTip(state, Modifier.align(Alignment.BottomEnd).presence()) }
         EyedropperLoupe(state, Modifier.fillMaxSize())
-        val frame = quad.takeUnless { state.playing }?.takeIf { editingText || state.panel == EditorPanel.ColorFill }?.let { q -> state.selected?.let { uncroppedQuad(q, it) } ?: q }
+        val frame = quad.takeUnless { state.playing || state.timelineScrubbing }?.takeIf { editingText || state.panel == EditorPanel.ColorFill }?.let { q -> state.selected?.let { uncroppedQuad(q, it) } ?: q }
         GradientHandles(state, frame, scale, Offset(dx, dy))
         CropOverlay(state, quad.takeUnless { state.playing }, scale, Offset(dx, dy))
         CropAutoView(state, quad.takeUnless { state.playing }, size, with(LocalDensity.current) { reserveEnd.toPx() }, touching)

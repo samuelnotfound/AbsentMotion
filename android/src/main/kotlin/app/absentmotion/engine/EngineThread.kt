@@ -639,7 +639,7 @@ class EngineThread(private val background: Int, context: Context? = null, privat
             applyPending()
             val v = view ?: return
             val exact = mediaScene?.let { videos?.previewReady(it, v.timeMs, playing) } != false
-            if (!exact && mediaScene?.let { videos?.previewShown(it, v.timeMs, playing) } == false) return pauseWatch()
+            if (!exact && mediaScene?.let { videos?.previewShown(it, v.timeMs) } == false) return pauseWatch()
             if (target != 0L) {
                 val native = engine()
                 if (watchPaused) {

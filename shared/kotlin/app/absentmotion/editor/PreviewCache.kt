@@ -383,8 +383,8 @@ object PreviewCache {
         val now = System.nanoTime()
         if (force || now - revisedNs > 100_000_000L) { revisedNs = now; revision++ }
     }
-    fun runsFor(state: EditorState, onDisk: Boolean): List<IntRange> =
-        if (!paused && phase == Phase.Ready && key?.let { cacheBarShows(it, keyOf(state), catchingUp = false) } == true) {
+    fun runsFor(state: EditorState, onDisk: Boolean, resources: Long): List<IntRange> =
+        if (!paused && phase == Phase.Ready && key?.let { cacheBarShows(it, keyOf(state, resources), catchingUp = false) } == true) {
             val area = state.scene.workArea
             store?.runs(onDisk).orEmpty().map { it.inside(area) }.filterNot { it.isEmpty() }
         } else emptyList()

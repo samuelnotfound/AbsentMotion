@@ -258,7 +258,10 @@ class UiContracts(unittest.TestCase):
         text = source('ui/editor/Preview.kt')
         self.assertIn('LaunchedEffect(state.selectedId, scene, mediaRevision, state.cameraMode, editorCamera, cropping, shownChange, showSpatialControls) {', text)
         self.assertIn('if (quadFor != Triple(state.selectedId, cropping, shownChange)) {', text)
-        self.assertIn('snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest', text)
+        self.assertIn('snapshotFlow { state.previewGeometryTime }.collectLatest', text)
+        self.assertIn('if (timeMs == null) return@collectLatest', text)
+        clock = source('editor/EditorState.kt')
+        self.assertIn('if (playing || timelineScrubbing) null else timeMs', clock)
 
     def test_curve_menu_and_both_paste_paths_share_compatibility_rules(self):
         text = source('editor/EditorActions.kt')

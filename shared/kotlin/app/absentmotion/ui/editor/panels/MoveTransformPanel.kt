@@ -133,15 +133,18 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
             }
         }
     }
-    val others by produceState(emptyList<SnapOther>(), layer.id, state.selectedScene.layers, state.timeMs, state.playing) {
-        if (state.playing) return@produceState
+    val geometryTime = state.previewGeometryTime
+    val others by produceState(emptyList<SnapOther>(), layer.id, state.selectedScene, geometryTime) {
+        if (geometryTime == null) { value = emptyList(); return@produceState }
         kotlinx.coroutines.delay(120)
         value = state.selectedScene.layers.filter { it.id != layer.id && it.kind != "audio" && it.activeAt(state.selectedSampleMs) }.map { o ->
             val at = state.selectedScene.place(o, state.selectedSampleMs)
-            SnapOther(at.x, at.y, state.engine.layerBounds(o.id, state.timeMs))
+            SnapOther(at.x, at.y, state.engine.layerBounds(o.id, geometryTime))
         }
     }
-    val box by produceState<FloatArray?>(null, layer.node, state.timeMs, state.playing) { if (!state.playing) value = state.engine.layerBounds(layer.id, state.timeMs) }
+    val box by produceState<FloatArray?>(null, layer.node, geometryTime) {
+        value = geometryTime?.let { state.engine.layerBounds(layer.id, it) }
+    }
     val start by rememberUpdatedState { state.selectedScene.snapAxesFor(layer, state.selectedSampleMs, box, others) }
     val now by rememberUpdatedState(layer)
     val tick = rememberHaptic(state)
@@ -490,8 +493,9 @@ private class BoxAt(val sides: Sides, val sx: Float, val sy: Float)
 
 @Composable
 private fun layerBox(state: EditorState, layer: Layer): Pair<BoxAt?, Pair<Float, Float>?> {
-    val measured by produceState<BoxAt?>(null, layer.node, state.sampleMs, state.playing) {
-        if (!state.playing) value = state.engine.layerQuad(layer.id, state.sampleMs)?.let { q -> BoxAt(sidesOf(q), layer.scale[0], layer.scale[1]) }
+    val measureAt = state.previewGeometryTime?.let { state.sampleMs }
+    val measured by produceState<BoxAt?>(null, layer.node, measureAt) {
+        if (measureAt != null) value = state.engine.layerQuad(layer.id, measureAt)?.let { q -> BoxAt(sidesOf(q), layer.scale[0], layer.scale[1]) }
     }
     return measured to measured?.let { m ->
         val x = m.sides.x * if (m.sx != 0f) abs(layer.scale[0] / m.sx) else 1f
@@ -687,10 +691,11 @@ private fun PivotTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?) {
     val focus = state.inlineComponent(PropRef.Pivot)
     var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf(focus ?: 0) }
     if (focus != null) SideEffect { state.inlineTransformAxis = activeAxis }
-    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, state.timeMs, state.playing, state.cameraMode, state.editorCamera) {
-        if (state.playing) return@produceState
-        val m = state.engine.layerMatrix(layer.id, state.timeMs)
-        value = m?.let { pivotFrame(it, state.engine.layerQuad(layer.id, state.timeMs)) }
+    val geometryTime = state.previewGeometryTime
+    val frame by produceState<PivotFrame?>(null, layer.id, layer.node, geometryTime, state.cameraMode, state.editorCamera) {
+        if (geometryTime == null) return@produceState
+        val m = state.engine.layerMatrix(layer.id, geometryTime)
+        value = m?.let { pivotFrame(it, state.engine.layerQuad(layer.id, geometryTime)) }
     }
     val now by rememberUpdatedState(layer)
     val seen by rememberUpdatedState(frame)

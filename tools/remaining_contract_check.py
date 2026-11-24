@@ -94,7 +94,8 @@ class RemainingContracts(unittest.TestCase):
     def test_nested_video_selection_uses_each_track_local_scene(self):
         text = kotlin('media/VideoLibrary.kt')
         self.assertIn('request.scene.videoSamples(', text)
-        self.assertIn('val tracks = layerTracks()', text)
+        self.assertIn('private fun Scene.videoTracks(): List<LayerTrack> =\n    layerTracks()', text)
+        self.assertIn('track.timeAt(ms.toDouble(), true)?.let { VideoSample(track, it.ms) }', text)
         self.assertIn('sample.timeMs + ahead', text)
         self.assertIn('sample.scene', text)
 
