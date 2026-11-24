@@ -326,8 +326,12 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     fun withTransform(name: String, vararg values: Float): Layer {
         val ref = PropRef(PropRef.Kind.Transform, name)
-        return if (ref == PropRef.Location && positionDimensionsSeparated) withTransformAxes(ref, *values)
-        else withValue(ref, formatFloats(values))
+        val separated = when (ref) {
+            PropRef.Location -> positionDimensionsSeparated
+            PropRef.Scale -> scaleDimensionsSeparated
+            else -> false
+        }
+        return if (separated) withTransformAxes(ref, *values) else withValue(ref, formatFloats(values))
     }
 
     internal val positionDimensionsSeparated: Boolean
@@ -337,7 +341,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
     internal fun withPositionDimensionsSeparated(separated: Boolean): Layer? {
         if (separated) return copy(node = node.with("positionDimensionsSeparated", "true"))
         val location = propertyElement(PropRef.Location)
-        val combined = if (location == null) this else withElement(PropRef.Location, location.joinPositionAxes() ?: return null)
+        val combined = if (location == null) this else withElement(PropRef.Location, location.joinTransformAxes(PropRef.Location) ?: return null)
         return combined.copy(node = combined.node.with("positionDimensionsSeparated", null))
     }
 
@@ -357,7 +361,22 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
 
     val scaleLinked: Boolean get() = node["scaleLinked"] != "false"
 
-    fun withScaleLinked(linked: Boolean) = copy(node = node.with("scaleLinked", if (linked) null else "false"))
+    fun withScaleLinked(linked: Boolean): Layer {
+        if (linked == scaleLinked) return this
+        val changed = copy(node = node.with("scaleLinked", if (linked) null else "false").with("scaleDimensionsSeparated", "false"))
+        return if (linked) changed.withScaleDimensionsSeparated(false) ?: changed else changed
+    }
+
+    internal val scaleDimensionsSeparated: Boolean
+        get() = !scaleLinked && (node["scaleDimensionsSeparated"]?.toBooleanStrictOrNull() ?:
+            (propertyElement(PropRef.Scale)?.children?.any { it.name == "axis" && it.isKeyframed } == true))
+
+    internal fun withScaleDimensionsSeparated(separated: Boolean): Layer? {
+        if (separated) return copy(node = node.with("scaleDimensionsSeparated", "true").with("scaleLinked", "false"))
+        val scale = propertyElement(PropRef.Scale)
+        val combined = if (scale == null) this else withElement(PropRef.Scale, scale.joinTransformAxes(PropRef.Scale) ?: return null)
+        return combined.copy(node = combined.node.with("scaleDimensionsSeparated", "false"))
+    }
 
     fun withProp(name: String, type: String, value: String): Layer {
         val ref = PropRef.shape(name)
@@ -411,14 +430,19 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
         return withElement(ref, element.withVectorKeyToggled(t, snap))
     }
 
-    fun easing(ref: PropRef): Easing? {
+    internal fun easingElement(ref: PropRef): XmlNode? {
         val element = element(ref) ?: return null
+        return if (ref == PropRef.Scale && !scaleDimensionsSeparated) element.joinTransformAxes(ref) else element
+    }
+
+    fun easing(ref: PropRef): Easing? {
+        val element = easingElement(ref) ?: return null
         val index = element.stretchAt(snap)
         return if (index < 0) null else Easing.parse(element.keyframes[index].e)
     }
 
     fun stretchProgress(ref: PropRef): Float? {
-        val element = element(ref) ?: return null
+        val element = easingElement(ref) ?: return null
         val index = element.stretchAt(snap)
         if (index < 0) return null
         val keys = element.keyframes
@@ -426,7 +450,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
     }
 
     fun withEasing(ref: PropRef, easing: Easing): Layer {
-        val element = element(ref) ?: return this
+        val element = easingElement(ref) ?: return this
         val index = element.stretchAt(snap)
         if (index < 0) return this
         val text = easing.takeUnless { it.isLinear }?.toString()
@@ -434,7 +458,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
     }
 
     fun withEasingEverywhere(ref: PropRef, easing: Easing): Layer {
-        val element = element(ref) ?: return this
+        val element = easingElement(ref) ?: return this
         val text = easing.takeUnless { it.isLinear }?.toString()
         return withElement(ref, element.withKeyframes(element.keyframes.mapIndexed { i, k -> if (i == 0) k else k.copy(e = text) }))
     }
@@ -450,7 +474,7 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
             else if (n.name != "scene") n.children.forEach(::walk)
         }
         val scoped = if (scope == null) node else scopeNode(scope) ?: return emptyList()
-        if (scope?.ref == PropRef.Scale && scaleLinked && scoped.children.any { it.name == "axis" }) {
+        if (scope?.ref == PropRef.Scale && !scaleDimensionsSeparated && scoped.children.any { it.name == "axis" }) {
             for (axis in 0..1) walk(scoped.axisTrack(axis, PropRef.Scale.axisDefaults()))
         } else {
             walk(scoped)

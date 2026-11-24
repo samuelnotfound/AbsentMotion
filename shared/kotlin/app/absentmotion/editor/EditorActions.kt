@@ -222,18 +222,24 @@ fun EditorState.skipForward() {
     if (next == null || (next >= scene.lastFrame && next != layerEnd)) parkAtEnd() else stepTo(next)
 }
 
-internal fun EditorState.togglePositionDimensions() {
+internal fun EditorState.toggleTransformDimensions(ref: PropRef) {
     endGesture()
     val layer = selected?.takeUnless { it.locked } ?: return
-    val separated = !layer.positionDimensionsSeparated
-    val updated = layer.withPositionDimensionsSeparated(separated)
+    val position = ref == PropRef.Location
+    val separated = when (ref) {
+        PropRef.Location -> !layer.positionDimensionsSeparated
+        PropRef.Scale -> !layer.scaleDimensionsSeparated
+        else -> return
+    }
+    val updated = if (position) layer.withPositionDimensionsSeparated(separated) else layer.withScaleDimensionsSeparated(separated)
     if (updated == null) {
-        hint(R.string.position_join_requires_matching_keys)
+        hint(if (position) R.string.position_join_requires_matching_keys else R.string.scale_join_requires_matching_keys)
         return
     }
     editSelected { updated }
-    if (inlineProperty?.copy(component = null) == PropRef.Location) {
-        inlineProperty = if (separated) PropRef.Location.copy(component = inlineTransformAxis) else PropRef.Location
+    if (inlineProperty?.copy(component = null) == ref) {
+        val axis = inlineTransformAxis.coerceIn(0, if (position && layer.uses3D) 2 else 1)
+        inlineProperty = if (separated) ref.copy(component = axis) else ref
     }
 }
 
@@ -293,7 +299,7 @@ fun EditorState.hasStretch(direction: Int): Boolean = stretchFrame(direction) !=
 private fun EditorState.stretchFrame(direction: Int): Int? {
     val ref = keyTarget?.ref ?: return null
     val layer = keyLayer ?: return null
-    val element = layer.element(ref) ?: return null
+    val element = layer.easingElement(ref) ?: return null
     val keys = element.keyframes
     val end = element.stretchAt(layer.snap) + direction
     if (end < 1 || end > keys.lastIndex || element.stretchAt(layer.snap) < 0) return null

@@ -71,7 +71,7 @@ internal fun inlineTrackSections(
     }
     if (layer.uses3D) vector(PropRef.Tilt, rotate, "XY", "0,0", unit = "°")
     val size = AppText.get(R.string.panel_size)
-    if (layer.scaleLinked) {
+    if (!layer.scaleDimensionsSeparated) {
         if (active?.copy(component = null) == PropRef.Scale || layer.keyframeTimes(KeyScope(PropRef.Scale)).isNotEmpty()) {
             transform += InlineTrack(PropRef.Scale, size)
         }

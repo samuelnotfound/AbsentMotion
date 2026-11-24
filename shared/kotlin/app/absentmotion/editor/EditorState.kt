@@ -241,7 +241,10 @@ class EditorState(
         set(value) {
             if (value != null && value != selection && scene.layer(value)?.locked == true) return hint(R.string.layer_locked_hint)
             if (value != selection) { Glide.interrupt(); if (liveRecording != null) endGesture() }
-            if (value != selection) selectedGroups = emptyList()
+            if (value != selection) {
+                selectedGroups = emptyList()
+                inlineTransformAxis = 0
+            }
             selection = value
             if (inlinePanelHidden) {
                 inlinePanelHidden = false

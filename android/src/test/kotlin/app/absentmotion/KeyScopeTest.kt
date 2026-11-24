@@ -12,6 +12,7 @@ import app.absentmotion.editor.inlineNavigationStops
 import app.absentmotion.editor.inlineEditorPanel
 import app.absentmotion.editor.inlineTrackSections
 import app.absentmotion.editor.navigationStops
+import app.absentmotion.model.Easing
 import app.absentmotion.model.KeyScope
 import app.absentmotion.model.Layer
 import app.absentmotion.model.PropRef
@@ -193,9 +194,52 @@ class KeyScopeTest {
         assertEquals(listOf(ref), tracks(layer).filter { it.name == ref.name })
         assertEquals(listOf(15, 20, 25, 35), layer.frames(KeyScope(ref)))
         val unlinked = layer.withScaleLinked(false)
-        assertEquals(listOf(ref.copy(component = 0), ref.copy(component = 1)), tracks(unlinked).filter { it.name == ref.name })
-        assertEquals(listOf(15, 25), unlinked.keys(ref.copy(component = 0)))
-        assertEquals(listOf(20, 35), unlinked.keys(ref.copy(component = 1)))
+        assertEquals(listOf(ref), tracks(unlinked).filter { it.name == ref.name })
+        val separated = unlinked.withScaleDimensionsSeparated(true)!!
+        assertEquals(listOf(ref.copy(component = 0), ref.copy(component = 1)), tracks(separated).filter { it.name == ref.name })
+        assertEquals(listOf(15, 25), separated.keys(ref.copy(component = 0)))
+        assertEquals(listOf(20, 35), separated.keys(ref.copy(component = 1)))
+        val chained = separated.withScaleLinked(true)
+        assertEquals(listOf(ref), tracks(chained).filter { it.name == ref.name })
+        assertEquals(listOf(15, 20, 25, 35), chained.frames(KeyScope(ref)))
+    }
+
+    @Test fun unlockedScaleCanUseSharedKeysOrEditOneAxis() {
+        val scale = XmlNode("scale", children = listOf(kf(10, "1,1"), kf(45, "2,3")))
+        val base = layer()
+        val layer = base.copy(node = base.node.withChild("transform", XmlNode("transform", children = listOf(scale))))
+        val shared = layer.withScaleLinked(false)
+        val x = PropRef.Scale.copy(component = 0)
+        val y = PropRef.Scale.copy(component = 1)
+        val at = shared.at(scene.frameTime(20), scene.fps)
+        val combined = at.withTransform("scale", 3f, at.scale[1])
+        assertEquals(false, combined.scaleLinked)
+        assertEquals(false, combined.scaleDimensionsSeparated)
+        assertEquals(listOf(10, 20, 45), combined.keys(x))
+        assertEquals(listOf(10, 20, 45), combined.keys(y))
+
+        val atSplit = combined.withScaleDimensionsSeparated(true)!!.at(scene.frameTime(25), scene.fps)
+        val separated = atSplit.withTransform("scale", 4f, atSplit.scale[1])
+        assertEquals(true, separated.scaleDimensionsSeparated)
+        assertEquals(listOf(10, 20, 25, 45), separated.keys(x))
+        assertEquals(listOf(10, 20, 45), separated.keys(y))
+        assertEquals(null, separated.withScaleDimensionsSeparated(false))
+        assertEquals(false, separated.withScaleLinked(true).scaleDimensionsSeparated)
+    }
+
+    @Test fun aSeparatedPositionCurveWritesOnlyTheActiveAxis() {
+        val location = XmlNode("location", children = listOf(kf(10, "10,20,30"), kf(45, "20,40,60")))
+        val base = layer()
+        val layer = base.copy(node = base.node.withChild("transform", XmlNode("transform", children = listOf(location))))
+        val at = layer.withPositionDimensionsSeparated(true)!!.at(scene.frameTime(25), scene.fps)
+        val x = PropRef.Location.copy(component = 0)
+        val y = PropRef.Location.copy(component = 1)
+        val z = PropRef.Location.copy(component = 2)
+        val curve = Easing("cubicBezier", listOf(0.4f, 0f, 0.6f, 1f))
+        val changed = at.withEasing(z, curve)
+        assertEquals(at.keyframes(x), changed.keyframes(x))
+        assertEquals(at.keyframes(y), changed.keyframes(y))
+        assertEquals(curve, changed.easing(z))
     }
 
     @Test fun movingAndTogglingOnePositionAxisPreservesTheOther() {

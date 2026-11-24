@@ -1109,6 +1109,7 @@
     <string name="position_separate_dimensions">Separate Dimensions</string>
     <string name="position_join_dimensions">Join Dimensions</string>
     <string name="position_join_requires_matching_keys">Position axes need matching keyframes and curves to join.</string>
+    <string name="scale_join_requires_matching_keys">Scale axes need matching keyframes and curves to join.</string>
     <string name="position_drag_axis">Drag here to move along %1$s</string>
     <string name="menu_reset_rotation">Reset Rotation</string>
     <string name="menu_reset_scale">Reset Scale</string>

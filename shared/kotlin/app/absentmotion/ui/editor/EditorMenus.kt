@@ -97,7 +97,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import app.absentmotion.editor.resetTransform
-import app.absentmotion.editor.togglePositionDimensions
+import app.absentmotion.editor.toggleTransformDimensions
+import app.absentmotion.model.PropRef
 import app.absentmotion.ui.editor.panels.Turn
 import app.absentmotion.editor.EditorState
 import app.absentmotion.editor.isPlainGroup
@@ -281,10 +282,16 @@ internal fun TransformMenu(state: EditorState, tab: Int, turn: Turn?, extra: (@C
         else listOf(R.string.menu_reset_location, R.string.menu_reset_rotation, R.string.menu_reset_scale, R.string.menu_reset_3d_rotation, R.string.menu_reset_skew, R.string.menu_reset_pivot)[tab]
     MenuPopup(AboveLeft, onDismiss, TransformOrigin(0f, 1f)) {
         extra?.invoke(onDismiss)
-        if (tab == 0 && state.selected != null) {
-            val separated = state.selected?.positionDimensionsSeparated == true
+        val layer = state.selected
+        val dimensions = when {
+            layer == null -> null
+            tab == 0 -> PropRef.Location to layer.positionDimensionsSeparated
+            tab == SIZE_TAB && layer.kind != "camera" -> PropRef.Scale to layer.scaleDimensionsSeparated
+            else -> null
+        }
+        dimensions?.let { (ref, separated) ->
             MenuRow(stringResource(if (separated) R.string.position_join_dimensions else R.string.position_separate_dimensions)) {
-                state.togglePositionDimensions()
+                state.toggleTransformDimensions(ref)
                 onDismiss()
             }
         }
