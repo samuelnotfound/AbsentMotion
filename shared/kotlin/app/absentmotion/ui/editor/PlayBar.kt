@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -28,15 +29,15 @@ import app.absentmotion.ui.tutorial.tutorialTarget
 @Composable
 fun PlayBar(state: EditorState, modifier: Modifier = Modifier, transportOnly: Boolean = false) {
     var menuOpen by remember { mutableStateOf(false) }
-    Row(modifier.background(Am.TimelineBg)) {
+    Row(modifier.background(TimelinePanelColor)) {
         val cell = Modifier.weight(1f).fillMaxHeight()
         if (!transportOnly) {
             BarButton(ChromeIcons.Undo, stringResource(R.string.play_undo), cell.tutorialTarget("undo"), enabled = state.canUndo) { state.undo() }
             BarButton(ChromeIcons.Redo, stringResource(R.string.play_redo), cell.tutorialTarget("redo"), enabled = state.canRedo) { state.redo() }
         }
-        BarButton(ChromeIcons.SkipBack, stringResource(R.string.play_skip_back), cell.tutorialTarget("skip_back")) { state.skipBack() }
+        BarButton(ChromeIcons.SkipBack, stringResource(R.string.play_skip_back), cell.tutorialTarget("skip_back"), tint = Color.White) { state.skipBack() }
         PlaybackControl(state, cell.tutorialTarget("play"))
-        BarButton(ChromeIcons.SkipForward, stringResource(R.string.play_skip_forward), cell.tutorialTarget("skip_forward")) { state.skipForward() }
+        BarButton(ChromeIcons.SkipForward, stringResource(R.string.play_skip_forward), cell.tutorialTarget("skip_forward"), tint = Color.White) { state.skipForward() }
         BarButton(ChromeIcons.CopyPaste, stringResource(R.string.play_copy_paste), cell) { menuOpen = true }
         if (!transportOnly) Box(cell) {
             BarButton(

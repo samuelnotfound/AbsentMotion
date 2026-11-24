@@ -8,7 +8,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -23,7 +22,6 @@ import kotlin.math.max
 import kotlin.math.min
 import app.absentmotion.ui.theme.Am
 
-private val AudioBar get() = Am.AudioBar
 private val AudioWave get() = Am.AudioWave
 private val AudioShadow get() = Am.PreviewBg
 
@@ -43,7 +41,7 @@ internal fun timingOf(layer: Layer): VideoTiming {
     return VideoTiming(layer).also { timings[layer.id] = layer.node to it }
 }
 
-internal fun DrawScope.drawAudioBar(outline: Path, layer: Layer, left: Float, right: Float, top: Float, bottom: Float, pxPerMs: Float) {
+internal fun DrawScope.drawAudioBar(outline: Path, layer: Layer, left: Float, right: Float, top: Float, bottom: Float, pxPerMs: Float, time: TimeScale) {
     val radius = 2.dp.toPx()
     val from = max(left, -2 * radius)
     val to = min(right, size.width + 2 * radius)
@@ -52,7 +50,8 @@ internal fun DrawScope.drawAudioBar(outline: Path, layer: Layer, left: Float, ri
     outline.rewind()
     outline.addRoundRect(RoundRect(from, top, to, bottom, CornerRadius(radius)))
     clipPath(outline) {
-        drawRect(AudioBar, Offset(from, top), Size(to - from, bottom - top))
+        drawFrameCells(time, from, to, top, bottom)
+        drawCurrentCell(time, from, to, top, bottom)
         val centre = (top + bottom) / 2
         drawLine(AudioWave.copy(alpha = 0.6f), Offset(from, centre), Offset(to, centre), 1.dp.toPx())
         val peaks = layer.node["src"]?.let { Waveforms.peaks(it) } ?: return@clipPath

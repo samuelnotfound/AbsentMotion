@@ -24,6 +24,37 @@ class TimelineMoveTest {
     private fun sceneWith(clip: XmlNode, rate: Int = fps) =
         Scene.create("t", 1080, 1080, rate, 0).let { Scene(it.node.copy(children = it.node.children + clip)) }
 
+    @Test fun scrubbingUsesTheWholeDragDistanceAndClampsTheDisplayedFrame() {
+        val first = TimelineMath.scrubPosition(60.0, -3f, 10f)
+        assertEquals(60, TimelineMath.scrubFrame(first, 100))
+        val next = TimelineMath.scrubPosition(first, -3f, 10f)
+        assertEquals(61, TimelineMath.scrubFrame(next, 100))
+        assertEquals(59, TimelineMath.scrubFrame(TimelineMath.scrubPosition(60.0, 11f, 10f), 100))
+        assertEquals(0, TimelineMath.scrubFrame(TimelineMath.scrubPosition(60.0, 1000f, 10f), 100))
+        assertEquals(100, TimelineMath.scrubFrame(TimelineMath.scrubPosition(60.0, -1000f, 10f), 100))
+    }
+
+    @Test fun aStoredFrameStartLandsOnItsTickAndTheKeyLandsInTheCell() {
+        val timeline = TimeScale(481, 400f, 7.25f, 60)
+        val scene = Scene.create("t", 1080, 1080, 60, 0)
+        assertEquals(400f, timeline.frameX(481), 0f)
+        assertEquals(407.25f, timeline.frameX(482), 0f)
+        for (frame in 478..484) {
+            assertEquals(timeline.frameX(frame), timeline.x(scene.frameStart(frame).toFloat()), 0f)
+            assertEquals(frame, timeline.frameAt(timeline.frameX(frame)))
+            assertEquals(timeline.frameX(frame) + timeline.frameWidth / 2f, timeline.keyX(frame), 0f)
+        }
+        assertEquals(timeline.frameX(480), timeline.patternStart(399f, 10), 0f)
+    }
+
+    @Test fun thePlaybackFrameChangesAtItsBoundary() {
+        assertEquals(0, previewFrameOffset(41_666_666L, 24, 4))
+        assertEquals(1, previewFrameOffset(41_666_667L, 24, 4))
+        assertEquals(1, previewFrameOffset(83_333_333L, 24, 4))
+        assertEquals(2, previewFrameOffset(83_333_334L, 24, 4))
+        assertEquals(12, previewFrameOffset(1_000_000_000L, 24, 2))
+    }
+
     @Test fun withNothingToSnapToTheStartLandsOnTheNearestFrame() {
         assertEquals(MoveTarget(30, null), move(1010f))
         assertEquals(MoveTarget(31, null), move(1020f))

@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -133,10 +134,10 @@ internal fun InlinePositionDetails(
                     val active = layer.id == state.selectedId && state.selectedGroups == groups && state.inlineProperty != null &&
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
-                        .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
+                        .background((if (active) Am.Field else TimelinePanelColor).copy(alpha = 0.65f))) {
                         val currentFrame = if (groups.isNotEmpty()) scene.frameAt(sampleMs) else state.playheadFrame
                         InlinePositionKeys(layer, track, track.frames(scene, layer), currentFrame.takeIf { active || state.inlineProperty == null }, Modifier.matchParentSize(), xOf, selection, groups)
-                        Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
+                        Row(Modifier.width(labelWidth).fillMaxHeight().background(TimelinePanelColor.copy(alpha = 0.32f))
                             .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
                                 val x = TreeTrunk.toPx()
@@ -200,25 +201,20 @@ private fun InlinePositionKeys(
 }
 
 internal fun DrawScope.drawTimelineKeyAt(diamond: Path, x: Float, y: Float, active: Boolean, selected: Boolean, current: Boolean) {
-    val halfWidth = 4.5.dp.toPx()
-    val halfHeight = 7.dp.toPx()
+    val halfWidth = 7.dp.toPx()
+    val halfHeight = 10.dp.toPx()
     diamond.rewind()
     diamond.moveTo(x, y - halfHeight)
     diamond.lineTo(x + halfWidth, y)
     diamond.lineTo(x, y + halfHeight)
     diamond.lineTo(x - halfWidth, y)
     diamond.close()
-    if (active) drawTimelineKey(diamond, selected, current)
-    else drawPath(diamond, Am.OnDark.copy(alpha = 0.40f))
-}
-
-private fun DrawScope.drawTimelineKey(diamond: Path, selected: Boolean, current: Boolean) {
-    val highlight = when {
+    val outline = when {
         selected -> Am.Cool
-        current -> Am.Accent
-        else -> null
+        current && active -> Am.Accent
+        else -> TimelinePanelColor.copy(alpha = 0.65f)
     }
-    val outline = highlight ?: Am.TimelineBg.copy(alpha = 0.7f)
-    drawPath(diamond, outline, style = Stroke((if (highlight == null) 2.dp else 3.5.dp).toPx(), join = StrokeJoin.Round))
-    drawPath(diamond, Am.OnDark)
+    if (active) drawPath(diamond, outline, style = Stroke(3.dp.toPx(), join = StrokeJoin.Round))
+    drawPath(diamond, Color.White.copy(alpha = if (active) 1f else 0.42f),
+        style = Stroke(1.2.dp.toPx(), join = StrokeJoin.Round))
 }

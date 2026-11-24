@@ -137,7 +137,8 @@ internal fun timelineGroupRows(
 @Composable
 internal fun TimelineGroupContents(
     state: EditorState, rows: List<TimelineGroupRow>, selection: InlineKeySelection,
-    xAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
+    xAt: (Double) -> Float,
+    keyXAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
     onOpen: (TimelineGroupRow, PropRef?) -> Unit,
     onToggleSection: (List<Long>, InlineSection) -> Unit,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit,
@@ -154,8 +155,8 @@ internal fun TimelineGroupContents(
             val sidebarWidth = row.sidebarWidth(state, open)
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
-            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected || checked) Am.Field else Am.TimelineBg)) {
-                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
+            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected || checked) Am.Field else TimelinePanelColor)) {
+                GroupMemberClip(row, sidebarWidth, xAt, keyXAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
                 Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
                     .clip(RoundedCornerShape(50)).background(if (checked) Am.Accent else Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -219,7 +220,7 @@ internal fun TimelineGroupContents(
             }
             row.details?.let { sections ->
                 InlinePositionDetails(state, layer, sections, Modifier.fillMaxWidth(),
-                    xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: -Float.MAX_VALUE },
+                    xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(keyXAt) ?: -Float.MAX_VALUE },
                     selection = selection, scene = row.owner, sampleMs = row.localTime(state.sampleMs),
                     groups = row.groups, editable = row.editable, onOpen = { onOpen(row, it) },
                     onToggleSection = { onToggleSection(row.path, it) },
@@ -234,7 +235,7 @@ internal fun TimelineGroupContents(
 
 @Composable
 private fun GroupMemberClip(
-    row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
+    row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, keyXAt: (Double) -> Float, onOpen: (() -> Unit)?,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit, modifier: Modifier,
     selected: Boolean, scope: KeyScope?, timeMs: Int, selection: InlineKeySelection,
 ) {
@@ -264,7 +265,7 @@ private fun GroupMemberClip(
                 val current = row.owner.frameAt(row.localTime(timeMs))
                 clipRect(left = visibleLeft, right = visibleRight) {
                     for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
-                        val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: continue
+                        val x = row.hostTime(row.owner.frameStart(frame))?.let(keyXAt) ?: continue
                         val picked = strong && ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
                         if (x in visibleLeft..visibleRight) drawTimelineKeyAt(outline, x, center.y, strong, picked, strong && frame == current)
                     }

@@ -220,7 +220,7 @@ private fun PhoneEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: 
                 val lower = lowerPanelHeight(available, wanted)
                 val scroll = androidx.compose.foundation.rememberScrollState()
                 LaunchedEffect(scroll) { androidx.compose.runtime.snapshotFlow { scroll.maxValue }.collect { scroll.scrollTo(it) } }
-                Box(Modifier.fillMaxWidth().height(lower).enterFade().background(Am.TimelineBg).tutorialTarget("timeline")
+                Box(Modifier.fillMaxWidth().height(lower).enterFade().background(TimelinePanelColor).tutorialTarget("timeline")
                     .verticalScroll(scroll, enabled = lower < wanted)) {
                     Box(Modifier.fillMaxWidth().height(wanted)) {
                         Timeline(state, Modifier.fillMaxSize())
@@ -308,7 +308,7 @@ private fun Playback(state: EditorState) {
                 val fps = state.scene.fps
                 val frame = if (audible) {
                     val ms = audio?.positionMs() ?: startMs.toDouble()
-                    startFrame + ((ms - startMs).coerceAtLeast(0.0) * fps / 1000.0 + 0.25).toInt()
+                    startFrame + ((ms - startMs).coerceAtLeast(0.0) * fps / 1000.0).toInt()
                 } else {
                     startFrame + previewFrameOffset(now - startNanos, fps, speed)
                 }
@@ -337,4 +337,4 @@ private fun Playback(state: EditorState) {
 }
 
 internal fun previewFrameOffset(elapsedNanos: Long, fps: Int, speed: Int): Int =
-    ((elapsedNanos.toDouble() * fps * speed / 4.0 + 250_000_000.0) / 1_000_000_000.0).toInt()
+    (elapsedNanos.toDouble() * fps * speed / 4_000_000_000.0).toInt()

@@ -97,12 +97,12 @@ internal fun WideEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: 
                 }
                 if (side) SidePanels(state, addLibrary, textEdit, textUi, Modifier.align(Alignment.CenterEnd))
             }
-            Box(Modifier.fillMaxWidth().height(46.dp).background(Am.TimelineBg)) {
+            Box(Modifier.fillMaxWidth().height(46.dp).background(TimelinePanelColor)) {
                 PlayBar(state, Modifier.align(Alignment.Center).widthIn(max = 560.dp).fillMaxSize().tutorialTarget("playbar").tutorialGuard(any = true))
                 if (!state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp).tutorialTarget("transition"), compact = true)
                 LevelMeter(state, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.1.dp))
             }
-            Box(Modifier.fillMaxWidth().height(timeline).background(Am.TimelineBg).tutorialTarget("timeline")) {
+            Box(Modifier.fillMaxWidth().height(timeline).background(TimelinePanelColor).tutorialTarget("timeline")) {
                 Timeline(state, Modifier.fillMaxSize())
                 if (!side) LowerPanels(state, addLibrary, transitionHere = false)
             }
@@ -140,12 +140,12 @@ private fun RailEditorBody(state: EditorState, onExit: () -> Unit, addLibrary: A
                     if (state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.BottomStart).padding(12.dp).tutorialTarget("transition"))
                     HistoryNotes(state, Modifier.align(Alignment.BottomCenter))
                 }
-                Box(Modifier.fillMaxWidth().height(46.dp).background(Am.TimelineBg)) {
+                Box(Modifier.fillMaxWidth().height(46.dp).background(TimelinePanelColor)) {
                     PlayBar(state, Modifier.align(Alignment.Center).widthIn(max = 360.dp).fillMaxSize().tutorialTarget("playbar").tutorialGuard(any = true), transportOnly = true)
                     if (!state.settings.transitionInPreview) TransitionButton(state, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp).tutorialTarget("transition"), compact = true)
                     LevelMeter(state, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.1.dp))
                 }
-                Box(Modifier.fillMaxWidth().height(timeline).background(Am.TimelineBg).tutorialTarget("timeline")) {
+                Box(Modifier.fillMaxWidth().height(timeline).background(TimelinePanelColor).tutorialTarget("timeline")) {
                     CompositionLocalProvider(LocalRail provides true) { Timeline(state, Modifier.fillMaxSize()) }
                 }
             }

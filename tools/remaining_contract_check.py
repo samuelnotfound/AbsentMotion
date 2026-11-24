@@ -55,10 +55,12 @@ class RemainingContracts(unittest.TestCase):
         clip = kotlin('ui/editor/Timeline.kt').split('private fun DrawScope.drawGroupClip(', 1)[1].split('private fun DrawScope.drawDeskClipFrame(', 1)[0]
         self.assertIn('drawLabel(layer.shownName(), measurer, left, right,', clip)
 
-    def test_wheel_scrubbing_settles_after_the_last_event(self):
+    def test_wheel_scrubbing_resets_the_drag_remainder_after_the_last_event(self):
         text = kotlin('ui/editor/Timeline.kt')
-        self.assertIn('\n                view.finishWheelScrub()\n', text)
-        self.assertIn('fun finishWheelScrub() { motion = scope.launch { kotlinx.coroutines.delay(120); settle() } }', text)
+        self.assertIn('view.finishWheelScrub()', text)
+        self.assertIn('motion = scope.launch { kotlinx.coroutines.delay(120); resetScrub() }', text)
+        self.assertIn('return TimeScale(frame, origin, frameWidth, fps)', text)
+        self.assertNotIn('fling(velocity.x)', text)
 
     def test_test_intents_handle_closed_engines_and_preserve_cancellation(self):
         text = source('android/src/debug/kotlin/app/absentmotion/TestHooks.kt')

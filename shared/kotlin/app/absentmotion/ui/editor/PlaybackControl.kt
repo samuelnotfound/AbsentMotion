@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
@@ -46,9 +47,9 @@ internal fun PlaybackControl(state: EditorState, modifier: Modifier = Modifier, 
     } else Modifier
     Box(modifier.then(secondary)) {
         BarButton(
-            if (active) ChromeIcons.Pause else if (settings.loopingPlay) ChromeIcons.PlayRepeat else ChromeIcons.Play,
+            if (active) ChromeIcons.Pause else if (settings.loopingPlay) ChromeIcons.PlayRepeat else ChromeIcons.TimelinePlay,
             stringResource(if (active) R.string.play_pause else R.string.play_play), Modifier.fillMaxSize(),
-            onLongClick = { open = true },
+            onLongClick = { open = true }, tint = Color.White,
         ) { state.togglePlayback() }
         if (settings.countIn != 0 || settings.playbackSpeed != 4) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(6.dp).background(Am.Accent, CircleShape))
         val colors = MenuDefaults.itemColors(textColor = Am.OnDark)

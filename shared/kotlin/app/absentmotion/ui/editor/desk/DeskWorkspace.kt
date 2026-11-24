@@ -184,7 +184,6 @@ private fun DeskWorkspaceBody(state: EditorState, onExit: () -> Unit, library: A
                         Presence(state.previewPanelOpen) { PreviewModePanel(state, Modifier.align(Alignment.CenterEnd)) }
                         HistoryNotes(state, Modifier.align(Alignment.BottomCenter))
                     }
-                    DeskTransport(state, Modifier.fillMaxWidth().height(40.dp).tutorialTarget("playbar").tutorialGuard(any = true))
                 }
                 if (inspectorShown) {
                     DeskDivider(true, DividerDrag({ inspectorNow }, { InspectorMin }, { minOf(InspectorMax, room - libraryNow) }, -1, inspectorBounce) { inspectorWidth = it })
@@ -195,6 +194,7 @@ private fun DeskWorkspaceBody(state: EditorState, onExit: () -> Unit, library: A
                 }
             }
             DeskDivider(false, DividerDrag({ timelineHeight.value }, { TimelineMinDp }, { maxHeight.value * .6f }, -1, timelineBounce) { timelineFraction = (it / maxHeight.value).coerceIn(.1f, .6f) })
+            DeskTransport(state, Modifier.fillMaxWidth().height(40.dp).tutorialTarget("playbar").tutorialGuard(any = true))
             Timeline(state, Modifier.fillMaxWidth().height(timelineHeight).rubber(timelineBounce, false, 1f).tutorialTarget("timeline"))
         }
         app.absentmotion.platform.BackHandler(!both && state.drawing !is PointMode && (soloLibrary || soloInspector)) {
@@ -305,7 +305,7 @@ private val Tabular: TextStyle @androidx.compose.runtime.Composable get() = Text
 
 @Composable
 private fun DeskTransport(state: EditorState, modifier: Modifier) {
-    SizedBox(modifier.background(Am.TimelineBg)) { maxWidth, _ ->
+    SizedBox(modifier.background(TimelinePanelColor)) { maxWidth, _ ->
         val steps = maxWidth >= 640.dp
         val total = maxWidth >= 520.dp
         val skips = maxWidth >= 440.dp

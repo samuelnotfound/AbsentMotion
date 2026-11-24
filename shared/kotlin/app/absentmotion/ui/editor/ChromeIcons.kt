@@ -43,6 +43,7 @@ internal fun BarButton(
     iconSize: DpSize = DpSize(24.dp, 24.dp),
     onLongClick: (() -> Unit)? = null,
     hint: String? = null,
+    tint: Color = Color.Unspecified,
     onClick: () -> Unit = {},
 ) {
     Box(
@@ -54,12 +55,12 @@ internal fun BarButton(
         if (deskLayout && (hint ?: description).isNotEmpty()) {
             app.absentmotion.platform.Hint(hint ?: description) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Icon(icon, description, Modifier.size(iconSize), tint = Am.OnDark)
+                    Icon(icon, description, Modifier.size(iconSize), tint = if (tint == Color.Unspecified) Am.OnDark else tint)
                     if (onLongClick == null) HoldName(description)
                 }
             }
         } else {
-            Icon(icon, description, Modifier.size(iconSize), tint = Am.OnDark)
+            Icon(icon, description, Modifier.size(iconSize), tint = if (tint == Color.Unspecified) Am.OnDark else tint)
             if (onLongClick == null) HoldName(description)
         }
     }
@@ -81,6 +82,8 @@ internal object ChromeIcons {
     val SkipBack = icon("SkipBack", stroke = "M3 19L3 5M13 6L7 12L13 18M7 12L21 12")
     val SkipForward = icon("SkipForward", stroke = "M17 12L3 12M11 18L17 12L11 6M21 5L21 19")
     val Play = icon("Play", fill = "M6.4 6.4A1.6 1.6 0 0 1 8.806 5.018L18.404 10.616A1.6 1.6 0 0 1 18.406 13.382L8.806 18.982A1.6 1.6 0 0 1 6.4 17.6Z", stroke = "M6.4 6.4A1.6 1.6 0 0 1 8.806 5.018L18.404 10.616A1.6 1.6 0 0 1 18.406 13.382L8.806 18.982A1.6 1.6 0 0 1 6.4 17.6Z", width = 1.2f)
+    val TimelinePlay = icon("TimelinePlay", width = 1.4f, stroke =
+        "M10 8.5L15.5 12L10 15.5ZM18.4 5.8A8.6 8.6 0 1 0 20.6 13M18.4 2.6V6.3H14.7")
     val PlayRepeat = icon("PlayRepeat", fill = "M10.3 9.4L10.3 14.6L14.7 12Z", stroke = "M17 2L21 6L17 10M3 11L3 10A4 4 0 0 1 7 6L21 6M7 22L3 18L7 14M21 13L21 14A4 4 0 0 1 17 18L3 18", width = 1.4f)
     val Pause = icon("Pause", fill = "M14.1 5.7L16.2 5.7A0.7 0.7 0 0 1 16.9 6.4L16.9 17.6A0.7 0.7 0 0 1 16.2 18.3L14.1 18.3A0.7 0.7 0 0 1 13.4 17.6L13.4 6.4A0.7 0.7 0 0 1 14.1 5.7ZM7.8 5.7" +
             "L9.9 5.7A0.7 0.7 0 0 1 10.6 6.4L10.6 17.6A0.7 0.7 0 0 1 9.9 18.3L7.8 18.3A0.7 0.7 0 0 1 7.1 17.6L7.1 6.4A0.7 0.7 0 0 1 7.8 5.7Z", stroke = "M14.1 5.7L16.2 5.7A0.7 0.7 0 0 1 16.9 6.4L16.9 17.6A0.7 0.7 0 0 1 16.2 18.3L14.1 18.3A0.7 0.7 0 0 1 13.4 17.6L13.4 6.4A0.7 0.7 0 0 1 14.1 5.7ZM7.8 5.7" +
