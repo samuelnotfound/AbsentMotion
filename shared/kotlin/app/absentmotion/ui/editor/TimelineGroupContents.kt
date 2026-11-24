@@ -171,7 +171,7 @@ internal fun TimelineGroupContents(
                             PanelIcon(if (layer.locked || layer.timingLocked) TimelineIcons.Lock else TimelineIcons.LockOpen,
                                 Am.OnDarkDim, size = 13.dp, description = lockLabel)
                         }
-                        val dimension = stringResource(R.string.three_d_layer)
+                        val dimension = stringResource(R.string.layer_3d_controls)
                         val toggle3d = if (!state.lookOnly && row.editable && layer.canToggle3D) Modifier.inlineTap {
                             state.editGroupMember(row) { it.withThreeD(!it.uses3D) }
                         } else Modifier
@@ -179,13 +179,15 @@ internal fun TimelineGroupContents(
                             PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
                                 size = 14.dp, description = dimension)
                         }
-                        val cameraLabel = stringResource(if (layer.visibleInCamera) R.string.layer_hide_in_camera else R.string.layer_show_in_camera)
-                        val toggleCamera = if (!state.lookOnly && row.editable && layer.canShowInCamera) Modifier.inlineTap {
-                            state.editGroupMember(row) { it.withCameraVisibility(!it.visibleInCamera) }
+                        val toggleRenderSpace = if (!state.lookOnly && row.editable && layer.canChooseRenderSpace) Modifier.inlineTap {
+                            state.editGroupMember(row) { it.withRenderIn3D(!it.rendersIn3D) }
                         } else Modifier
-                        Box(Modifier.size(GroupIconWidth).then(toggleCamera), contentAlignment = Alignment.Center) {
-                            val tint = if (layer.canShowInCamera && layer.visibleInCamera) Am.Accent else Am.OnDarkDim
-                            PanelIcon(PanelIcons.Camera, tint.copy(alpha = if (layer.canShowInCamera) 1f else 0.38f), size = 14.dp, description = cameraLabel)
+                        Box(Modifier.size(GroupIconWidth).then(toggleRenderSpace), contentAlignment = Alignment.Center) {
+                            if (layer.canChooseRenderSpace) {
+                                val label = stringResource(if (layer.rendersIn3D) R.string.layer_render_flat else R.string.layer_render_in_3d)
+                                val tint = if (layer.rendersIn3D) Am.Accent else Am.OnDarkDim
+                                PanelIcon(PanelIcons.TabTilt, tint, size = 14.dp, description = label)
+                            }
                         }
                     }
                     Box(

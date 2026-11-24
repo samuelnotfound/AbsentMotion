@@ -267,14 +267,6 @@ bool EditorCameraOn() { return (bool)gEditorCamera; }
 
 bool CameraViewOn() { return gCameraView; }
 
-bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs) {
-    if (layer.spatial() || layer.showInCamera || !DrawsInScene(layer)) return false;
-    if (EditorCameraOn()) return true;
-    if (!gCameraView) return false;
-    const Layer* camera = ActiveCamera(layers, timeMs);
-    return camera && camera->activeAt(timeMs);
-}
-
 LightSet SceneLights(const std::vector<Layer>& layers, double timeMs) {
     LightSet result;
     for (const Layer& layer : layers) {
@@ -534,11 +526,10 @@ float DepthPerPixel(const Layer& l, double timeMs) {
     return (v.orthographic ? OrthoDistance(v) : std::max(depth, kNearest)) / v.focal;
 }
 
-bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen, bool cameraOnly) {
+bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen) {
     const bool editor = top && EditorCameraOn();
     const Layer* camera = top && gCameraView && !editor ? ActiveCamera(layers, timeMs) : nullptr;
-    cameraOnly = cameraOnly || editor || (camera && camera->activeAt(timeMs));
-    if (!cameraOnly && !camera && std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
+    if (std::none_of(layers.begin(), layers.end(), [](const Layer& l) { return l.spatial() && DrawsInScene(l); })) return false;
     const double beforeMs = timeMs - 1000.0 / std::max(fps, 1);
     const View now = SelectView(layers, camera, width, height, timeMs, editor);
     const View before = camera ? LayerView(layers, *camera, width, height, beforeMs) : now;
@@ -553,10 +544,10 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         Layer copy = l;
         copy.parent = 0;
         copy.placed = true;
-        copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height, cameraOnly && l.spatial()};
-        copy.sight.editorView = editor;
+        copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height};
+        copy.sight.editorView = editor && l.spatial();
         float d = 0;
-        bool drop = cameraOnly && !l.spatial() && !l.showInCamera && DrawsInScene(l);
+        bool drop = false;
         if (l.spatial() && DrawsInScene(l)) {
             const Seen s = Look(now, ContentPlacement(p));
             d = s.depth;
@@ -641,7 +632,7 @@ Layer Sighted(const std::vector<Layer>& layers, const Layer& l, int width, int h
     const View view = SelectView(layers, camera, width, height, timeMs, editor);
     copy.parent = 0;
     copy.placed = true;
-    copy.sight = {&layers, &l, camera, width, height, editor || (camera && camera->activeAt(timeMs))};
+    copy.sight = {&layers, &l, camera, width, height};
     copy.sight.editorView = editor;
     copy.sight.depth = Look(view, ContentPlacement(p)).depth;
     copy.projected = editor || Solid(l, p) || (camera && view.tilt != SkM44());

@@ -214,7 +214,7 @@ Placement OwnAt(const Layer& l, double timeMs) {
                 {l.scale.get(0, t, 1), l.scale.get(1, t, 1)},
                 l.rotation.get(0, t, 0),
                 l.location.get(2, t, 0)};
-    if (l.spatial()) p.pivotZ = l.pivot.get(2, t, 0);
+    if (l.spatial() && l.has3DTransforms()) p.pivotZ = l.pivot.get(2, t, 0);
     const float tx = l.tilt.get(0, t, 0), ty = l.tilt.get(1, t, 0);
     if (tx != 0 || ty != 0) p.tilt = SkM44::Rotate({0, 1, 0}, -ty * kRadians) * SkM44::Rotate({1, 0, 0}, -tx * kRadians);
     ApplyMotion(l, timeMs, &p);
@@ -255,7 +255,7 @@ const Layer* PathSource(const std::vector<Layer>& siblings, const Layer& l) {
 Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double timeMs, int depth, bool followPath = true, bool flat = false) {
     flat = flat || !l.spatial();
     Placement own = Own(l, timeMs);
-    if (flat) {
+    if (flat || !l.has3DTransforms()) {
         own.z = own.pivotZ = 0;
         own.tilt = SkM44();
     }
@@ -577,7 +577,7 @@ struct Override {
 void DrawOne(SkCanvas* canvas, const std::vector<Layer>& siblings, const Layer& l, double timeMs,
              const MediaPictures& pictures, const Override& ov);
 void DrawList(SkCanvas* canvas, const std::vector<Layer>& layers, int width, int height, bool top, double timeMs,
-              const MediaPictures& pictures, bool cameraOnly = false);
+              const MediaPictures& pictures);
 
 void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictures& pictures) {
     canvas->translate(-l.innerWidth / 2.0f, -l.innerHeight / 2.0f);
@@ -608,7 +608,7 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
     if (l.fixedPrecompose && l.innerWidth > 0 && l.innerHeight > 0) {
         if (auto surface = canvas->makeSurface(SkImageInfo::MakeN32Premul(l.innerWidth, l.innerHeight))) {
             surface->getCanvas()->drawColor((SkColor)l.innerBackground);
-            DrawList(surface->getCanvas(), l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures, l.sight.cameraOnly);
+            DrawList(surface->getCanvas(), l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures);
             canvas->drawImage(surface->makeImageSnapshot(), 0, 0, SkSamplingOptions(SkFilterMode::kLinear));
             return;
         }
@@ -623,7 +623,7 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
         background.setColor((SkColor)l.innerBackground);
         canvas->drawRect(SkRect::MakeWH((float)l.innerWidth, (float)l.innerHeight), background);
     }
-    DrawList(canvas, l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures, l.sight.cameraOnly);
+    DrawList(canvas, l.inner(), l.innerWidth, l.innerHeight, false, inner, pictures);
     if (framed) canvas->restore();
 }
 
@@ -2022,7 +2022,7 @@ static bool ContainsOne(const std::vector<Layer>& siblings, const Layer& l, doub
     if (innerTime < 0) return false;
     if (l.fixedPrecompose && !SkRect::MakeIWH(l.innerWidth, l.innerHeight).contains(inner.fX, inner.fY)) return false;
     std::vector<Layer> seen;
-    const auto& children = SeeLayers(l.inner(), l.innerWidth, l.innerHeight, false, l.retiming.fps, innerTime, false, &seen, l.sight.cameraOnly) ? seen : l.inner();
+    const auto& children = SeeLayers(l.inner(), l.innerWidth, l.innerHeight, false, l.retiming.fps, innerTime, false, &seen) ? seen : l.inner();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         if (Contains(children, *it, innerTime, inner, l.innerWidth, l.innerHeight, masks)) return true;
     }
@@ -2176,20 +2176,20 @@ void LayerMatrices(const Scene& scene, const Layer& layer, double timeMs, float 
     for (int row : {0, 1, 3}) {
         for (int col = 0; col < 4; ++col) m[i++] = pivot.rc(row, col);
     }
-    if (layer.spatial() && layer.kind != "camera") LayerGizmoMatrices(scene, layer, timeMs, m + 30);
+    if (layer.spatial() && layer.has3DTransforms() && layer.kind != "camera") LayerGizmoMatrices(scene, layer, timeMs, m + 30);
     else std::fill(m + 30, m + 55, 0.f);
 }
 
 bool SelectionQuad(const Scene& scene, const Layer& layer, double timeMs, SkPoint corners[4], const LayerEffects* effects) {
-    if (CameraHidesLayer(scene.layers, layer, timeMs)) return false;
     SelectionBounds(layer, timeMs, SkMatrix::I()).toQuad(corners);
     std::vector<Layer> storage;
     const std::vector<Layer>& list = SeenProject(scene, timeMs, &storage);
     const auto seen = std::find_if(list.begin(), list.end(), [&](const Layer& l) { return l.id == layer.id; });
-    const SkMatrix m = seen != list.end() ? SiblingMatrix(list, *seen, timeMs) : SiblingMatrix(scene.layers, layer, timeMs);
+    if (seen == list.end()) return false;
+    const SkMatrix m = SiblingMatrix(list, *seen, timeMs);
     if (!m.hasPerspective()) {
         m.mapPoints({corners, 4});
-        if (effects && effects->turn) effects->turn(seen != list.end() ? *seen : layer, timeMs, corners);
+        if (effects && effects->turn) effects->turn(*seen, timeMs, corners);
         return true;
     }
     constexpr float kNear = 1;
@@ -2310,11 +2310,11 @@ void Collect(SkCanvas* canvas, const std::vector<Layer>& layers, const Layer& l,
 }
 
 void DrawList(SkCanvas* canvas, const std::vector<Layer>& listed, int width, int height, bool top, double timeMs,
-              const MediaPictures& pictures, bool cameraOnly) {
+              const MediaPictures& pictures) {
     std::vector<Layer> inherited, storage;
     const std::vector<Layer>& source = InheritEffects(listed, &inherited) ? inherited : listed;
     const bool pieces = gScene && gScene->depthOrder && gScene->pieceOrder;
-    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage, cameraOnly);
+    const bool seen = SeeLayers(source, width, height, top, gScene ? gScene->fps : 30, timeMs, gScene && gScene->depthOrder, &storage);
     if (seen) FaceForward(&storage);
     if (seen && !pieces) SplitSeen(&storage, timeMs);
     const std::vector<Layer>& layers = seen ? storage : source;

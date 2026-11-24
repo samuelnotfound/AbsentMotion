@@ -321,16 +321,16 @@ private fun Scene.parentOf(layer: Layer): Layer? =
     layer.node["parent"]?.toLongOrNull()?.takeIf { it != layer.id }?.let { id -> layers.firstOrNull { it.id == id } }
 
 internal fun Scene.place(layer: Layer, timeMs: Int, depth: Int = 0, flat: Boolean = false): Place {
-    val planar = flat || !layer.uses3D
-    val own = ownPlace(layer, timeMs, fps).let { if (planar) it.copy(z = 0f) else it }
+    val planar = flat || !layer.rendersIn3D
+    val own = ownPlace(layer, timeMs, fps).let { if (planar || !layer.uses3D) it.copy(z = 0f) else it }
     val parent = parentOf(layer)?.takeIf { depth < 16 } ?: return own
     return compose(own, place(parent, timeMs, depth + 1, planar), layer.pull(timeMs, fps))
 }
 
 private fun Scene.pose(layer: Layer, timeMs: Int, depth: Int = 0, flat: Boolean = false): Pose {
-    val planar = flat || !layer.uses3D
-    val own = ownPlace(layer, timeMs, fps).let { if (planar) it.copy(z = 0f) else it }
-    val turn = if (planar) spin(2, own.rot.toDouble()) else turnOf(own.rot, layer.at(timeMs, fps).tilt)
+    val planar = flat || !layer.rendersIn3D
+    val own = ownPlace(layer, timeMs, fps).let { if (planar || !layer.uses3D) it.copy(z = 0f) else it }
+    val turn = if (planar || !layer.uses3D) spin(2, own.rot.toDouble()) else turnOf(own.rot, layer.at(timeMs, fps).tilt)
     val parent = parentOf(layer)?.takeIf { depth < 16 }?.let { pose(it, timeMs, depth + 1, planar) } ?: return Pose(own, turn)
     val pull = layer.pull(timeMs, fps)
     return Pose(lifted(own, parent, pull), mul(parent.pulled(pull), turn))
@@ -429,8 +429,8 @@ internal fun Layer.rebaked(changing: Boolean, outerTimes: List<Int>, fps: Int, c
 internal fun Scene.rebased(layer: Layer, parentId: Long?, atMs: Int = layer.startTime): Layer? {
     val base = Layer(layer.node)
     val ms = atMs.coerceIn(base.startTime, base.endTime)
-    val from = parentOf(base)?.let { pose(it, ms, flat = !base.uses3D) }
-    val to = parentId?.let { id -> layers.firstOrNull { it.id == id } }?.let { pose(it, ms, flat = !base.uses3D) }
+    val from = parentOf(base)?.let { pose(it, ms, flat = !base.rendersIn3D) }
+    val to = parentId?.let { id -> layers.firstOrNull { it.id == id } }?.let { pose(it, ms, flat = !base.rendersIn3D) }
     val own = ownPlace(base, ms, fps)
     val tilt = base.at(ms, fps).tilt
     val pull = base.pull(ms, fps)

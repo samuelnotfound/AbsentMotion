@@ -71,15 +71,32 @@ class GroupAndSnapTest {
         assertTrue(inner.layer(1)!!.uses3D)
     }
 
-    @Test fun olderDepthTransformsAreKeptUntilTheLayerIsExplicitlySetToFlat() {
+    @Test fun renderingAndTransformControlsAreIndependentAndSaved() {
         val legacy = Layer(layer(1, 0, 999)).withTransform("location", 540f, 960f, 30f)
         assertNull(legacy.node["threeD"])
-        assertTrue(legacy.uses3D)
-        val flat = legacy.withThreeD(false).withCameraVisibility(true)
-        assertFalse(flat.uses3D)
-        assertTrue(flat.visibleInCamera)
-        assertEquals(30f, flat.location[2])
-        assertTrue(flat.withThreeD(true).uses3D)
+        assertTrue(legacy.applies3DTransforms)
+
+        val flat = legacy.withRenderIn3D(false)
+        assertTrue(flat.uses3D)
+        assertFalse(flat.rendersIn3D)
+        assertFalse(flat.applies3DTransforms)
+        assertTrue(flat.withRenderIn3D(true).applies3DTransforms)
+
+        val controlsOff = legacy.withThreeD(false)
+        assertFalse(controlsOff.uses3D)
+        assertTrue(controlsOff.rendersIn3D)
+        assertFalse(controlsOff.applies3DTransforms)
+        assertEquals(30f, controlsOff.location[2])
+        assertTrue(controlsOff.withThreeD(true).applies3DTransforms)
+
+        val plain = Layer(layer(2, 0, 999))
+        assertFalse(plain.rendersIn3D)
+        assertFalse(plain.withThreeD(true).rendersIn3D)
+        val roundTrip = Scene.parse(scene(flat.node, controlsOff.withId(3).node).toXml())
+        assertFalse(roundTrip.layer(1)!!.rendersIn3D)
+        assertTrue(roundTrip.layer(1)!!.uses3D)
+        assertTrue(roundTrip.layer(3)!!.rendersIn3D)
+        assertFalse(roundTrip.layer(3)!!.uses3D)
     }
 
     @Test fun groupingKeepsMasksClippingTheirLayerAndLeavesCamerasOutside() {

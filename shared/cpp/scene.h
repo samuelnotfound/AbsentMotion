@@ -143,12 +143,13 @@ struct EditorCamera {
     explicit operator bool() const { return mode != 0; }
 };
 
+enum class RenderSpace { Automatic, Flat, Scene };
+
 struct Sight {
     const std::vector<Layer>* layers = nullptr;
     const Layer* layer = nullptr;
     const Layer* camera = nullptr;
     int width = 0, height = 0;
-    bool cameraOnly = false;
     int run = 0;
     float depth = 0;
     std::vector<depth::Cut> cuts;
@@ -162,7 +163,8 @@ struct Layer {
     std::string label, shape, fillType, outlineShape;
     std::string mediaUri, mediaFillMode;
     int startTime = 0, endTime = 0;
-    bool hidden = false, video = false, force3d = false, showInCamera = false, mixPieces = true, alight = false;
+    bool hidden = false, video = false, force3d = false, mixPieces = true, alight = false;
+    RenderSpace renderSpace = RenderSpace::Automatic;
     Anim location, pivot, scale, rotation, skew, opacity, fillColor, tilt;
     std::vector<Property> props;
     std::vector<LayerEffect> effects;
@@ -199,7 +201,8 @@ struct Layer {
 
     const Property* prop(const char* name) const;
     const LayerEffect* effect(const char* id) const;
-    bool spatial() const { return force3d || kind == "camera" || kind == "light" || kind == "model"; }
+    bool has3DTransforms() const { return force3d || kind == "camera" || kind == "light" || kind == "model"; }
+    bool spatial() const { return renderSpace == RenderSpace::Automatic ? has3DTransforms() : renderSpace == RenderSpace::Scene; }
     bool activeAt(double timeMs) const { return !hidden && timeMs >= startTime && timeMs < endTime + 1.0; }
     float stepRate(double timeMs) const {
         if (steps.empty() || endTime <= startTime) return 0;
@@ -329,9 +332,8 @@ bool EditorCameraOn();
 SkMatrix PlaneMatrix(const std::vector<Layer>& layers, const Layer& layer, int width, int height, double timeMs);
 bool CameraViewOn();
 SkPoint CameraEye(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs);
-bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs);
 bool CameraFrame(const std::vector<Layer>& layers, const Layer& camera, int width, int height, double timeMs, SkPoint corners[4]);
-bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen, bool cameraOnly = false);
+bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top, int fps, double timeMs, bool depthOrder, std::vector<Layer>* seen);
 bool SeenPlacement(const Layer& layer, double timeMs, Placement* placement);
 void SeenPieces(const Layer& layer, double timeMs, SkPoint center, const SkM44& orientation, PieceView* view);
 bool SeenFlat(const Layer& layer, double timeMs, depth::Flat* flat);

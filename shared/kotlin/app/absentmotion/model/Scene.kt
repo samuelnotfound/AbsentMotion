@@ -265,11 +265,20 @@ data class Layer(val node: XmlNode, val t: Float = 0f, val snap: ClosedFloatingP
         "false" -> false
         else -> canToggle3D && (hasDepthComponent("location", 2) || hasDepthComponent("tilt", 0) || hasDepthComponent("tilt", 1))
     }
-    internal val visibleInCamera: Boolean get() = node["showInCamera"] == "true"
-    internal val canShowInCamera: Boolean get() = canToggle3D && kind != "nullobj" && !uses3D
+    internal val canChooseRenderSpace: Boolean get() = canToggle3D && kind != "nullobj"
+    internal val rendersIn3D: Boolean get() = when (node["renderSpace"].takeIf { canChooseRenderSpace }) {
+        "scene" -> true
+        "flat" -> false
+        else -> uses3D
+    }
+    internal val applies3DTransforms: Boolean get() = uses3D && rendersIn3D
 
-    internal fun withThreeD(on: Boolean): Layer = copy(node = node.with("threeD", on.toString()))
-    internal fun withCameraVisibility(on: Boolean): Layer = copy(node = node.with("showInCamera", "true".takeIf { on }))
+    internal fun withThreeD(on: Boolean): Layer {
+        val current = if (canChooseRenderSpace) withRenderIn3D(rendersIn3D).node else node
+        return copy(node = current.with("threeD", on.toString()))
+    }
+
+    internal fun withRenderIn3D(on: Boolean): Layer = copy(node = node.with("renderSpace", if (on) "scene" else "flat"))
 
     private fun hasDepthComponent(name: String, component: Int): Boolean {
         val property = node.child("transform")?.child(name) ?: return false

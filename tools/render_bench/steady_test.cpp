@@ -139,12 +139,27 @@ int main() {
         const double now = 0;
         const auto cameraScene = std::vector<am::Layer>{camera, flatLayer, spatial(1, 100)};
         am::SeeLayers(cameraScene, 100, 100, true, 30, now, true, &output);
-        const auto visible = [&](int64_t id) {
-            return std::any_of(output.begin(), output.end(), [&](const am::Layer& l) { return l.id == id; });
-        };
-        Expect(!visible(flatLayer.id), "camera view hides a 2D layer");
-        Expect(am::CameraHidesLayer({camera, flatLayer}, flatLayer, now), "camera view hides selection for 2D layers");
-        Expect(!am::CameraHidesLayer({camera, flatLayer}, flatLayer, 1200), "inactive camera does not hide 2D layers");
+        Expect(output.size() == 3 && output[1].id == flatLayer.id && !output[1].sight.camera,
+               "active camera retains flat layers in the stack");
+        am::Layer plane = flatLayer;
+        plane.renderSpace = am::RenderSpace::Scene;
+        const auto projectedScene = std::vector<am::Layer>{camera, plane, spatial(1, 100)};
+        const auto placement = am::EffectivePlacement(projectedScene, plane, now);
+        Expect(plane.spatial() && !plane.has3DTransforms() && placement.z == 0 && placement.tilt == SkM44(),
+               "a projected plane can keep its depth transforms disabled");
+        am::SeeLayers(projectedScene, 100, 100, true, 30, now, true, &output);
+        Expect(output.size() == 3 && output.back().id == plane.id && output.back().sight.camera,
+               "a projected plane inherits the scene camera and depth order");
+        am::Layer flattened = spatial(12, 200);
+        flattened.renderSpace = am::RenderSpace::Flat;
+        Expect(flattened.has3DTransforms() && !flattened.spatial() &&
+               am::EffectivePlacement({flattened}, flattened, now).z == 0, "flat rendering preserves editable depth");
+        am::SetEditorCamera({2, 35, 15});
+        const auto customScene = std::vector<am::Layer>{flatLayer, spatial(1, 100)};
+        am::SeeLayers(customScene, 100, 100, true, 30, now, true, &output);
+        Expect(output.size() == 2 && output.front().id == flatLayer.id && !output.front().sight.editorView &&
+               output.back().sight.editorView, "custom views include flat layers without projecting them");
+        am::SetCameraView(true);
         am::Layer tilted = camera;
         tilted.tilt.value = {20, 35};
         am::Layer near = spatial(11, 0);

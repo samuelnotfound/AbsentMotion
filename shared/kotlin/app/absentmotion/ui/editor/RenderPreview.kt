@@ -185,7 +185,7 @@ private fun CachedSelection(state: EditorState, frame: Int, left: Float, top: Fl
                     close()
                 }
                 val pivot = if (id == selected) matrices?.let { PivotProjection.from(it) }?.let {
-                    val point = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
+                    val point = layer.pivot.let { if (layer.applies3DTransforms) it else floatArrayOf(it[0], it[1], 0f) }
                     it to point
                 } else null
                 CachedLayerControls(contour, corners, pivot)

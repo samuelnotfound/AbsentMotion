@@ -305,7 +305,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         DrawCameraFrames(canvas, scene, timeMs, camera, selectedId, toTarget, px);
         float xy[8];
         const Layer* selected = selectedId != 0 ? scene.layer(selectedId) : nullptr;
-        if (selected && (selected->kind == "camera" || CameraHidesLayer(scene.layers, *selected, timeMs))) selected = nullptr;
+        if (selected && selected->kind == "camera") selected = nullptr;
         const auto toPreview = [&](const float points[8], SkPoint q[4]) {
             for (int i = 0; i < 4; i++) q[i] = {points[2 * i] * scale + dx, points[2 * i + 1] * scale + dy};
         };
@@ -321,7 +321,7 @@ void RenderPreview(SkCanvas* canvas, int width, int height, const Scene& scene, 
         const auto drawAnchor = [&](const Layer& layer) {
             const SceneScope scope(scene);
             const float t = layer.localTime(timeMs);
-            const SkV3 pivot{layer.pivot.get(0, t, 0), layer.pivot.get(1, t, 0), layer.spatial() ? layer.pivot.get(2, t, 0) : 0};
+            const SkV3 pivot{layer.pivot.get(0, t, 0), layer.pivot.get(1, t, 0), layer.spatial() && layer.has3DTransforms() ? layer.pivot.get(2, t, 0) : 0};
             DrawAnchor(canvas, LayerPivotMatrix(scene, layer, timeMs), pivot, toTarget, px);
         };
         if (selected && handles == -2) {

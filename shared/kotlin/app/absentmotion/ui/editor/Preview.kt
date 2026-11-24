@@ -221,7 +221,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     var pivotProjection by remember { mutableStateOf<PivotProjection?>(null) }
     var spatialProjection by remember { mutableStateOf<SpatialGizmoProjection?>(null) }
     var gizmoContour by remember { mutableStateOf<Path?>(null) }
-    val showSpatialControls = state.gizmoProperty != null && state.selected?.uses3D == true
+    val showSpatialControls = state.gizmoProperty != null && state.selected?.applies3DTransforms == true
     var pivotSnaps by remember { mutableStateOf(emptySet<Int>()) }
     var quadFor by remember { mutableStateOf<Any?>(null) }
     val cropping = state.livePanel == EditorPanel.Crop
@@ -404,16 +404,16 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     fun inLayer(at: Offset): Pt? = worldView?.inverseMap(((at - currentOffset) / currentScale).let { Pt(it.x, it.y) })
                     val adjustBox = if (adjusting != null && worldView != null) world?.let { pivotFrame(it, frameQuad).box } else null
                     val gradientMode = startLayer != null && startQuad != null && !state.panZoomMode && state.livePanel == EditorPanel.ColorFill && startLayer.fillType == "gradient"
-                    val pivot = startLayer?.let { layer -> if (layer.uses3D) layer.pivot else layer.pivot.copyOf().also { it[2] = 0f } }
+                    val pivot = startLayer?.let { layer -> if (layer.applies3DTransforms) layer.pivot else layer.pivot.copyOf().also { it[2] = 0f } }
                     val pivotDrag = if (state.pivotEditing && state.livePanel == EditorPanel.MoveTransform && !state.playing &&
                         !state.panZoomMode && !state.lookOnly && startLayer?.locked == false && pivot != null) {
                         pivotProjection?.let { project ->
                             val box = world?.let { pivotFrame(it, frameQuad).box }
-                            PivotDrag(project, pivot, box, currentScale, currentOffset, startLayer.uses3D, density)
+                            PivotDrag(project, pivot, box, currentScale, currentOffset, startLayer.applies3DTransforms, density)
                         }
                     } else null
                     val pivotGrab = pivotDrag?.hit(down.position)
-                    val gizmoLayer = startLayer?.takeIf { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
+                    val gizmoLayer = startLayer?.takeIf { it.applies3DTransforms && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
                     val gizmoProperty = state.gizmoProperty
                     val spatial = if (gizmoProperty == null) null else gizmoLayer?.let { layer ->
                         spatialProjection?.let {
@@ -729,12 +729,12 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
         state.layerPoints?.let { points -> (world ?: FlatPlane.takeIf { points.scene })?.takeUnless { state.playing }?.let { LayerPointsOverlay(points, it, scale, Offset(dx, dy)) } }
         if (editingPivot && !state.playing && !state.panZoomMode && !state.lookOnly && !state.orbiting) {
             state.selected?.takeIf { !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }?.let { layer ->
-                val at = layer.pivot.let { if (layer.uses3D) it else floatArrayOf(it[0], it[1], 0f) }
-                pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.uses3D, pivotSnaps) }
+                val at = layer.pivot.let { if (layer.applies3DTransforms) it else floatArrayOf(it[0], it[1], 0f) }
+                pivotProjection?.let { PivotGizmo(it, at, scale, Offset(dx, dy), layer.applies3DTransforms, pivotSnaps) }
             }
         }
         state.gizmoProperty?.let { property ->
-            val layer = state.selected?.takeIf { it.uses3D && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
+            val layer = state.selected?.takeIf { it.applies3DTransforms && !it.locked && it.kind != "camera" && it.activeAt(state.sampleMs) }
             if (layer != null) {
                 val offset = Offset(dx, dy)
                 when {

@@ -135,9 +135,9 @@ fun EditorState.toggleLayer3D(id: Long) {
     edit { it.update(id) { layer -> layer.withThreeD(!layer.uses3D) } }
 }
 
-internal fun EditorState.toggleCameraVisibility(id: Long) {
-    if (lookOnly || scene.layer(id)?.let { it.canShowInCamera && !it.locked } != true) return
-    edit { it.update(id) { layer -> layer.withCameraVisibility(!layer.visibleInCamera) } }
+internal fun EditorState.toggleLayerRenderSpace(id: Long) {
+    if (lookOnly || scene.layer(id)?.let { it.canChooseRenderSpace && !it.locked } != true) return
+    edit { it.update(id) { layer -> layer.withRenderIn3D(!layer.rendersIn3D) } }
 }
 
 fun EditorState.setLock(id: Long, lock: String?) = edit { it.update(id) { layer -> layer.withLock(lock) } }

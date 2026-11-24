@@ -583,7 +583,11 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     l.hidden = StrAttr(*n, "hidden") == "true";
     const std::string spatial = StrAttr(*n, "threeD");
     l.force3d = spatial == "true";
-    l.showInCamera = StrAttr(*n, "showInCamera") == "true";
+    if (l.kind == "shape" || l.kind == "text" || l.kind == "drawing" || l.kind == "embedScene") {
+        const std::string render = StrAttr(*n, "renderSpace");
+        if (render == "scene") l.renderSpace = RenderSpace::Scene;
+        else if (render == "flat") l.renderSpace = RenderSpace::Flat;
+    }
     l.mixPieces = StrAttr(*n, "mixPieces") != "false";
     if (const XmlNode* t = n->child("transform")) {
         l.location = ParseAnim(t->child("location"));

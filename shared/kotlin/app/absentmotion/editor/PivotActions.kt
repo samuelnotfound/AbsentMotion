@@ -157,13 +157,13 @@ private fun Layer.motion(ms: Double): Pair<Double, Double> {
 }
 
 private fun Scene.stance(layer: Layer, ms: Double, depth: Int = 0, flat: Boolean = false): Stance {
-    val flatten = flat || !layer.uses3D
+    val flatten = flat || !layer.rendersIn3D
     val at = layer.atMs(ms)
     val (spin, pulse) = layer.motion(ms)
     val s = at.scale
     val tilt = at.tilt
     val rot = at.transform("rotation", 0f)[0] + spin
-    val own = if (!flatten && (tilt[0] != 0f || tilt[1] != 0f)) mul(turn(1, -tilt[1].toDouble()), turn(0, -tilt[0].toDouble())) else null
+    val own = if (!flatten && layer.uses3D && (tilt[0] != 0f || tilt[1] != 0f)) mul(turn(1, -tilt[1].toDouble()), turn(0, -tilt[0].toDouble())) else null
     val parent = chain(layer).getOrNull(1)?.takeIf { depth < 16 }?.let { stance(it, ms, depth + 1, flatten) }
         ?: return Stance(rot, s[0] * pulse, s[1] * pulse, own, null)
     val tilted = parent.tilt?.let { mul(mul(mul(turn(2, -rot), it), turn(2, rot)), own ?: IDENTITY) } ?: own
