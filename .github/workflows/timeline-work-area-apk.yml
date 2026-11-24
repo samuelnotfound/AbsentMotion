@@ -1,6 +1,7 @@
 name: Timeline work area APK
 
 on:
+  workflow_call:
   push:
     branches:
       - feature/expandable-layer-rows
