@@ -1149,8 +1149,11 @@ private class TimelineView(val state: EditorState, private val density: Density,
     }
 
     fun revealRow() {
-        val row = state.selectedId?.let { rowOf(it) } ?: return
-        if (desktopDragging) return
+        if (!desktopDragging) state.selectedId?.let(::revealRow)
+    }
+
+    private fun revealRow(id: Long) {
+        val row = rowOf(id) ?: return
         val top = rowTop(row)
         val bottom = top + rowH
         if (top < rulerH) scrollPx = scroll - (rulerH - top) else if (bottom > rowsBottom) scrollPx = scroll + (bottom - rowsBottom)
@@ -1617,6 +1620,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             }
             hit is Hit.Handle && !state.lookOnly -> {
                 dragId = hit.id
+                collapseForReorder(hit.id)
                 Drag.Reorder
             }
             abs(moved.x) > abs(moved.y) -> {
@@ -1657,8 +1661,14 @@ private class TimelineView(val state: EditorState, private val density: Density,
         autoStop()
         limits = emptyMap()
         snapAt = null
-        if (drag == Drag.Lift) drop()
-        if (drag == Drag.Lift) dropMove(lifted)
+        if (drag == Drag.Lift) {
+            drop()
+            dropMove(lifted)
+            if (lifted && liftArmed) liftId?.let(::revealRow)
+        }
+        if (drag == Drag.Reorder) {
+            if (lifted) revealRow(dragId) else state.cancelGesture("reorder")
+        }
         if (drag == Drag.Select) endSelect()
         if (drag == Drag.KeyBox) {
             keyBox = null
@@ -1837,6 +1847,17 @@ private class TimelineView(val state: EditorState, private val density: Density,
 
     fun timeFor(id: Long, time: TimeScale) = if (id == moveId || id in moveGroupIds) time.slid(moveSlide) else time
 
+    private fun collapseForReorder(id: Long) {
+        if (inlinePositions.isEmpty() && inlineEffects.isEmpty()) return
+        val row = rowOf(id) ?: return
+        val anchoredScroll = rulerH + row * rowH - rowTop(row)
+        inlinePositions = emptySet()
+        inlineEffects = emptySet()
+        inlineKeySelection.clear()
+        state.timelineDetailsOpen = false
+        scrollPx = anchoredScroll.coerceIn(0f, maxScroll)
+    }
+
     private fun reorderTo(y: Float) {
         val layers = layers
         if (layers.isEmpty()) return
@@ -1889,7 +1910,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
     fun liftDrag(at: Offset, pushing: Boolean) {
         liftFinger = at.y
         liftPush = pushing
-        if (abs(at.y - liftStart) > liftSlop) liftArmed = true
+        if (!liftArmed && abs(at.y - liftStart) > liftSlop) {
+            liftArmed = true
+            liftId?.let(::collapseForReorder)
+        }
         if (deskLayout && !liftArmed) liftFinger = liftStart
         if (!liftMoves && abs(at.x - liftStartX) > liftSlop) showLockHint()
         if (liftMoves) {
@@ -2125,6 +2149,12 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
                         view.dragBy(Drag.Keys, at - start, at)
                     }
                     drag == Drag.Lift -> view.liftDrag(at, true)
+                    drag == null && moved && !boxHold && plain && hit is Hit.Bar &&
+                        abs(at.y - start.y) > maxOf(4.dp.toPx(), abs(at.x - start.x)) &&
+                        view.lift(hit.id, start, 4.dp.toPx(), false) -> {
+                        drag = Drag.Lift
+                        view.liftDrag(at, true)
+                    }
                     drag != null -> drag?.let { view.dragBy(it, at - previous, at) }
                     moved && hit == Hit.InlineBody -> {
                         val delta = at - previous
@@ -2264,7 +2294,9 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
                     if (moved.getDistance() > viewConfiguration.touchSlop) {
                         val started = if (hit is Hit.Key) { view.startKeyMove(hit, down.position); Drag.Keys } else view.beginDrag(hit, moved)
                         drag = started
-                        if (started == Drag.WorkAreaStart || started == Drag.WorkAreaEnd || started == Drag.Keys) view.dragBy(started, moved, first.position)
+                        if (started == Drag.WorkAreaStart || started == Drag.WorkAreaEnd || started == Drag.Keys || started == Drag.Reorder) {
+                            view.dragBy(started, moved, first.position)
+                        }
                         first.consume()
                     }
                 }
@@ -2275,6 +2307,7 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
             }
         }
         lifted = TimelineMath.released(last)
+        if (lifted && drag == Drag.Reorder) view.dragBy(Drag.Reorder, Offset.Zero, finger)
     } finally {
         if (lifted && (drag == null && !held || drag == Drag.Lift && hit is Hit.Bar && !view.liftMoved)) {
             if (dismissing) view.dismissAddMenu() else view.tap(hit)
