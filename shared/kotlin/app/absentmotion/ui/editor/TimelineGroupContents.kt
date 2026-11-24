@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -65,7 +66,6 @@ private val GroupIconWidth = 22.dp
 private val GroupDisclosureWidth = 26.dp
 private val GroupSidebarStart = 4.dp
 private val GroupSidebarEnd = 2.dp
-private val GroupClipGap = 2.dp
 
 internal class TimelineGroupRow(
     val layer: Layer, val owner: Scene, val groups: List<Long>, private val clocks: List<Pair<Layer, Int>>,
@@ -84,8 +84,6 @@ internal class TimelineGroupRow(
         }
         return indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * icons
     }
-    fun clipLaneStart(state: EditorState, expanded: Boolean): Dp = sidebarWidth(state, expanded) + GroupClipGap
-
     fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
         val right = (sidebarWidth(state, expanded) - GroupDisclosureWidth - GroupSidebarEnd).toPx()
         x >= right - GroupIconWidth.toPx() && x < right
@@ -159,7 +157,7 @@ internal fun TimelineGroupContents(
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
             Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected || checked) Am.Field else Am.TimelineBg)) {
-                GroupMemberClip(row, row.clipLaneStart(state, open), xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
+                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
                 Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
                     .clip(RoundedCornerShape(50)).background(if (checked) Am.Accent else Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -228,7 +226,7 @@ internal fun TimelineGroupContents(
 
 @Composable
 private fun GroupMemberClip(
-    row: TimelineGroupRow, laneStart: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
+    row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit, modifier: Modifier,
     selected: Boolean, scope: KeyScope?, timeMs: Int, selection: InlineKeySelection,
 ) {
@@ -245,34 +243,38 @@ private fun GroupMemberClip(
     val outline = remember { Path() }
     fun left() = xAt(range.first.toDouble())
     fun right() = xAt(range.last + 1.0)
-    val tap = if (onOpen == null) Modifier else Modifier.inlineTap(onOpen)
     Layout(
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
         content = {
-            Canvas(Modifier.fillMaxWidth().fillMaxHeight().clipToBounds().then(tap)
-                .semantics { contentDescription = layer.shownName() }.alpha(if (layer.hidden) 0.45f else 1f)) {
-                val origin = floor(maxOf(laneStart.toPx(), left()))
-                drawClip(layer, outline, left() - origin, right() - origin)
+            Canvas(Modifier.alpha(if (layer.hidden) 0.45f else 1f)) {
+                val left = left()
+                val right = right()
+                val visibleLeft = maxOf(left, 0f)
+                val visibleRight = minOf(right, size.width)
+                if (visibleLeft >= visibleRight) return@Canvas
+                drawClip(layer, outline, left, right)
                 val current = row.owner.frameAt(row.localTime(timeMs))
-                for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
-                    val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt)?.minus(origin) ?: continue
-                    val picked = strong && ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
-                    if (x in 0f..size.width) drawTimelineKeyAt(outline, x, center.y, strong, picked, strong && frame == current)
+                clipRect(left = visibleLeft, right = visibleRight) {
+                    for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
+                        val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: continue
+                        val picked = strong && ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
+                        if (x in visibleLeft..visibleRight) drawTimelineKeyAt(outline, x, center.y, strong, picked, strong && frame == current)
+                    }
                 }
             }
+            if (onOpen != null) Box(Modifier.inlineTap(onOpen).semantics { contentDescription = layer.shownName() })
         },
     ) { measurables, constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val minimum = laneStart.toPx().coerceAtMost(width.toFloat())
-        val left = left().coerceIn(minimum, width.toFloat())
-        val right = right().coerceIn(minimum, width.toFloat())
-        if (left < right && height > 0) {
-            val x = floor(left).toInt()
-            val clip = measurables.single().measure(Constraints.fixed(ceil(right).toInt() - x, height))
-            layout(width, height) { clip.place(x, 0) }
-        } else {
-            layout(width, height) {}
+        val artwork = measurables.first().measure(Constraints.fixed(width, height))
+        val tapLeft = maxOf(sidebarWidth.roundToPx(), floor(left()).toInt())
+        val tapRight = minOf(width, ceil(right()).toInt())
+        val tapTarget = measurables.getOrNull(1)?.takeIf { tapLeft < tapRight }
+            ?.measure(Constraints.fixed(tapRight - tapLeft, height))
+        layout(width, height) {
+            artwork.place(0, 0)
+            tapTarget?.place(tapLeft, 0)
         }
     }
 }

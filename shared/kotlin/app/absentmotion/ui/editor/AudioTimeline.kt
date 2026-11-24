@@ -43,11 +43,10 @@ internal fun timingOf(layer: Layer): VideoTiming {
     return VideoTiming(layer).also { timings[layer.id] = layer.node to it }
 }
 
-internal fun DrawScope.drawAudioBar(outline: Path, layer: Layer, left: Float, right: Float, top: Float, bottom: Float, pxPerMs: Float, clipToLane: Boolean = false) {
+internal fun DrawScope.drawAudioBar(outline: Path, layer: Layer, left: Float, right: Float, top: Float, bottom: Float, pxPerMs: Float) {
     val radius = 2.dp.toPx()
-    val bleed = if (clipToLane) 0f else 2 * radius
-    val from = max(left, -bleed)
-    val to = min(right, size.width + bleed)
+    val from = max(left, -2 * radius)
+    val to = min(right, size.width + 2 * radius)
     if (from >= to) return
     drawRect(AudioShadow, Offset(from, bottom - radius), Size(to - from, radius + 2.dp.toPx()))
     outline.rewind()
