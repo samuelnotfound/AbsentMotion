@@ -39,6 +39,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Curve editor**. Scrubbing outside a keyframe interval keeps the editor open and hides the curve and its handles until an interval is available.
 - **Selection anchor**. The preview marker shows the actual pivot when a layer is tilted or its pivot is offset.
 - **Trim and Extend**. Extend actions have their own icons when the playhead is outside a clip.
+- **Null scaling**. Scaling a 3D rig from its null changes the depth offsets along with the other dimensions, so connected faces stay together.
 - **Clip timing**. Drag clips before time zero while keeping at least one frame of each clip on the timeline. The touch timeline scrolls when you move or trim a clip past the visible edge.
 - **Nested clip bars**. The clip bar, label, and keyframes scroll together behind the sidebar.
 

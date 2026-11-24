@@ -270,6 +270,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     }
     flat = flat || !l.spatial();
     Placement own = Own(l, timeMs);
+    if (l.kind == "nullobj") own.depthScale = (float)std::sqrt(std::fabs((double)own.scale.fX * own.scale.fY));
     if (flat || !l.has3DTransforms()) {
         own.z = own.pivotZ = 0;
         own.tilt = SkM44();
@@ -284,7 +285,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
     Placement p{};
     if (parent) {
         p = Effective(siblings, *parent, timeMs, depth + 1, true, flat);
-        const SkV4 offset = Turn(p.rotation) * p.tilt * SkV4{own.location.fX * p.scale.fX, own.location.fY * p.scale.fY, own.z, 0};
+        const SkV4 offset = Turn(p.rotation) * p.tilt * SkV4{own.location.fX * p.scale.fX, own.location.fY * p.scale.fY, own.z * p.depthScale, 0};
         own.location = p.location + SkVector{offset.x, offset.y};
         SkPoint followScale;
         float followRotation;
@@ -293,6 +294,7 @@ Placement Effective(const std::vector<Layer>& siblings, const Layer& l, double t
         if (p.tilt != SkM44()) own.tilt = Turn(-own.rotation) * p.tilt * Turn(own.rotation) * own.tilt;
         own.rotation += followRotation;
         own.z = p.z + offset.z;
+        own.depthScale *= p.depthScale;
         ParentRoll(l, timeMs, &own);
     }
     if (!followPath || !FollowsPath(l)) return own;
@@ -320,7 +322,7 @@ Placement CollapsedPlacement(const CollapsedLayer& child, double timeMs) {
     const float t = child.group->localTime(host);
     SkMatrix skew;
     skew.setSkew(tanf(child.group->skew.get(0, t, 0)), tanf(child.group->skew.get(1, t, 0)));
-    const SkM44 basis = Turn(group.rotation) * group.tilt * SkM44(skew) * SkM44::Scale(group.scale.fX, group.scale.fY, 1);
+    const SkM44 basis = Turn(group.rotation) * group.tilt * SkM44(skew) * SkM44::Scale(group.scale.fX, group.scale.fY, group.depthScale);
     const SkV4 point = basis.map(own.location.fX - child.group->innerWidth / 2.f - group.pivot.fX,
                                 own.location.fY - child.group->innerHeight / 2.f - group.pivot.fY, own.z - group.pivotZ, 0);
     own.location = group.location + SkVector{point.x, point.y};

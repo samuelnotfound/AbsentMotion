@@ -65,6 +65,22 @@ int main() {
     Expect(ids == std::vector<int64_t>({2, 9, 1, 3, 6, 7, 4, 5}), "2D layers separate depth runs");
     const auto flatPlacement = am::EffectivePlacement(input, flatLayer, 0);
     Expect(flatPlacement.z == 0 && flatPlacement.tilt == SkM44(), "2D placement ignores saved depth and tilt");
+    am::Layer root = spatial(50, 0);
+    root.kind = "nullobj";
+    root.force3d = false;
+    root.scale.value = {0.5f, 0.5f};
+    am::Layer face = spatial(51, 80);
+    face.parent = root.id;
+    face.location.value = {40, 60, 80};
+    am::Layer detail = spatial(52, 20);
+    detail.parent = face.id;
+    const std::vector<am::Layer> rig{root, face, detail};
+    const auto facePose = am::EffectivePlacement(rig, face, 0);
+    Expect(facePose.location.fX == 70 && facePose.location.fY == 80 && facePose.z == 40 && facePose.scale.fX == 0.5f,
+           "scaling a null scales both the faces and depth offsets of its rig");
+    Expect(am::EffectivePlacement(rig, detail, 0).z == 50, "null depth scale carries through spatial descendants");
+    face.force3d = false;
+    Expect(am::EffectivePlacement(rig, face, 0).z == 0, "null depth scale leaves flat descendants flat");
     input[0].location.value[2] = 300;
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     ids.clear();

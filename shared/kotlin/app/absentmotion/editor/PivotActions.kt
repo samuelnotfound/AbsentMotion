@@ -51,7 +51,7 @@ private fun turn(axis: Int, degrees: Double): DoubleArray {
     }
 }
 
-private class Stance(val rot: Double, val sx: Double, val sy: Double, val tilt: DoubleArray?, val link: DoubleArray?) {
+private class Stance(val rot: Double, val sx: Double, val sy: Double, val depthScale: Double, val tilt: DoubleArray?, val link: DoubleArray?) {
     val turned: DoubleArray get() = tilt?.let { mul(turn(2, rot), it) } ?: turn(2, rot)
 
     fun undo(v: DoubleArray): DoubleArray? {
@@ -164,11 +164,14 @@ private fun Scene.stance(layer: Layer, ms: Double, depth: Int = 0, flat: Boolean
     val tilt = at.tilt
     val rot = at.transform("rotation", 0f)[0] + spin
     val own = if (!flatten && layer.uses3D && (tilt[0] != 0f || tilt[1] != 0f)) mul(turn(1, -tilt[1].toDouble()), turn(0, -tilt[0].toDouble())) else null
+    val sx = s[0] * pulse
+    val sy = s[1] * pulse
+    val depthScale = layer.nullDepthScale(sx, sy)
     val parent = chain(layer).getOrNull(1)?.takeIf { depth < 16 }?.let { stance(it, ms, depth + 1, flatten) }
-        ?: return Stance(rot, s[0] * pulse, s[1] * pulse, own, null)
+        ?: return Stance(rot, sx, sy, depthScale, own, null)
     val tilted = parent.tilt?.let { mul(mul(mul(turn(2, -rot), it), turn(2, rot)), own ?: IDENTITY) } ?: own
-    val link = mul(parent.turned, doubleArrayOf(parent.sx, 0.0, 0.0, 0.0, parent.sy, 0.0, 0.0, 0.0, 1.0))
-    return Stance(rot + parent.rot, s[0] * pulse * parent.sx, s[1] * pulse * parent.sy, tilted, link)
+    val link = mul(parent.turned, doubleArrayOf(parent.sx, 0.0, 0.0, 0.0, parent.sy, 0.0, 0.0, 0.0, parent.depthScale))
+    return Stance(rot + parent.rot, sx * parent.sx, sy * parent.sy, depthScale * parent.depthScale, tilted, link)
 }
 
 private fun Stance.mapped(layer: Layer, dx: Float, dy: Float, dz: Float): DoubleArray {
