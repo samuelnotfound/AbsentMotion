@@ -816,7 +816,9 @@ private class TimelineView(val state: EditorState, private val density: Density,
     var coordinates: LayoutCoordinates? = null
     var headerDp by mutableFloatStateOf(DeskTimelineControls.headerDp)
     val headerWidth: Float get() = if (deskLayout) headerDp * scale else HeaderWidth.px
-    fun showsLayerControls(layer: Layer): Boolean = layer.id == state.selectedId || layer.id in MultiSelect.rootIds || inlinePosition(layer)
+    fun showsLayerControls(layer: Layer): Boolean =
+        (!state.editingGroupMember && state.showsLayerInspector && layer.id == state.selectedId) ||
+            layer.id in MultiSelect.rootIds || inlinePosition(layer)
     fun rowHeaderWidth(layer: Layer): Float = if (!deskLayout && showsLayerControls(layer)) headerWidth + ExpandedControls.px else headerWidth
     private var inlinePositions by mutableStateOf<Set<List<Long>>>(emptySet())
     private var inlineSectionsToggled by mutableStateOf<Set<Pair<List<Long>, String>>>(emptySet())
@@ -865,6 +867,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
                 (key.groups + key.layerId).take(path.size) != path
             }
             if (MultiSelect.groups.take(path.size) == path) MultiSelect.clear()
+            if (state.editingGroupMember) {
+                val selectedPath = state.selectedGroups + listOfNotNull(state.selectedId)
+                if (selectedPath.take(path.size) == path) state.deselectLayer()
+            }
         } else {
             inlinePositions = inlinePositions + setOf(absolute)
         }

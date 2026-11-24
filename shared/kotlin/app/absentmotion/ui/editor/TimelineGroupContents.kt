@@ -74,8 +74,9 @@ internal class TimelineGroupRow(
 
     fun indent(state: EditorState): Dp = if (selected(state) && state.showsLayerInspector) 0.dp else (groups.size.coerceAtMost(4) * 14 + 8).dp
     fun selected(state: EditorState): Boolean = state.selectedId == layer.id && state.selectedGroups == groups
+    fun showsLayerControls(state: EditorState, expanded: Boolean): Boolean = expanded || (selected(state) && state.showsLayerInspector)
     fun sidebarWidth(state: EditorState, expanded: Boolean): Dp =
-        indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (expanded || selected(state)) 5 else 2)
+        indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (showsLayerControls(state, expanded)) 5 else 2)
     fun thumbnailHit(state: EditorState, expanded: Boolean, x: Float, density: Density): Boolean = with(density) {
         val right = (sidebarWidth(state, expanded) - GroupDisclosureWidth - GroupSidebarEnd).toPx()
         x >= right - GroupIconWidth.toPx() && x < right
@@ -144,7 +145,7 @@ internal fun TimelineGroupContents(
             val checked = MultiSelect.active && row.groups == MultiSelect.groups && layer.id in MultiSelect.ids
             val indent = row.indent(state)
             val scope = state.keyScope.takeIf { selected && state.showsLayerInspector }
-            val controls = open || selected
+            val controls = row.showsLayerControls(state, open)
             val sidebarWidth = row.sidebarWidth(state, open)
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
