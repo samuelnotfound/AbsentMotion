@@ -768,6 +768,7 @@ private sealed interface Hit {
 private enum class Drag(val edit: Boolean = false) { Scrub, Scroll, Pinch, Spent, Select, TrimStart(true), TrimEnd(true), Reorder(true), Lift(true), KeyBox(true), Keys(true), WorkAreaStart(true), WorkAreaEnd(true) }
 
 private const val MOVE_EDIT = "clip-move"
+private const val KEYFRAME_HOLD_MS = 250L
 
 
 private class TimelineView(val state: EditorState, density: Density, private val scope: CoroutineScope) {
@@ -2074,7 +2075,7 @@ private suspend fun PointerInputScope.desktopTimelineGestures(view: TimelineView
             if (change.pressed) {
                 if (!moved && (at - start).getDistance() > 2f) {
                     moved = true
-                    boxHold = change.uptimeMillis - pressTime >= viewConfiguration.longPressTimeoutMillis
+                    boxHold = change.uptimeMillis - pressTime >= minOf(KEYFRAME_HOLD_MS, viewConfiguration.longPressTimeoutMillis)
                 }
                 view.snapDisabled = modifiers.isAltPressed
                 when {
@@ -2165,9 +2166,11 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
     var finger = down.position
     var second: PointerId? = null
     val dismissing = view.dismissZone(down.position)
+    val keyHold = !view.state.lookOnly && !dismissing && view.canBoxKeys(hit)
     val holdable = !view.state.lookOnly && !dismissing &&
-        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Bar || view.canBoxKeys(hit))
-    val deadline = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
+        (hit is Hit.Eye || hit is Hit.Lock || hit is Hit.Locked || hit is Hit.Header || hit is Hit.Row || hit is Hit.Bar || keyHold)
+    val longPress = viewConfiguration.longPressTimeoutMillis
+    val deadline = down.uptimeMillis + if (keyHold) minOf(KEYFRAME_HOLD_MS, longPress) else longPress
     try {
         while (true) {
             val event = if (holdable && drag == null && !held) {
@@ -2179,7 +2182,7 @@ private suspend fun PointerInputScope.timelineGestures(view: TimelineView, onLon
                         view.startKeyMove(hit, down.position)
                         drag = Drag.Keys
                     }
-                    view.canBoxKeys(hit) -> {
+                    keyHold -> {
                         view.startKeyBox(finger, (hit as? Hit.Key)?.key)
                         drag = Drag.KeyBox
                     }
