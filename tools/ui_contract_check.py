@@ -228,7 +228,7 @@ class UiContracts(unittest.TestCase):
         axes = panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0]
         self.assertIn('TurnHook(state, turn)', axes)
         self.assertIn('TransformRulers(state,', axes)
-        self.assertIn('AxisFields(layer.uses3D,', axes)
+        self.assertIn('TransformRulers(state, ::colour', axes)
         self.assertNotIn('LayerDimensionButton', panel)
         timeline = source('ui/editor/Timeline.kt')
         self.assertIn('ChromeIcons.ObjectTab, if (layer.uses3D) Layer3DColor', timeline)

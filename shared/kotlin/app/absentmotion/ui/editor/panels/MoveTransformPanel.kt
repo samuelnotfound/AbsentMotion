@@ -201,7 +201,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     ) {
         if (rulers) {
             TransformRulers(
-                state, ::colour, onSelect = { activeAxis = it }, depthEnabled = spatial,
+                state, ::colour, { formatFixed(at[it], 2) }, ::openKeypad, onSelect = { activeAxis = it }, depthEnabled = spatial,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
@@ -229,9 +229,9 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                     if (onFlip != null && !depth) FlipHint(stringResource(R.string.transform_double_tap_pivot))
                 }
             }
+            AxisFields(layer.uses3D, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
+                Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
         }
-        AxisFields(layer.uses3D, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
-            Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
     }
 }
 
@@ -814,31 +814,33 @@ private fun AxesTab(state: EditorState, layer: Layer, turn: Turn) {
     fun reset(which: Int) {
         state.editSelected { l -> turn.values(l).let { v -> v[which] = turn.default(which); turn.withValues(l, v, independent = focus != null) } }
     }
-    Box(Modifier.fillMaxSize()) {
-        TransformRulers(state, ::colour, { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
-        AxisFields(layer.uses3D, { formatFixed(values[it], 1) + "º" }, ::colour, { axis = it }, ::openKeypad,
-            Modifier.align(Alignment.TopCenter).padding(top = 17.px))
-    }
+    TransformRulers(state, ::colour, { formatFixed(values[it], 1) + "º" }, ::openKeypad,
+        { axis = it }, { which, dx -> drag(which, dx * AXIS_DEGREES_PER_DP) }, ::reset)
 }
 
 @Composable
 private fun TransformRulers(
-    state: EditorState, colour: (Int) -> Color, onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit,
-    depthEnabled: Boolean = true,
+    state: EditorState, colour: (Int) -> Color, value: (Int) -> String, onType: (Int) -> Unit,
+    onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit, depthEnabled: Boolean = true,
 ) {
-    Column(Modifier.fillMaxSize().padding(top = 109.px, bottom = 12.px)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.px, vertical = 12.px)) {
         for (which in transformAxisOrder) {
             val enabled = which != 2 || depthEnabled
-            Box(Modifier.fillMaxWidth().weight(1f).alpha(if (enabled) 1f else 0.38f)) {
+            val tint = if (enabled) colour(which) else Am.OnDarkDim
+            Row(Modifier.fillMaxWidth().weight(1f).alpha(if (enabled) 1f else 0.38f), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(62.px).fillMaxHeight().clickable(enabled = enabled) { onSelect(which) }, contentAlignment = Alignment.Center) {
+                    Text("XYZ"[which].toString(), color = tint, fontSize = 13.sp)
+                }
                 RulerSpinner(
-                    if (enabled) colour(which) else Am.OnDarkDim,
+                    tint,
                     onDrag = { dx -> onDrag(which, dx) },
                     onEnd = { state.endGesture() },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onStart = { onSelect(which) },
                     onReset = { onReset(which) }, enabled = enabled,
                 )
-                Text("XYZ"[which].toString(), Modifier.align(Alignment.CenterStart).padding(start = 22.px), color = colour(which), fontSize = 13.sp)
+                NumberBox(value(which), tint, Modifier.width(167.px).height(70.px),
+                    fontSize = 10.5f, onSelect = { onSelect(which) }, onType = if (enabled) { { onType(which) } } else null)
             }
         }
     }
