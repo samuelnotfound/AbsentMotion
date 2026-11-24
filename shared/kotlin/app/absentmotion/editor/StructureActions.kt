@@ -605,7 +605,7 @@ fun EditorState.moveClipEdges(end: Boolean, extend: Boolean) {
     val again = lastBlockMove?.let { it.scene.get() === scene.node && it.end == end && it.frame == frame && it.selection == MultiSelect.revision } == true
     lastBlockMove = null
     if (extend || ids.size < 2 || again) {
-        edit { it.withClipEdgesAt(ids, frame, end, extend) }
+        editSelectedScene { it.withClipEdgesAt(ids, selectedFrame, end, extend) }
         return
     }
     val block = scene.withBlockAt(ids, frame, end)

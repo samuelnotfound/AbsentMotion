@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -65,7 +67,8 @@ internal class TimelineGroupRow(
     val details: List<InlineSection>? = null,
 ) {
     val path get() = groups + layer.id
-    fun heightPx(density: Density): Int = with(density) { GroupRowHeight.roundToPx() + (details?.let { inlineDetailsHeight(it) } ?: 0) }
+    fun headerHeightPx(density: Density): Int = with(density) { GroupRowHeight.roundToPx() }
+    fun heightPx(density: Density): Int = headerHeightPx(density) + with(density) { details?.let { inlineDetailsHeight(it) } ?: 0 }
     val parentsUnlocked get() = clocks.none { it.first.locked }
     val editable get() = !layer.locked && parentsUnlocked
 
@@ -86,14 +89,7 @@ internal class TimelineGroupRow(
         return ceil(start).toInt()..floor(end).toInt()
     }
 
-    fun hostTime(localMs: Int): Double? {
-        var time = localMs.toDouble()
-        for ((group, fps) in clocks.asReversed()) {
-            time = group.nestedHostTime(time, fps)
-            if (time < group.startTime || time > group.endTime) return null
-        }
-        return time.takeIf { it.isFinite() }
-    }
+    fun hostTime(localMs: Int): Double? = track.hostTime(localMs.toDouble())
 }
 
 internal fun timelineGroupRows(
@@ -131,12 +127,16 @@ internal fun TimelineGroupContents(
             val indent = (row.groups.size.coerceAtMost(4) * 14 + 8).dp
             val layer = row.layer
             val open = isExpanded(row.path)
-            val sidebarWidth = if (open) 210.dp else 166.dp
+            val selected = state.selectedId == layer.id && state.selectedGroups == row.groups
+            val controls = open || selected
+            val sidebarWidth = if (controls) 210.dp else 166.dp
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
-            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(Am.TimelineBg)) {
+            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected) Am.Field else Am.TimelineBg)) {
                 GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize())
-                Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
+                    .clip(RoundedCornerShape(50)).background(Am.Button).padding(start = 4.dp, end = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     val visibility = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
                     val toggleVisibility = if (row.editable && !state.lookOnly) Modifier.inlineTap {
                         state.editGroupMember(row) { it.withHidden(!it.hidden) }
@@ -149,7 +149,7 @@ internal fun TimelineGroupContents(
                         PanelIcon(if (open) ChromeIcons.ChevronDown else ChromeIcons.ChevronRight,
                             if (open) Am.Accent else Am.OnDarkDim, size = 14.dp)
                     }
-                    if (open) {
+                    if (controls) {
                         val lockLabel = stringResource(if (layer.node["lock"] == null) R.string.layer_lock else R.string.layer_unlock)
                         val lockAction = if (!state.lookOnly && row.parentsUnlocked) Modifier.inlineTap {
                             state.editGroupMember(row) { it.withLock(if (it.node["lock"] == null) "all" else null) }

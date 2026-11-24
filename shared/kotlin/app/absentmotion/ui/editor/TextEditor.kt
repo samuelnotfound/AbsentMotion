@@ -181,7 +181,7 @@ internal fun TextEditor(state: EditorState, ui: TextEditUi = remember { TextEdit
                         onPick = { name -> scope.launch {
                             if (library.resolve(name, download = true) == null && FontName.parse(name).source == "googlefonts") {
                                 app.absentmotion.platform.Toast.makeText(context, context.getString(R.string.font_load_failed_body), app.absentmotion.platform.Toast.LENGTH_LONG).show()
-                            } else { library.remember(name); state.edit { it.update(layer.id, state.sampleMs) { l -> l.withFont(name) } } }
+                            } else { library.remember(name); if (state.selectedId == layer.id) state.editSelected { it.withFont(name) } }
                         } },
                         onViewAll = { ui.restoreIme = ui.imeShown; keyboard?.hide(); ui.browser = true })
                     "color" -> ColorPicker(state, layer, Modifier.align(Alignment.TopEnd).padding(top = 42.dp).size(304.dp, 128.dp).background(Am.Panel))

@@ -151,7 +151,7 @@ import app.absentmotion.ui.HoldName
 
 @Composable
 fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean = false) {
-    val still = state.selectedId?.let { state.scene.layer(it) }
+    val still = state.selectedLayer
     val drawn = still?.let { it.shape.isEmpty() && !it.isShapeTemplate } == true
     var properties by remember(state.selectedId) { mutableStateOf(false) }
     var moving by remember(state.selectedId) { mutableStateOf(false) }
@@ -174,8 +174,8 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
             Row(Modifier.weight(1f).fillMaxHeight(), Arrangement.spacedBy(3.px)) {
                 val clipStart = still?.startTime
                 val clipEnd = still?.endTime
-                val past by remember(state, clipEnd) { derivedStateOf { clipEnd != null && state.sampleMs > clipEnd } }
-                val before by remember(state, clipStart) { derivedStateOf { clipStart != null && state.timeMs < clipStart } }
+                val past by remember(state, clipEnd) { derivedStateOf { clipEnd != null && state.selectedSampleMs > clipEnd } }
+                val before by remember(state, clipStart) { derivedStateOf { clipStart != null && state.selectedTimeMs < clipStart } }
                 if (!past) SmallTool(if (before) PanelIcons.ExtendLeft else PanelIcons.TrimLeft, stringResource(if (before) R.string.a11y_extend_start else R.string.a11y_trim_start), Modifier.weight(1f), ToolShape.copy(topEnd = Square, bottomEnd = Square)) {
                     if (before) state.moveClipEdges(false, true) else state.trimStart()
                 }
@@ -226,7 +226,7 @@ fun LayerTools(state: EditorState, modifier: Modifier = Modifier, side: Boolean 
                     kind == "text" -> Tile(EditText) { state.panel = EditorPanel.EditText }
                     kind == "embedScene" -> if (still.link != null) Tile(ElementPropsButton) { properties = true }
                         else if (still.cutoutEdge != null) Tile(CutoutEdge) { state.panel = EditorPanel.Edge }
-                        else if (still.isPlainGroup == true) Tile(EditGroup) { state.selectedId?.let(state::enterGroup) } else null
+                        else if (still.isPlainGroup == true) Tile(EditGroup) { state.enterSelectedGroup() } else null
                     kind == "drawing" -> Tile(EditDrawing) { state.editDrawing() }
                     drawn -> Tile(EditPoints) { state.requestPoints(enter = true) }
                     else -> Tile(EditShape) { state.panel = EditorPanel.EditShape }
@@ -304,7 +304,7 @@ private val ToolPageShade = Color.Black.copy(alpha = 0.15f)
 
 @Composable
 internal fun PanelRail(state: EditorState, modifier: Modifier) {
-    val layer = state.selectedId?.let { state.scene.layer(it) }
+    val layer = state.selectedLayer
     val panels = when {
         layer == null || app.absentmotion.editor.MultiSelect.active || state.drawing != null -> emptyList()
         else -> when (layer.kind) {
@@ -504,7 +504,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
         panel == EditorPanel.BorderShadow -> borderShadowTarget(layer)
         panel == EditorPanel.Blending -> KeyTarget(OpacityRef, "1.000000")
         panel == EditorPanel.Speed && layer.node.child("timeRemap") != null -> KeyTarget(app.absentmotion.model.RemapRef, "0.000000")
-        panel == EditorPanel.Frame && layer.picksFrames -> KeyTarget(FrameRef, formatFloats(floatArrayOf(layer.shownFrame(state.sampleMs.toDouble(), state.scene.fps).toFloat())))
+        panel == EditorPanel.Frame && layer.picksFrames -> KeyTarget(FrameRef, formatFloats(floatArrayOf(layer.shownFrame(state.selectedSampleMs.toDouble(), state.selectedScene.fps).toFloat())))
         else -> null
     }
     if (named) SideEffect { state.keyTarget = known }
@@ -569,7 +569,7 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
             val index = if (i == 0 && shown == PIVOT_TAB) PIVOT_TAB else i
             val icon = icons[index]
             val name = stringResource(names[index])
-            val usable = i <= SIZE_TAB || selected.kind != "camera" || (i == TILT_TAB && state.scene.depthOrder)
+            val usable = i <= SIZE_TAB || selected.kind != "camera" || (i == TILT_TAB && state.selectedScene.depthOrder)
             val tip = if (!deskLayout) "" else when (i) {
                 SIZE_TAB -> deskShortcut(R.string.panel_size, "${DeskAlt}${stringResource(R.string.desk_scroll_key)}")
                 ROTATE_TAB -> deskShortcut(R.string.a11y_tab_rotate, "${DeskShift}${DeskAlt}${stringResource(R.string.desk_scroll_key)}")

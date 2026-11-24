@@ -121,11 +121,12 @@ internal fun InlinePositionDetails(
                     val raw = at.element(track.ref)?.valueAt(at.t) ?: track.default
                     val value = raw?.toFloatOrNull()?.times(track.multiplier)
                     val display = value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
-                    val active = !nested && layer.id == state.selectedId && state.inlineProperty != null &&
+                    val active = layer.id == state.selectedId && state.inlineProperty != null &&
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
                         .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
-                        InlinePositionKeys(state, layer, track, track.frames(scene, layer), Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
+                        val currentFrame = if (nested) scene.frameAt(sampleMs) else state.playheadFrame
+                        InlinePositionKeys(layer, track, track.frames(scene, layer), currentFrame, Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
                         Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
                             .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
@@ -174,7 +175,7 @@ internal class InlineKeySelection {
 
 @Composable
 private fun InlinePositionKeys(
-    state: EditorState, layer: Layer, track: InlineTrack, frames: List<Int>, modifier: Modifier,
+    layer: Layer, track: InlineTrack, frames: List<Int>, currentFrame: Int, modifier: Modifier,
     xOf: (Int) -> Float, selection: InlineKeySelection?,
 ) {
     Canvas(modifier) {
@@ -193,7 +194,7 @@ private fun InlinePositionKeys(
                 close()
             }
             val selected = selection?.keys?.contains(InlineKey(layer.id, track.ref, frame)) == true
-            drawTimelineKey(diamond, selected, frame == state.playheadFrame)
+            drawTimelineKey(diamond, selected, frame == currentFrame)
         }
     }
 }

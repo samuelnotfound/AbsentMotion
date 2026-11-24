@@ -429,8 +429,8 @@ internal fun Scene.withPivotMoved(id: Long, timeMs: Int, x: Float, y: Float, see
 
 fun EditorState.setPivot(x: Float, y: Float, key: Any? = null, z: Float? = null) {
     val id = selectedId ?: return
-    if (scene.layer(id)?.let { it.kind == "camera" || it.locked } != false) return
-    edit(key, pivot = id) { it.withPivotMoved(id, sampleMs, x, y, timeMs, z) }
+    if (selectedLayer?.let { it.kind == "camera" || it.locked } != false) return
+    editSelectedScene(key, pivot = id) { it.withPivotMoved(id, selectedSampleMs, x, y, selectedTimeMs, z) }
 }
 
 internal fun Scene.withPivotReset(id: Long, timeMs: Int, seenMs: Int = timeMs): Scene {
@@ -444,7 +444,7 @@ internal fun Scene.withPivotReset(id: Long, timeMs: Int, seenMs: Int = timeMs): 
 
 fun EditorState.resetPivot() {
     val id = selectedId ?: return
-    edit { it.withPivotReset(id, sampleMs, timeMs) }
+    editSelectedScene { it.withPivotReset(id, selectedSampleMs, selectedTimeMs) }
 }
 
 internal fun Scene.withRecordedPivot(id: Long, pivot: XmlNode): Scene {

@@ -16,7 +16,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Viewer angles**. Use the active camera, choose Front, Right, or Top, or orbit in one of three custom views. The custom views apply only to the editor. Camera layers support move and rotation gestures.
 - **Group dimension**. Keep depth inside an editable group or flatten the group to 2D. Groups made entirely from flat layers skip the prompt, and artwork can extend past the group bounds.
 
-- **Expandable groups**. Open a group in the timeline to see its layers and their clip bars. Tap a child clip to edit it, or toggle its visibility from the group timeline. Each child can expand to show its own property and effect controls.
+- **Expandable groups**. Open a group in the timeline to see its layers and their clip bars. Tap a child clip to edit its properties while the parent composition stays open. Child edits appear in the parent preview. Each child can expand to show its own property and effect controls.
 
 ### Changed
 

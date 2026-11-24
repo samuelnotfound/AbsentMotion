@@ -177,8 +177,9 @@ internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
     playing = false
     addOpen = false
     selectedId = layer.id
-    if (sampleMs !in layer.startTime..layer.endTime) {
-        stepTo(frame.coerceIn(scene.frameAt(layer.startTime), scene.frameAt(layer.endTime)))
+    if (selectedSampleMs !in layer.startTime..layer.endTime) {
+        val boundary = selectedSampleMs.coerceIn(layer.startTime, layer.endTime)
+        parentFrameForSelectedTime(boundary)?.let(::stepTo)
     }
     easingOpen = false
     keypad = null
