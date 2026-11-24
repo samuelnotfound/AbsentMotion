@@ -171,6 +171,7 @@ import app.absentmotion.model.Layer
 import app.absentmotion.ai.trimmedClip
 import app.absentmotion.ai.withClip
 import app.absentmotion.model.KeyScope
+import app.absentmotion.model.SpeedRef
 import app.absentmotion.ui.theme.Am
 import app.absentmotion.ui.theme.Motion
 import app.absentmotion.ui.tutorial.TourFacts
@@ -1533,8 +1534,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
 
     private var keyFramesFps = 0
 
-    fun keyFrames(layer: Layer, scope: KeyScope? = scopeOf(layer)): List<Int> {
-        if (state.editingGroupMember || layer.id != state.selectedId) return emptyList()
+    fun keyFrames(layer: Layer): List<Int> =
+        scopeOf(layer)?.takeIf { it.ref != null }?.let { keyFrames(layer, it) }.orEmpty()
+
+    private fun keyFrames(layer: Layer, scope: KeyScope?): List<Int> {
         val fps = state.scene.fps
         if (keyFramesFps != fps || keyFrames.size > layers.size * 4 + 16) {
             keyFrames.clear()
@@ -1544,7 +1547,8 @@ private class TimelineView(val state: EditorState, private val density: Density,
         val key = layer.id to scope
         val cached = keyFrames[key]
         if (cached != null && keyFrameNodes[key] === layer.node) return cached
-        return layer.keyframeTimes(scope).map { state.scene.frameAt(it) }.distinct().also {
+        val times = layer.keyframeTimes(scope) + if (scope == null) layer.keyframeTimes(KeyScope(SpeedRef)) else emptyList()
+        return times.map(state.scene::frameAt).distinct().also {
             keyFrames[key] = it
             keyFrameNodes[key] = layer.node
         }

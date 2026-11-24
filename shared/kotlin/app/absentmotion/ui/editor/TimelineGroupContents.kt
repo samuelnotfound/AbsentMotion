@@ -229,6 +229,13 @@ private fun GroupMemberClip(
     val range = row.visibleRange()
     if (range.isEmpty()) return
     val layer = row.layer
+    val ref = scope?.ref.takeIf { selected }
+    val active = remember(layer.node, row.owner.fps, ref) {
+        ref?.let { layer.keyframeTimes(KeyScope(it)).map(row.owner::frameAt).toSet() }.orEmpty()
+    }
+    val faint = remember(layer.node, row.owner.fps, active) {
+        (layer.keyframeTimes() + layer.keyframeTimes(KeyScope(SpeedRef))).map(row.owner::frameAt).toSet() - active
+    }
     val outline = remember { Path() }
     fun left() = xAt(range.first.toDouble())
     fun right() = xAt(range.last + 1.0)
@@ -240,15 +247,11 @@ private fun GroupMemberClip(
                 .semantics { contentDescription = layer.shownName() }.alpha(if (layer.hidden) 0.45f else 1f)) {
                 val origin = floor(maxOf(laneStart.toPx(), left()))
                 drawClip(layer, outline, left() - origin, right() - origin)
-                if (selected) {
-                    val active = if (scope == null) emptySet() else layer.keyframeTimes(scope).map(row.owner::frameAt).toSet()
-                    val faint = layer.keyframeTimes().map(row.owner::frameAt).toSet() - active
-                    val current = row.owner.frameAt(row.localTime(timeMs))
-                    for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
-                        val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt)?.minus(origin) ?: continue
-                        val picked = scope?.ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
-                        if (x in 0f..size.width) drawTimelineKeyAt(outline, x, center.y, strong, picked, frame == current)
-                    }
+                val current = row.owner.frameAt(row.localTime(timeMs))
+                for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
+                    val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt)?.minus(origin) ?: continue
+                    val picked = strong && ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
+                    if (x in 0f..size.width) drawTimelineKeyAt(outline, x, center.y, strong, picked, strong && frame == current)
                 }
             }
         },

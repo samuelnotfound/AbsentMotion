@@ -200,9 +200,8 @@ private fun InlinePositionKeys(
 }
 
 internal fun DrawScope.drawTimelineKeyAt(diamond: Path, x: Float, y: Float, active: Boolean, selected: Boolean, current: Boolean) {
-    val tall = active && (selected || current)
-    val halfWidth = (if (active) 4.5.dp else 3.dp).toPx()
-    val halfHeight = if (tall) 7.dp.toPx() else halfWidth
+    val halfWidth = 4.5.dp.toPx()
+    val halfHeight = 7.dp.toPx()
     diamond.rewind()
     diamond.moveTo(x, y - halfHeight)
     diamond.lineTo(x + halfWidth, y)
