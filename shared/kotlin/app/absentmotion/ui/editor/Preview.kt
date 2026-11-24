@@ -160,7 +160,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     val (scale, dx, dy) = previewFrame(size.width.toFloat(), size.height.toFloat(), with(LocalDensity.current) { reserveEnd.toPx() }, scene.width.toFloat(), scene.height.toFloat(), viewZoom, viewPan)
     val divisor = state.settings.previewQuality.divisor
     val quality = 1f / divisor
-    val selection = if (MultiSelect.ids.isNotEmpty()) MultiSelect.ids.toList() else listOfNotNull(state.selectedId)
+    val selection = if (MultiSelect.active) MultiSelect.rootIds.toList() else listOfNotNull(state.selectedId)
     val refPx = if (LocalWide.current) LocalDensity.current.density * PhoneWidth.value / 1080f else 0f
 
     var gesture by remember { mutableIntStateOf(IDLE) }
@@ -258,7 +258,7 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
     }
 
     var multiBox by remember { mutableStateOf<FloatArray?>(null, SameFloats) }
-    val multiIds = MultiSelect.ids
+    val multiIds = MultiSelect.rootIds
     LaunchedEffect(multiIds, scene, mediaRevision, state.cameraMode, editorCamera) {
         if (multiIds.isEmpty()) { multiBox = null; return@LaunchedEffect }
         snapshotFlow { state.timeMs.takeUnless { state.playing } }.collectLatest { timeMs ->
@@ -375,8 +375,8 @@ fun Preview(state: EditorState, modifier: Modifier = Modifier, reserveEnd: Dp = 
                     val down = awaitFirstDown()
                     tapGeneration++
                     if (deskLayout && app.absentmotion.platform.textFieldFocused()) focusManager.clearFocus()
-                    val canvasGesture = state.editingGroupMember || (state.selectedId == null && MultiSelect.ids.isEmpty()) || state.panZoomMode || state.livePanel == EditorPanel.Crop
-                    val multi = MultiSelect.ids.takeIf { it.isNotEmpty() && state.selectedId == null && !canvasGesture && !state.playing && state.drawing == null }
+                    val canvasGesture = state.editingGroupMember || (state.selectedId == null && MultiSelect.rootIds.isEmpty()) || state.panZoomMode || state.livePanel == EditorPanel.Crop
+                    val multi = MultiSelect.rootIds.takeIf { it.isNotEmpty() && state.selectedId == null && !canvasGesture && !state.playing && state.drawing == null }
                     val multiFrom = multi?.let { state.scene }
                     val multiQuad = multi?.let { multiBox }?.let { b -> listOf(Offset(b[0], b[1]), Offset(b[2], b[1]), Offset(b[2], b[3]), Offset(b[0], b[3])).map { it * currentScale + currentOffset } }
                     val multiCorner = multiQuad?.let { HandleHit.at(it, down.position, HandleHit.reach(it, density)) } ?: -1

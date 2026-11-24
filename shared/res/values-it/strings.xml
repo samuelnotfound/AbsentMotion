@@ -2914,7 +2914,4 @@
     <string name="send_help_linux">Assicurati che i due dispositivi siano sulla stessa Wi-Fi e che nessun firewall blocchi AbsentMotion.</string>
     <string name="send_open_mac">Apri Impostazioni di Sistema</string>
     <string name="send_open_windows">Apri Sicurezza di Windows</string>
-    <string name="structure_group_space">Dimensione del gruppo</string>
-    <string name="structure_group_keep_3d">Mantieni il 3D</string>
-    <string name="structure_group_flatten_2d">Appiattisci in 2D</string>
 </resources>

@@ -2914,7 +2914,4 @@
     <string name="send_help_linux">Confira se os dois aparelhos estão no mesmo Wi-Fi e se nenhum firewall bloqueia o AbsentMotion.</string>
     <string name="send_open_mac">Abrir Ajustes do Sistema</string>
     <string name="send_open_windows">Abrir Segurança do Windows</string>
-    <string name="structure_group_space">Dimensão do grupo</string>
-    <string name="structure_group_keep_3d">Manter em 3D</string>
-    <string name="structure_group_flatten_2d">Achatar em 2D</string>
 </resources>

@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">Achte darauf, dass beide Geräte im selben WLAN sind und keine Firewall AbsentMotion blockiert.</string>
     <string name="send_open_mac">Systemeinstellungen öffnen</string>
     <string name="send_open_windows">Windows-Sicherheit öffnen</string>
-    <string name="structure_group_space">Gruppendimension</string>
-    <string name="structure_group_keep_3d">3D beibehalten</string>
-    <string name="structure_group_flatten_2d">Auf 2D reduzieren</string>
 </resources>

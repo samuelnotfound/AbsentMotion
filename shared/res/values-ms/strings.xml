@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">Pastikan kedua-dua peranti pada Wi-Fi yang sama dan tiada tembok api menyekat AbsentMotion.</string>
     <string name="send_open_mac">Buka Tetapan Sistem</string>
     <string name="send_open_windows">Buka Keselamatan Windows</string>
-    <string name="structure_group_space">Dimensi kumpulan</string>
-    <string name="structure_group_keep_3d">Kekalkan 3D</string>
-    <string name="structure_group_flatten_2d">Ratakan kepada 2D</string>
 </resources>

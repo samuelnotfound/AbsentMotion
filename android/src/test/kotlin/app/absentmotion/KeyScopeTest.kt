@@ -126,6 +126,17 @@ class KeyScopeTest {
         assertEquals(setOf(InlineKey(base.id, radius, 19), InlineKey(base.id, alpha, 19), InlineKey(base.id, alpha, 59)), selection)
     }
 
+    @Test fun aSingleTimelineKeyCanCrossAnotherKeyWithoutReplacingIt() {
+        val base = scene.layers.single()
+        val key = InlineKey(base.id, radius, 30)
+        val move = InlineKeyMove(scene, setOf(key))
+        val (atNeighbor, _) = move.apply(scene, -20)
+        assertEquals(listOf(10, 11), atNeighbor.layers.single().keys(radius))
+        val (moved, selection) = move.apply(atNeighbor, -30)
+        assertEquals(listOf(0, 10), moved.layers.single().keys(radius))
+        assertEquals(setOf(key.copy(frame = 0)), selection)
+    }
+
     @Test fun timelinePropertiesOpenTheirNativeEditors() {
         val shape = layer()
         assertEquals(EditorPanel.MoveTransform, inlineEditorPanel(shape, PropRef.Tilt.copy(component = 1)))

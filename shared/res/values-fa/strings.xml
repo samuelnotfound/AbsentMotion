@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">مطمئن شوید هر دو دستگاه روی یک Wi-Fi هستند و هیچ دیوار آتشی AbsentMotion را مسدود نمی‌کند.</string>
     <string name="send_open_mac">باز کردن تنظیمات سیستم</string>
     <string name="send_open_windows">باز کردن امنیت Windows</string>
-    <string name="structure_group_space">بُعد گروه</string>
-    <string name="structure_group_keep_3d">حفظ حالت سه‌بعدی</string>
-    <string name="structure_group_flatten_2d">تخت کردن به دوبعدی</string>
 </resources>

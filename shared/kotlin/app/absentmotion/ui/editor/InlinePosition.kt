@@ -81,9 +81,9 @@ internal fun Density.inlineTrackOffset(sections: List<InlineSection>, ref: PropR
 internal fun InlinePositionDetails(
     state: EditorState, layer: Layer, sections: List<InlineSection>, modifier: Modifier,
     xOf: (Int) -> Float, selection: InlineKeySelection,
-    scene: Scene = state.scene, sampleMs: Int = state.sampleMs, nested: Boolean = false, editable: Boolean = true,
+    scene: Scene = state.scene, sampleMs: Int = state.sampleMs, groups: List<Long> = emptyList(), editable: Boolean = true,
     onOpen: (PropRef) -> Unit = { state.openInlineEditor(layer, it) },
-    onToggleEffect: (InlineSection) -> Unit,
+    onToggleSection: (InlineSection) -> Unit,
     onEditValue: ((InlineTrack, Float) -> Unit)? = null,
 ) {
     val at = layer.at(sampleMs, scene.fps)
@@ -99,11 +99,13 @@ internal fun InlinePositionDetails(
                 Text(stringResource(R.string.inline_no_keyframes), color = Am.OnDarkDim, fontSize = 11.sp)
             }
             for (section in sections) {
-                val expansion = section.effectExpanded
+                val expansion = section.expanded
                 val heading = if (expansion == null) section.visibleTracks.firstNotNullOfOrNull(::editor)
-                    else { { onToggleEffect(section) } }
+                    else { { onToggleSection(section) } }
                 Row(Modifier.height(SectionHeight).fillMaxWidth().then(if (heading == null) Modifier else Modifier.inlineTap(heading))
+                    .background(Am.Field.copy(alpha = 0.35f))
                     .drawBehind {
+                        drawLine(Am.Line, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx())
                         if (section.visibleTracks.isEmpty()) return@drawBehind
                         val x = TreeTrunk.toPx()
                         drawLine(Am.Line, Offset(x, size.height - 5.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
@@ -126,12 +128,12 @@ internal fun InlinePositionDetails(
                     } else {
                         value?.let { formatFixed(it, if (track.integer) 0 else 1) + track.unit } ?: raw.orEmpty()
                     }
-                    val active = layer.id == state.selectedId && state.inlineProperty != null &&
+                    val active = layer.id == state.selectedId && state.selectedGroups == groups && state.inlineProperty != null &&
                         (state.keyTarget?.ref ?: state.inlineProperty) == track.ref
                     Box(Modifier.fillMaxWidth().height(inlineTrackHeight)
                         .background((if (active) Am.Field else Am.TimelineBg).copy(alpha = 0.65f))) {
-                        val currentFrame = if (nested) scene.frameAt(sampleMs) else state.playheadFrame
-                        InlinePositionKeys(layer, track, track.frames(scene, layer), currentFrame, Modifier.matchParentSize(), xOf, selection.takeUnless { nested })
+                        val currentFrame = if (groups.isNotEmpty()) scene.frameAt(sampleMs) else state.playheadFrame
+                        InlinePositionKeys(layer, track, track.frames(scene, layer), currentFrame.takeIf { active || state.inlineProperty == null }, Modifier.matchParentSize(), xOf, selection, groups)
                         Row(Modifier.width(labelWidth).fillMaxHeight().background(Am.TimelineBg.copy(alpha = 0.32f))
                             .then(if (openEditor == null) Modifier else Modifier.inlineTap(openEditor))
                             .drawBehind {
@@ -173,38 +175,43 @@ internal fun Modifier.inlineTap(action: () -> Unit): Modifier {
 internal class InlineKeySelection {
     var keys by mutableStateOf<Set<InlineKey>>(emptySet())
 
-    fun retain(layers: Set<Long>) { keys = keys.filterTo(mutableSetOf()) { it.layerId in layers } }
+    fun retain(layers: Set<Long>) { keys = keys.filterTo(mutableSetOf()) { (it.groups.firstOrNull() ?: it.layerId) in layers } }
 
     fun clear() { keys = emptySet() }
 }
 
 @Composable
 private fun InlinePositionKeys(
-    layer: Layer, track: InlineTrack, frames: List<Int>, currentFrame: Int, modifier: Modifier,
-    xOf: (Int) -> Float, selection: InlineKeySelection?,
+    layer: Layer, track: InlineTrack, frames: List<Int>, currentFrame: Int?, modifier: Modifier,
+    xOf: (Int) -> Float, selection: InlineKeySelection, groups: List<Long>,
 ) {
     Canvas(modifier) {
         val y = center.y
-        val radius = 4.5.dp.toPx()
         val diamond = Path()
         for (frame in frames) {
             val x = xOf(frame)
             if (x !in 0f..size.width) continue
-            diamond.apply {
-                rewind()
-                moveTo(x - radius, y)
-                lineTo(x, y - radius)
-                lineTo(x + radius, y)
-                lineTo(x, y + radius)
-                close()
-            }
-            val selected = selection?.keys?.contains(InlineKey(layer.id, track.ref, frame)) == true
-            drawTimelineKey(diamond, selected, frame == currentFrame)
+            val selected = InlineKey(layer.id, track.ref, frame, groups) in selection.keys
+            drawTimelineKeyAt(diamond, x, y, true, selected, frame == currentFrame)
         }
     }
 }
 
-internal fun DrawScope.drawTimelineKey(diamond: Path, selected: Boolean, current: Boolean) {
+internal fun DrawScope.drawTimelineKeyAt(diamond: Path, x: Float, y: Float, active: Boolean, selected: Boolean, current: Boolean) {
+    val tall = active && (selected || current)
+    val halfWidth = (if (active) 4.5.dp else 3.dp).toPx()
+    val halfHeight = if (tall) 7.dp.toPx() else halfWidth
+    diamond.rewind()
+    diamond.moveTo(x, y - halfHeight)
+    diamond.lineTo(x + halfWidth, y)
+    diamond.lineTo(x, y + halfHeight)
+    diamond.lineTo(x - halfWidth, y)
+    diamond.close()
+    if (active) drawTimelineKey(diamond, selected, current)
+    else drawPath(diamond, Am.OnDark.copy(alpha = 0.40f))
+}
+
+private fun DrawScope.drawTimelineKey(diamond: Path, selected: Boolean, current: Boolean) {
     val highlight = when {
         selected -> Am.Cool
         current -> Am.Accent

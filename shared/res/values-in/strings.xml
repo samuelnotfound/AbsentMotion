@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">Pastikan kedua perangkat di Wi-Fi yang sama dan tidak ada firewall yang memblokir AbsentMotion.</string>
     <string name="send_open_mac">Buka Pengaturan Sistem</string>
     <string name="send_open_windows">Buka Keamanan Windows</string>
-    <string name="structure_group_space">Dimensi grup</string>
-    <string name="structure_group_keep_3d">Pertahankan 3D</string>
-    <string name="structure_group_flatten_2d">Ratakan ke 2D</string>
 </resources>

@@ -2913,10 +2913,9 @@
     <string name="send_help_linux">Make sure both devices are on the same Wi-Fi and no firewall blocks AbsentMotion.</string>
     <string name="send_open_mac">Open System Settings</string>
     <string name="send_open_windows">Open Windows Security</string>
-    <string name="structure_group_space">Group dimension</string>
-    <string name="structure_group_keep_3d">Keep 3D</string>
-    <string name="structure_group_flatten_2d">Flatten to 2D</string>
     <string name="inline_properties">Properties</string>
     <string name="inline_no_keyframes">No keyframes</string>
     <string name="inline_keyframes">Layer keyframes</string>
+    <string name="layer_show_in_camera">Show flat layer in camera views</string>
+    <string name="layer_hide_in_camera">Hide flat layer in camera views</string>
 </resources>

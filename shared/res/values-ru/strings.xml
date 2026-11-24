@@ -2955,7 +2955,4 @@
     <string name="send_help_linux">Убедитесь, что оба устройства в одной сети Wi-Fi и брандмауэр не блокирует AbsentMotion.</string>
     <string name="send_open_mac">Открыть Системные настройки</string>
     <string name="send_open_windows">Открыть Безопасность Windows</string>
-    <string name="structure_group_space">Размерность группы</string>
-    <string name="structure_group_keep_3d">Сохранить 3D</string>
-    <string name="structure_group_flatten_2d">Свести в 2D</string>
 </resources>

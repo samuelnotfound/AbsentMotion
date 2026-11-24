@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">দুটি ডিভাইস একই Wi-Fi-তে আছে আর কোনো ফায়ারওয়াল AbsentMotion আটকাচ্ছে না, তা নিশ্চিত করুন।</string>
     <string name="send_open_mac">System Settings খুলুন</string>
     <string name="send_open_windows">Windows Security খুলুন</string>
-    <string name="structure_group_space">গ্রুপের মাত্রা</string>
-    <string name="structure_group_keep_3d">থ্রিডি রাখুন</string>
-    <string name="structure_group_flatten_2d">টু-ডিতে সমতল করুন</string>
 </resources>

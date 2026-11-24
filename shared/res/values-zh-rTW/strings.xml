@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">請確認兩台裝置連上同一個 Wi-Fi，且沒有防火牆阻擋 AbsentMotion。</string>
     <string name="send_open_mac">開啟系統設定</string>
     <string name="send_open_windows">開啟 Windows 安全性</string>
-    <string name="structure_group_space">群組維度</string>
-    <string name="structure_group_keep_3d">保留 3D</string>
-    <string name="structure_group_flatten_2d">平面化為 2D</string>
 </resources>

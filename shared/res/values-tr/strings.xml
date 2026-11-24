@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">İki cihazın da aynı Wi-Fi ağında olduğundan ve hiçbir güvenlik duvarının AbsentMotion\'ı engellemediğinden emin ol.</string>
     <string name="send_open_mac">Sistem Ayarları\'nı aç</string>
     <string name="send_open_windows">Windows Güvenliği\'ni aç</string>
-    <string name="structure_group_space">Grup boyutu</string>
-    <string name="structure_group_keep_3d">3B olarak koru</string>
-    <string name="structure_group_flatten_2d">2B olarak düzleştir</string>
 </resources>

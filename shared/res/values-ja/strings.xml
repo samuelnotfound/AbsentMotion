@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">両方のデバイスが同じ Wi-Fi にあり、ファイアウォールが AbsentMotion をブロックしていないことを確認してください。</string>
     <string name="send_open_mac">システム設定を開く</string>
     <string name="send_open_windows">Windows セキュリティを開く</string>
-    <string name="structure_group_space">グループの次元</string>
-    <string name="structure_group_keep_3d">3Dを維持</string>
-    <string name="structure_group_flatten_2d">2Dに平面化</string>
 </resources>

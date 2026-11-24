@@ -67,7 +67,8 @@ jobs:
             --tests app.absentmotion.editor.PreviewCacheTest \
             --tests app.absentmotion.editor.PreviewDependenciesTest \
             --tests app.absentmotion.TrimLimitTest \
-            --tests app.absentmotion.KeyScopeTest
+            --tests app.absentmotion.KeyScopeTest \
+            --tests app.absentmotion.ui.editor.TimelineMoveTest
       - name: Build the signed timeline APK
         run: |
           ./gradlew :app:assembleFossRelease -PamTimelineTest=true --no-daemon

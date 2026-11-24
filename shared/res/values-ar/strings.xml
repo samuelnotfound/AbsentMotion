@@ -3037,7 +3037,4 @@
     <string name="send_help_linux">تأكد من أن الجهازين على شبكة Wi-Fi نفسها وأن جدار الحماية لا يحظر AbsentMotion.</string>
     <string name="send_open_mac">فتح إعدادات النظام</string>
     <string name="send_open_windows">فتح أمن Windows</string>
-    <string name="structure_group_space">أبعاد المجموعة</string>
-    <string name="structure_group_keep_3d">إبقاء ثلاثي الأبعاد</string>
-    <string name="structure_group_flatten_2d">تسطيح إلى ثنائي الأبعاد</string>
 </resources>

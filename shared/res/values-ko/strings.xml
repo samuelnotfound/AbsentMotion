@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">두 기기가 같은 Wi-Fi에 있고 방화벽이 AbsentMotion을 막지 않는지 확인하세요.</string>
     <string name="send_open_mac">시스템 설정 열기</string>
     <string name="send_open_windows">Windows 보안 열기</string>
-    <string name="structure_group_space">그룹 차원</string>
-    <string name="structure_group_keep_3d">3D 유지</string>
-    <string name="structure_group_flatten_2d">2D로 평면화</string>
 </resources>

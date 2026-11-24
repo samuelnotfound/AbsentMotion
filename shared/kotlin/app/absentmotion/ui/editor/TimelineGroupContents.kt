@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.absentmotion.R
 import app.absentmotion.editor.EditorState
+import app.absentmotion.editor.InlineKey
+import app.absentmotion.editor.MultiSelect
 import app.absentmotion.editor.InlineSection
 import app.absentmotion.editor.InlineTrack
 import app.absentmotion.editor.KeypadField
@@ -43,6 +45,7 @@ import app.absentmotion.editor.inlineTrackSections
 import app.absentmotion.editor.isPlainGroup
 import app.absentmotion.effects.EffectCatalog
 import app.absentmotion.model.Layer
+import app.absentmotion.model.KeyScope
 import app.absentmotion.model.LayerTrack
 import app.absentmotion.model.SpeedRef
 import app.absentmotion.model.effects
@@ -68,6 +71,11 @@ internal class TimelineGroupRow(
     val details: List<InlineSection>? = null,
 ) {
     val path get() = groups + layer.id
+
+    fun indent(state: EditorState): Dp = if (selected(state) && state.showsLayerInspector) 0.dp else (groups.size.coerceAtMost(4) * 14 + 8).dp
+    fun selected(state: EditorState): Boolean = state.selectedId == layer.id && state.selectedGroups == groups
+    fun sidebarWidth(state: EditorState, expanded: Boolean): Dp =
+        indent(state) + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * (if (expanded || selected(state)) 5 else 2)
     fun headerHeightPx(density: Density): Int = with(density) { GroupRowHeight.roundToPx() }
     fun heightPx(density: Density): Int = headerHeightPx(density) + with(density) { details?.let { inlineDetailsHeight(it) } ?: 0 }
     val parentsUnlocked get() = clocks.none { it.first.locked }
@@ -95,7 +103,7 @@ internal class TimelineGroupRow(
 
 internal fun timelineGroupRows(
     host: Scene, group: Layer, catalog: EffectCatalog,
-    effectExpanded: (List<Long>, String) -> Boolean = { _, _ -> false }, expanded: (List<Long>) -> Boolean,
+    sectionExpanded: (List<Long>, String) -> Boolean = { _, id -> id == "transform" }, expanded: (List<Long>) -> Boolean,
 ): List<TimelineGroupRow> = buildList {
     fun visit(parent: Layer, owner: Scene, path: List<Long>, clocks: List<Pair<Layer, Int>>) {
         val child = parent.nested ?: return
@@ -105,7 +113,7 @@ internal fun timelineGroupRows(
             val path = childPath + layer.id
             val open = expanded(path)
             val details = if (open) {
-                inlineTrackSections(layer, catalog, effectControls = true) { effectExpanded(path, it) }
+                inlineTrackSections(layer, catalog, effectControls = true) { sectionExpanded(path, it) }
                     .takeIf { it.isNotEmpty() || !layer.isPlainGroup }
             } else null
             add(TimelineGroupRow(layer, child, childPath, childClocks, details))
@@ -120,24 +128,25 @@ internal fun TimelineGroupContents(
     state: EditorState, rows: List<TimelineGroupRow>, selection: InlineKeySelection,
     xAt: (Double) -> Float, isExpanded: (List<Long>) -> Boolean, onExpand: (List<Long>) -> Unit,
     onOpen: (TimelineGroupRow, PropRef?) -> Unit,
-    onToggleEffect: (List<Long>, InlineSection) -> Unit,
+    onToggleSection: (List<Long>, InlineSection) -> Unit,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         for (row in rows) key(row.path) {
-            val indent = (row.groups.size.coerceAtMost(4) * 14 + 8).dp
             val layer = row.layer
             val open = isExpanded(row.path)
-            val selected = state.selectedId == layer.id && state.selectedGroups == row.groups
+            val selected = row.selected(state)
+            val checked = MultiSelect.active && row.groups == MultiSelect.groups && layer.id in MultiSelect.ids
+            val indent = row.indent(state)
+            val scope = state.keyScope.takeIf { selected && state.showsLayerInspector }
             val controls = open || selected
-            val icons = if (controls) 4 else 2
-            val sidebarWidth = indent + GroupSidebarStart + GroupSidebarEnd + GroupDisclosureWidth + GroupIconWidth * icons
+            val sidebarWidth = row.sidebarWidth(state, open)
             val openLayer: (() -> Unit)? = if (row.editable && !state.lookOnly) { { onOpen(row, null) } } else null
             val layerTap = if (openLayer == null) Modifier else Modifier.inlineTap(openLayer)
-            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected) Am.Field else Am.TimelineBg)) {
-                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize())
+            Box(Modifier.fillMaxWidth().height(GroupRowHeight).background(if (selected || checked) Am.Field else Am.TimelineBg)) {
+                GroupMemberClip(row, sidebarWidth, xAt, openLayer, drawClip, Modifier.matchParentSize(), selected, scope, state.sampleMs, selection)
                 Row(Modifier.width(sidebarWidth).fillMaxHeight().padding(start = indent, top = 2.dp, bottom = 2.dp)
-                    .clip(RoundedCornerShape(50)).background(Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
+                    .clip(RoundedCornerShape(50)).background(if (checked) Am.Accent else Am.Button).padding(start = GroupSidebarStart, end = GroupSidebarEnd),
                     verticalAlignment = Alignment.CenterVertically) {
                     val visibility = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
                     val toggleVisibility = if (row.editable && !state.lookOnly) Modifier.inlineTap {
@@ -162,11 +171,19 @@ internal fun TimelineGroupContents(
                         }
                         val dimension = stringResource(R.string.three_d_layer)
                         val toggle3d = if (!state.lookOnly && row.editable && layer.canToggle3D) Modifier.inlineTap {
-                            state.editGroupMember(row) { it.copy(node = it.node.with("threeD", if (it.uses3D) null else "true")) }
+                            state.editGroupMember(row) { it.withThreeD(!it.uses3D) }
                         } else Modifier
                         Box(Modifier.size(GroupIconWidth).then(toggle3d), contentAlignment = Alignment.Center) {
                             PanelIcon(ChromeIcons.ObjectTab, if (layer.uses3D) Color(0xFFFF8F66) else Am.OnDarkDim,
                                 size = 14.dp, description = dimension)
+                        }
+                        val cameraLabel = stringResource(if (layer.visibleInCamera) R.string.layer_hide_in_camera else R.string.layer_show_in_camera)
+                        val toggleCamera = if (!state.lookOnly && row.editable && layer.canShowInCamera) Modifier.inlineTap {
+                            state.editGroupMember(row) { it.withCameraVisibility(!it.visibleInCamera) }
+                        } else Modifier
+                        Box(Modifier.size(GroupIconWidth).then(toggleCamera), contentAlignment = Alignment.Center) {
+                            val tint = if (layer.canShowInCamera && layer.visibleInCamera) Am.Accent else Am.OnDarkDim
+                            PanelIcon(PanelIcons.Camera, tint.copy(alpha = if (layer.canShowInCamera) 1f else 0.38f), size = 14.dp, description = cameraLabel)
                         }
                     }
                     Box(
@@ -181,8 +198,8 @@ internal fun TimelineGroupContents(
                 InlinePositionDetails(state, layer, sections, Modifier.fillMaxWidth(),
                     xOf = { frame -> row.hostTime(row.owner.frameStart(frame))?.let(xAt) ?: -Float.MAX_VALUE },
                     selection = selection, scene = row.owner, sampleMs = row.localTime(state.sampleMs),
-                    nested = true, editable = row.editable, onOpen = { onOpen(row, it) },
-                    onToggleEffect = { onToggleEffect(row.path, it) },
+                    groups = row.groups, editable = row.editable, onOpen = { onOpen(row, it) },
+                    onToggleSection = { onToggleSection(row.path, it) },
                     onEditValue = { track, value ->
                         if (track.ref == SpeedRef) onOpen(row, track.ref)
                         else state.editGroupValue(row, track, value)
@@ -196,6 +213,7 @@ internal fun TimelineGroupContents(
 private fun GroupMemberClip(
     row: TimelineGroupRow, sidebarWidth: Dp, xAt: (Double) -> Float, onOpen: (() -> Unit)?,
     drawClip: DrawScope.(Layer, Path, Float, Float) -> Unit, modifier: Modifier,
+    selected: Boolean, scope: KeyScope?, timeMs: Int, selection: InlineKeySelection,
 ) {
     val range = row.visibleRange()
     if (range.isEmpty()) return
@@ -211,6 +229,16 @@ private fun GroupMemberClip(
                 .semantics { contentDescription = layer.shownName() }.alpha(if (layer.hidden) 0.45f else 1f)) {
                 val origin = floor(maxOf(sidebarWidth.toPx(), left()))
                 drawClip(layer, outline, left() - origin, right() - origin)
+                if (selected) {
+                    val active = if (scope == null) emptySet() else layer.keyframeTimes(scope).map(row.owner::frameAt).toSet()
+                    val faint = layer.keyframeTimes().map(row.owner::frameAt).toSet() - active
+                    val current = row.owner.frameAt(row.localTime(timeMs))
+                    for ((frames, strong) in listOf(faint to false, active to true)) for (frame in frames) {
+                        val x = row.hostTime(row.owner.frameStart(frame))?.let(xAt)?.minus(origin) ?: continue
+                        val picked = scope?.ref?.let { InlineKey(layer.id, it, frame, row.groups) in selection.keys } == true
+                        if (x in 0f..size.width) drawTimelineKeyAt(outline, x, center.y, strong, picked, frame == current)
+                    }
+                }
             }
         },
     ) { measurables, constraints ->

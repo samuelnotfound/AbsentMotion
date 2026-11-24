@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">Tiyaking nasa iisang Wi-Fi ang dalawang device at walang firewall na humaharang sa AbsentMotion.</string>
     <string name="send_open_mac">Buksan ang System Settings</string>
     <string name="send_open_windows">Buksan ang Windows Security</string>
-    <string name="structure_group_space">Dimensiyon ng grupo</string>
-    <string name="structure_group_keep_3d">Panatilihin ang 3D</string>
-    <string name="structure_group_flatten_2d">Gawing patag na 2D</string>
 </resources>

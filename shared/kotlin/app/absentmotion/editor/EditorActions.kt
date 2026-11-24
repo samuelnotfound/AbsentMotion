@@ -105,8 +105,11 @@ fun EditorState.clearSelection() {
 }
 
 fun EditorState.selectAll() {
+    val owner = selectedScene
+    val groups = selectionEditGroups
     deselectLayer()
-    MultiSelect.ids = scene.layers.filterNot { it.locked }.map { it.id }.toSet()
+    MultiSelect.groups = groups
+    MultiSelect.ids = owner.layers.filterNot { it.locked }.map { it.id }.toSet()
     MultiSelect.active = MultiSelect.ids.isNotEmpty()
 }
 
@@ -129,7 +132,12 @@ fun EditorState.toggleHidden(id: Long) = edit { it.update(id) { layer -> layer.w
 
 fun EditorState.toggleLayer3D(id: Long) {
     if (lookOnly || scene.layer(id)?.let { it.canToggle3D && !it.locked } != true) return
-    edit { it.update(id) { layer -> layer.copy(node = layer.node.with("threeD", if (layer.uses3D) null else "true")) } }
+    edit { it.update(id) { layer -> layer.withThreeD(!layer.uses3D) } }
+}
+
+internal fun EditorState.toggleCameraVisibility(id: Long) {
+    if (lookOnly || scene.layer(id)?.let { it.canShowInCamera && !it.locked } != true) return
+    edit { it.update(id) { layer -> layer.withCameraVisibility(!layer.visibleInCamera) } }
 }
 
 fun EditorState.setLock(id: Long, lock: String?) = edit { it.update(id) { layer -> layer.withLock(lock) } }
@@ -203,9 +211,14 @@ private fun EditorState.stops(): List<Int> = if (timelineDetailsOpen) {
     val boundaries = if (editingGroupMember) selectedLayer?.let { layer ->
         listOfNotNull(parentFrameForSelectedTime(layer.startTime), parentFrameForSelectedTime(layer.endTime))
     }.orEmpty() else emptyList()
-    scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty() + boundaries, selectedLayer.takeUnless { editingGroupMember })
+    val drawnKeys = selectedLayer?.keyframeTimes()?.mapNotNull(::parentFrameForSelectedTime).orEmpty()
+    scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty() + boundaries + drawnKeys, selectedLayer.takeUnless { editingGroupMember })
 } else {
-    scene.navigationStops(selectedLayer.takeUnless { editingGroupMember }, keyScope)
+    val layer = selectedLayer
+    val stops = scene.navigationStops(layer.takeUnless { editingGroupMember })
+    val clipStops = layer?.let { it.keyframeTimes() + listOf(it.startTime, it.endTime) }
+        ?.mapNotNull(::parentFrameForSelectedTime).orEmpty()
+    (stops + clipStops.filter { it in 0..scene.lastFrame }).distinct().sorted()
 }
 
 fun EditorState.skipBack() {
@@ -386,7 +399,7 @@ internal val copiedLayerForStyle: Layer? get() = copiedLayers.lastOrNull()
 internal val copiedMediaForStyle: List<MediaDeclaration> get() = copiedMedia
 
 val EditorState.chosenLayers: List<Layer>
-    get() = if (MultiSelect.active) scene.layers.filter { it.id in MultiSelect.ids }
+    get() = if (MultiSelect.active) selectedScene.layers.filter { it.id in MultiSelect.ids }
     else listOfNotNull(selectedLayer)
 
 fun EditorState.copySelected() {
@@ -406,10 +419,12 @@ internal fun Scene.layersToCopy(ids: Set<Long>): List<Layer> {
 
 fun EditorState.duplicateChosen() {
     if (!MultiSelect.active) return duplicateSelected()
-    val copies = chosenLayers.zip(copyLayers(chosenLayers.map { scene.pinnedPath(it) }, preserveOutsideParents = true, newId = scene::freeLayerId))
+    val owner = selectedScene
+    val layers = chosenLayers
+    val copies = layers.zip(copyLayers(layers.map { owner.pinnedPath(it) }, preserveOutsideParents = true, newId = owner::freeLayerId))
         .associate { (source, copy) -> source.id to copy.withLabel(AppText.get(R.string.edit_layer_copy_name, source.label)) }
     if (copies.isEmpty()) return
-    edit { it.withCopiesAbove(copies) }
+    editSelectedScene { it.withCopiesAbove(copies) }
     MultiSelect.clear()
     deselectLayer()
 }

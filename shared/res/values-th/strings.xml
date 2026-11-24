@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">ตรวจสอบว่าทั้งสองอุปกรณ์อยู่บน Wi-Fi เดียวกันและไม่มีไฟร์วอลล์บล็อก AbsentMotion</string>
     <string name="send_open_mac">เปิดการตั้งค่าระบบ</string>
     <string name="send_open_windows">เปิดความปลอดภัยของ Windows</string>
-    <string name="structure_group_space">มิติของกลุ่ม</string>
-    <string name="structure_group_keep_3d">คง 3D ไว้</string>
-    <string name="structure_group_flatten_2d">ทำให้แบนเป็น 2D</string>
 </resources>

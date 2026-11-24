@@ -2832,7 +2832,4 @@
     <string name="send_help_linux">Hãy chắc rằng hai thiết bị ở cùng Wi-Fi và không có tường lửa nào chặn AbsentMotion.</string>
     <string name="send_open_mac">Mở Cài đặt hệ thống</string>
     <string name="send_open_windows">Mở Bảo mật Windows</string>
-    <string name="structure_group_space">Chiều không gian của nhóm</string>
-    <string name="structure_group_keep_3d">Giữ 3D</string>
-    <string name="structure_group_flatten_2d">Làm phẳng thành 2D</string>
 </resources>

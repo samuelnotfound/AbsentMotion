@@ -457,10 +457,10 @@ internal fun MultiTopBar(state: EditorState, modifier: Modifier) {
             val cell = Modifier.weight(1f).fillMaxHeight()
             SelectionButton(SelectionIcons.Previous, stringResource(R.string.structure_group_options), cell, tint) { alignment = false }
             SelectionIcons.Align.forEachIndexed { edge, icon ->
-                SelectionButton(icon, stringResource(AlignNames[edge]), cell, tint, ids.isNotEmpty()) { scope.launch { state.alignSelection(edge) } }
+                SelectionButton(icon, stringResource(AlignNames[edge]), cell, tint, ids.isNotEmpty() && MultiSelect.groups.isEmpty()) { scope.launch { state.alignSelection(edge) } }
             }
-            SelectionButton(SelectionIcons.DistributeVertical, stringResource(R.string.structure_distribute_vertical), cell, tint, ids.size > 2) { scope.launch { state.distributeSelection(false) } }
-            SelectionButton(SelectionIcons.DistributeHorizontal, stringResource(R.string.structure_distribute_horizontal), cell, tint, ids.size > 2) { scope.launch { state.distributeSelection(true) } }
+            SelectionButton(SelectionIcons.DistributeVertical, stringResource(R.string.structure_distribute_vertical), cell, tint, ids.size > 2 && MultiSelect.groups.isEmpty()) { scope.launch { state.distributeSelection(false) } }
+            SelectionButton(SelectionIcons.DistributeHorizontal, stringResource(R.string.structure_distribute_horizontal), cell, tint, ids.size > 2 && MultiSelect.groups.isEmpty()) { scope.launch { state.distributeSelection(true) } }
         }
     }
 }
@@ -520,7 +520,7 @@ internal fun MultiParentMenu(state: EditorState, below: Boolean = false, onDismi
     val context = LocalContext.current
     val skippedText = stringResource(R.string.structure_link_parent_skipped)
     val ids = MultiSelect.ids
-    val others = state.scene.layers.filter { it.id !in ids }.reversed()
+    val others = state.selectedScene.layers.filter { it.id !in ids }.reversed()
     ChoiceList(listOf(stringResource(R.string.none)) + others.map { it.shownName() }, onDismiss, below) { i ->
         val skipped = state.setParentOfChosen(if (i == 0) null else others[i - 1].id)
         if (skipped > 0) Toast.makeText(context, skippedText, Toast.LENGTH_LONG).show()

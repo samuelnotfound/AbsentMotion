@@ -10,20 +10,20 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 
 ### Added
 
-- **Timeline work area**. Drag the themed handles in the ruler to set the playback range. Use **Pre-render** to render that range. Resizing the work area keeps valid cached frames, so expanding it only renders missing frames. Green marks show frames in memory and blue marks show frames on disk.
-- **Timeline keyframe tracks**. Open a layer's disclosure to see animated properties and expand each effect separately. Tap a property to open its editor. Hold and drag to box-select keyframes, then move them together. The clip bar shows keys for the active property. Outlines identify the current and selected keys, and the playhead stays above the expanded tracks.
-- **Expandable groups**. See and scroll through child clips and their property tracks in the parent timeline. Each child has a thumbnail in the sidebar and its name on the clip bar. Tap a child clip to edit its properties and see the changes in the parent preview.
-- **3D viewer controls**. Move, size, and rotate layers with handles that follow their axes. The far side of a rotation ring remains faintly visible through the layer. Adjust the three-axis pivot in the viewer and snap it to the layer edges, center, or zero depth.
+- **Timeline work area**. Drag the solid, themed handles on the shaded ruler band to set the playback range. Use **Pre-render** to render that range. Resizing the work area keeps valid cached frames, so expanding it only renders missing frames. Green marks show frames in memory and blue marks show frames on disk.
+- **Timeline keyframe tracks**. Open a layer's disclosure to see animated properties, then collapse Transform or an individual effect. Tap a property to open its editor. Hold and drag in empty property lanes to box-select keys in the same scene, then move them together. Clip bars highlight the active property's keys and show other keys faintly. The playhead stays above expanded tracks.
+- **Expandable groups**. See and scroll through child clips and their property tracks in the parent timeline. Each child has a thumbnail in the sidebar and its name on the clip bar. Tap a child clip to edit its properties in the parent preview. Hold and drag across child thumbnails to select siblings.
+- **3D viewer controls**. Move, size, and rotate layers with handles that follow their axes. The far sides of rotation rings and movement handles remain visible through the layer. Adjust the three-axis pivot in the viewer and snap it to the layer edges, center, or zero depth.
 - **Viewer angles**. Use the active camera, choose Front, Right, or Top, or orbit in one of three custom editing views. Camera layers support move and rotation gestures on Android.
-- **Group dimension**. Choose whether to keep depth or flatten to 2D when grouping layers that use 3D. Artwork can extend beyond the group bounds.
+- **Camera visibility**. Use the camera button beside 3D to show a flat layer in camera views while keeping it flat.
 
 ### Changed
 
 - **Layer sidebar**. Select a layer or open its disclosure to show Lock and 3D. The cube turns orange when 3D is enabled. Reordering closes the disclosures and keeps the dropped layer in view. Group bars are orange and null bars are gray.
-- **Timeline navigation**. The skip buttons stop at the work-area handles and the selected layer's start and end. They also visit visible keyframes on expanded tracks or bookmarks when the tracks are closed. The transition shortcut returns at a cut when the disclosures close.
-- **Move & Transform**. Position opens with the move pad. Tap Move again to switch to rulers or back to the pad. The app remembers the layout. Double-tap Move or Pivot to switch between the two tools. The move pad keeps nearly straight drags on one axis and snaps to the canvas guides.
+- **Timeline navigation**. The skip buttons stop at the work-area handles and the selected layer's start and end. They also visit visible keyframes on expanded tracks or bookmarks when the tracks are closed. Faint keyframes on the selected clip are also stops. The transition shortcut returns at a cut when the disclosures close.
+- **Move & Transform**. Position opens with the move pad. Tap Move again to switch to rulers or back to the pad. The app remembers the layout. Position and 3D rotation rulers place one axis, ruler, and value on each row. Double-tap Move or Pivot to switch between the two tools. The move pad keeps nearly straight drags on one axis and snaps to the canvas guides.
 - **Transform keyframes**. Position uses a shared track by default. Choose **Separate Dimensions** to give each axis its own keys and curves. In Size, unlock the chain to set different X and Y values on one keyframe. Choose **Separate Dimensions** for independent scale keys or relink to return to one Size track. Tap an axis in a separated transform to choose which keys and curves to edit.
-- **Layer depth**. Layers with 3D off follow timeline order and show 3D effects as part of the flat layer. The active camera view hides flat layers. The Z Position field stays visible and disabled for flat layers. Older XML projects keep their saved Z movement and X/Y rotation. Enabling 3D applies those values.
+- **Layer depth**. Layers with 3D off follow timeline order and show 3D effects as part of the flat layer. The Z Position field stays visible and disabled for flat layers. Layers with saved Z motion or X/Y rotation and no explicit 3D setting use those transforms when opened. Turning 3D off keeps the values and displays the layer flat. New groups retain depth when any member uses 3D, and artwork can extend beyond the group bounds.
 - **Preview selection**. Outlines follow shape contours, appear on each selected layer, and stay visible during playback.
 - **Curve editor**. Add or remove a keyframe from the curve panel.
 
@@ -38,6 +38,7 @@ Versions before 2.0.0 were never published or numbered. The entry for 1.0.0 stan
 - **Curve editor**. Scrubbing outside a keyframe interval keeps the editor open and dims the curve controls until an interval is available.
 - **Selection anchor**. The preview marker shows the actual pivot when a layer is tilted or its pivot is offset.
 - **Trim and Extend**. Extend actions have their own icons when the playhead is outside a clip.
+- **Clip timing**. Drag clips before time zero while keeping at least one frame of each clip on the timeline.
 ## [5.3.0] - 2026-11-24
 
 ### Added

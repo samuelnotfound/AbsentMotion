@@ -53,6 +53,8 @@ import app.absentmotion.model.valueAt
 
 object MultiSelect {
     var active by mutableStateOf(false)
+    internal var groups by mutableStateOf<List<Long>>(emptyList())
+    internal val rootIds get() = if (groups.isEmpty()) ids else emptySet()
     private var chosen by mutableStateOf(setOf<Long>())
     var revision = 0L
         private set
@@ -66,12 +68,13 @@ object MultiSelect {
 
     fun clear() {
         active = false
+        groups = emptyList()
         ids = emptySet()
     }
 }
 
-private fun EditorState.numbered(base: String): String {
-    val used = scene.layers.mapNotNull { it.label.removePrefix("$base ").toIntOrNull().takeIf { _ -> it.label.startsWith("$base ") } }
+private fun EditorState.numbered(base: String, owner: Scene = scene): String {
+    val used = owner.layers.mapNotNull { it.label.removePrefix("$base ").toIntOrNull().takeIf { _ -> it.label.startsWith("$base ") } }
     return "$base ${(used.maxOrNull() ?: 0) + 1}"
 }
 
@@ -156,32 +159,30 @@ fun EditorState.addEmptyGroup() {
 }
 
 fun EditorState.groupLayers(ids: Set<Long>, blend: String? = null, anchor: Pair<Float, Float>? = null, keep3D: Boolean = false) {
-    val id = Layer.newId()
-    val label = numbered(AppText.get(R.string.model_layer_group))
-    edit { s -> s.grouped(ids, blend, id, label, sampleMs, keep3D).let { g -> anchor?.let { (x, y) -> g.withAnchorAt(id, x, y) } ?: g } }
-    if (scene.layer(id) == null) return
+    val owner = selectedScene
+    val groups = selectionEditGroups
+    val id = owner.freeLayerId()
+    val label = numbered(AppText.get(R.string.model_layer_group), owner)
+    val at = selectedSampleMs
+    editSelectedScene { s -> s.grouped(ids, blend, id, label, at, keep3D).let { g -> anchor?.let { (x, y) -> g.withAnchorAt(id, x, y) } ?: g } }
+    if (scene.focused(groups)?.layer(id) == null) return
     MultiSelect.clear()
-    selectedId = id
+    if (groups.isEmpty()) selectedId = id else selectGroupMember(groups, id)
     panel = EditorPanel.Tools
 }
 
 suspend fun EditorState.groupLayersCentred(ids: Set<Long>, blend: String? = null) {
     val before = scene
-    val members = before.layers.filter { it.id in ids && it.kind != "camera" }
+    val groups = selectionEditGroups
+    val members = selectedScene.layers.filter { it.id in ids && it.kind != "camera" }
     if (members.isEmpty()) return
     val memberIds = members.map { it.id }.toSet()
     val at = sampleMs
-    val boxes = members.mapNotNull { engine.layerBounds(it.id, at) }
-    if (scene.node !== before.node) return
+    val boxes = if (groups.isEmpty()) members.mapNotNull { engine.layerBounds(it.id, at) } else emptyList()
+    if (scene.node !== before.node || selectionEditGroups != groups) return
     val anchor = if (boxes.isEmpty()) null else ((boxes.minOf { it[0] } + boxes.maxOf { it[2] }) / 2f) to ((boxes.minOf { it[1] } + boxes.maxOf { it[3] }) / 2f)
     playing = false
-    if (members.any { it.uses3D }) {
-        groupAsk = { keep3D ->
-            if (scene.node === before.node) groupLayers(memberIds, blend, anchor, keep3D)
-        }
-    } else {
-        groupLayers(memberIds, blend, anchor, keep3D = false)
-    }
+    groupLayers(memberIds, blend, anchor, keep3D = members.any { it.uses3D })
 }
 
 internal fun Scene.withAnchorAt(id: Long, x: Float, y: Float): Scene = update(id) { group ->
@@ -494,15 +495,16 @@ internal fun Scene.parented(ids: Collection<Long>, parentId: Long?, atMs: Int? =
 }
 
 fun EditorState.setParentOfChosen(parentId: Long?): Int {
-    val (next, skipped) = scene.parented(MultiSelect.ids, parentId, sampleMs)
-    if (next.node !== scene.node) edit { next }
+    val owner = selectedScene
+    val (next, skipped) = owner.parented(MultiSelect.ids, parentId, selectedSampleMs)
+    if (next.node !== owner.node) editSelectedScene { next }
     return skipped
 }
 
 suspend fun EditorState.alignSelection(edge: Int) {
     val document = scene
     val at = sampleMs
-    val layers = MultiSelect.ids.mapNotNull { scene.layer(it) }
+    val layers = MultiSelect.rootIds.mapNotNull { scene.layer(it) }
     val bounds = layers.mapNotNull { l -> engine.layerBounds(l.id, at)?.let { l to it } }
     if (bounds.isEmpty() || scene.node !== document.node) return
     val horizontal = edge < 3
@@ -533,7 +535,7 @@ internal fun Scene.movedTogether(ids: Set<Long>, timeMs: Int, aboutX: Float, abo
 suspend fun EditorState.distributeSelection(horizontal: Boolean) {
     val document = scene
     val at = sampleMs
-    val items = MultiSelect.ids.mapNotNull { scene.layer(it) }.mapNotNull { l -> engine.layerBounds(l.id, at)?.let { l to it } }
+    val items = MultiSelect.rootIds.mapNotNull { scene.layer(it) }.mapNotNull { l -> engine.layerBounds(l.id, at)?.let { l to it } }
         .sortedBy { (_, b) -> if (horizontal) b[0] else b[1] }
     if (items.size < 3 || scene.node !== document.node) return
     fun from(b: FloatArray) = if (horizontal) b[0] else b[1]
@@ -593,7 +595,7 @@ fun EditorState.alignClipTimes(mode: Int) {
             else -> first + (lastStart - first).toLong().times(index).div(layers.lastIndex).toInt()
         }
     }.toMap()
-    edit { s -> layers.fold(s) { acc, layer -> acc.update(layer.id) { acc.movedClip(it, starts.getValue(layer.id), keepEnd = mode == 2) } } }
+    editSelectedScene { s -> layers.fold(s) { acc, layer -> acc.update(layer.id) { acc.movedClip(it, starts.getValue(layer.id), keepEnd = mode == 2) } } }
 }
 
 private class BlockMove(val scene: java.lang.ref.WeakReference<app.absentmotion.model.XmlNode>, val end: Boolean, val frame: Int, val selection: Long)

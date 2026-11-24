@@ -186,7 +186,6 @@ class EditorState(
     val premuteGain = HashMap<Long, Float>()
 
     var ungroupAsk by mutableStateOf(false)
-    internal var groupAsk by mutableStateOf<((Boolean) -> Unit)?>(null)
 
     var pointsAsk by mutableStateOf<(() -> Unit)?>(null)
 
@@ -212,16 +211,19 @@ class EditorState(
     }
 
     internal val editingGroupMember get() = selectedGroups.isNotEmpty()
-    internal val selectedScene: Scene get() = selectedGroupTrack?.scene ?: scene
+    internal val selectionEditGroups: List<Long> get() = if (MultiSelect.active) MultiSelect.groups else selectedGroups
+    private val multiGroupTrack get() = if (!MultiSelect.active || MultiSelect.groups.isEmpty()) null
+        else MultiSelect.ids.firstNotNullOfOrNull { scene.groupMemberTrack(MultiSelect.groups, it) }
+    internal val selectedScene: Scene get() = selectedGroupTrack?.scene ?: multiGroupTrack?.scene ?: scene
     internal val selectedLayer: Layer?
         get() = if (editingGroupMember) selectedGroupTrack?.layer else selectedId?.let(scene::layer)
 
     private fun selectedLocalMs(ms: Int): Int =
-        selectedGroupTrack?.timeAt(ms.toDouble(), activeOnly = false, quantize = false)?.ms?.roundToInt() ?: ms
+        (selectedGroupTrack ?: multiGroupTrack)?.timeAt(ms.toDouble(), activeOnly = false, quantize = false)?.ms?.roundToInt() ?: ms
 
     internal val selectedSampleMs: Int get() = selectedLocalMs(sampleMs)
     internal val selectedTimeMs: Int get() = selectedLocalMs(timeMs)
-    internal val selectedFrame: Int get() = if (editingGroupMember) selectedScene.frameAt(selectedSampleMs) else frame
+    internal val selectedFrame: Int get() = if (selectionEditGroups.isNotEmpty()) selectedScene.frameAt(selectedSampleMs) else frame
 
     internal fun parentFrameForSelectedTime(ms: Int): Int? {
         if (!editingGroupMember) return scene.frameAt(ms)
@@ -233,7 +235,7 @@ class EditorState(
         playing = false
         MultiSelect.clear()
         deselectLayer()
-        selectedId = id
+        selection = id
         selectedGroups = groups
         return true
     }
@@ -444,7 +446,7 @@ class EditorState(
     var keyTarget by mutableStateOf<KeyTarget?>(null)
 
     val keyScope: KeyScope?
-        get() = if (inlinePanelHidden && inlineProperty == null) null else keyTarget?.let { KeyScope(it.ref) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
+        get() = if (inlinePanelHidden && inlineProperty == null) null else keyTarget?.let { KeyScope(it.ref) } ?: inlineProperty?.let { KeyScope(it) } ?: if (panel == EditorPanel.Effects && effectIndex >= 0) KeyScope(effectIndex = effectIndex) else null
 
     var snapGuides by mutableStateOf<List<SnapGuide>>(emptyList())
 
@@ -593,12 +595,12 @@ class EditorState(
     }
 
     internal fun editSelectedScene(key: Any? = null, pivot: Long? = null, change: (Scene) -> Scene) {
-        val groups = selectedGroups
+        val groups = selectionEditGroups
         if (groups.isEmpty()) {
             edit(key, pivot, change)
             return
         }
-        val id = selectedId ?: return
+        val id = selectedId ?: MultiSelect.ids.firstOrNull() ?: return
         edit(key) { parent ->
             val owner = parent.groupMemberTrack(groups, id)?.scene ?: return@edit parent
             val next = change(owner)
@@ -656,8 +658,11 @@ class EditorState(
         groupPath = next.openablePath(groupPath)
         val now = scene
         if (MultiSelect.active) {
-            val alive = now.layers.filterNot { it.locked }.mapTo(HashSet()) { it.id }
+            val groups = MultiSelect.groups
+            val alive = if (groups.isEmpty()) now.layers.filterNot { it.locked }.mapTo(HashSet()) { it.id }
+                else MultiSelect.ids.filterTo(HashSet()) { now.groupMemberTrack(groups, it)?.layer?.locked == false }
             MultiSelect.ids = MultiSelect.ids.filterTo(LinkedHashSet()) { it in alive }
+            if (MultiSelect.ids.isEmpty()) MultiSelect.clear()
         }
         canUndo = history.canUndo
         canRedo = history.canRedo

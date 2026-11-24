@@ -37,14 +37,14 @@ internal data class InlineTrack(
 }
 
 internal data class InlineSection(
-    val id: String, val label: String, val tracks: List<InlineTrack>, val effectExpanded: Boolean? = null,
+    val id: String, val label: String, val tracks: List<InlineTrack>, val expanded: Boolean? = null,
 ) {
-    val visibleTracks get() = if (effectExpanded == false) emptyList() else tracks
+    val visibleTracks get() = if (expanded == false) emptyList() else tracks
 }
 
 internal fun inlineTrackSections(
     layer: Layer, catalog: EffectCatalog, active: PropRef? = null, effectControls: Boolean = false,
-    effectExpanded: (String) -> Boolean = { false },
+    sectionExpanded: (String) -> Boolean = { it == "transform" },
 ): List<InlineSection> = buildList {
     val transform = mutableListOf<InlineTrack>()
     fun vector(ref: PropRef, title: String, axes: String, defaults: String, multiplier: Float = 1f, unit: String = "") {
@@ -83,7 +83,7 @@ internal fun inlineTrackSections(
     if (active == PropRef.Opacity || layer.propertyElement(PropRef.Opacity)?.isKeyframed == true) {
         transform += InlineTrack(PropRef.Opacity, AppText.get(R.string.layer_tool_opacity_blend), 100f, "%")
     }
-    if (transform.isNotEmpty()) add(InlineSection("transform", AppText.get(R.string.layer_tool_transform), transform))
+    if (transform.isNotEmpty()) add(InlineSection("transform", AppText.get(R.string.layer_tool_transform), transform, sectionExpanded("transform")))
 
     for ((index, effect) in layer.effects.withIndex()) {
         val id = effect["id"] ?: continue
@@ -102,7 +102,7 @@ internal fun inlineTrackSections(
         }
         val sectionId = "effect-$index-$id"
         if (tracks.isNotEmpty()) {
-            add(InlineSection(sectionId, definition?.name ?: labelOf(id.substringAfterLast('.')), tracks, effectExpanded(sectionId)))
+            add(InlineSection(sectionId, definition?.name ?: labelOf(id.substringAfterLast('.')), tracks, sectionExpanded(sectionId)))
         }
     }
 
@@ -199,11 +199,16 @@ internal fun EditorState.openInlineEditor(layer: Layer, ref: PropRef) {
     panel = target
 }
 
-internal data class InlineKey(val layerId: Long, val ref: PropRef, val frame: Int)
+internal data class InlineKey(val layerId: Long, val ref: PropRef, val frame: Int, val groups: List<Long> = emptyList())
 
 internal class InlineKeyMove(private val source: Scene, private val keys: Set<InlineKey>) {
     private val tracks = keys.groupBy { it.layerId to it.ref }
     private val limits = bounds()
+    private val singleton = keys.singleOrNull()
+    private val occupied = singleton?.let { key ->
+        source.layer(key.layerId)?.keyframeTimes(KeyScope(key.ref))
+            ?.map(source::frameAt)?.filterNot { it == key.frame }?.toSet()
+    }.orEmpty()
 
     private fun bounds(): IntRange {
         var low = Int.MIN_VALUE
@@ -217,8 +222,8 @@ internal class InlineKeyMove(private val source: Scene, private val keys: Set<In
             val start = source.frameAt(layer.startTime)
             val end = source.frameAt(layer.endTime)
             for (frame in frames) {
-                val before = remaining.lastOrNull { it < frame }?.plus(1) ?: start
-                val after = remaining.firstOrNull { it > frame }?.minus(1) ?: end
+                val before = if (keys.size == 1) start else remaining.lastOrNull { it < frame }?.plus(1) ?: start
+                val after = if (keys.size == 1) end else remaining.firstOrNull { it > frame }?.minus(1) ?: end
                 low = maxOf(low, before - frame)
                 high = minOf(high, after - frame)
             }
@@ -227,7 +232,10 @@ internal class InlineKeyMove(private val source: Scene, private val keys: Set<In
     }
 
     fun apply(scene: Scene, requested: Int): Pair<Scene, Set<InlineKey>> {
-        val delta = requested.coerceIn(limits)
+        var delta = requested.coerceIn(limits)
+        singleton?.let { key ->
+            while (delta != 0 && key.frame + delta in occupied) delta -= if (delta > 0) 1 else -1
+        }
         var result = scene
         for ((id, layerTracks) in tracks.entries.groupBy { it.key.first }) {
             val layer = source.layer(id) ?: continue

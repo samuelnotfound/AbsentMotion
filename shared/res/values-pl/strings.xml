@@ -2955,7 +2955,4 @@
     <string name="send_help_linux">Upewnij się, że oba urządzenia są w tej samej sieci Wi-Fi i żadna zapora nie blokuje AbsentMotion.</string>
     <string name="send_open_mac">Otwórz Ustawienia systemowe</string>
     <string name="send_open_windows">Otwórz Zabezpieczenia Windows</string>
-    <string name="structure_group_space">Wymiar grupy</string>
-    <string name="structure_group_keep_3d">Zachowaj 3D</string>
-    <string name="structure_group_flatten_2d">Spłaszcz do 2D</string>
 </resources>

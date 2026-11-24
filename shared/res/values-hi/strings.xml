@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">पक्का करें कि दोनों डिवाइस एक ही Wi-Fi पर हैं और कोई फ़ायरवॉल AbsentMotion को नहीं रोक रहा।</string>
     <string name="send_open_mac">System Settings खोलें</string>
     <string name="send_open_windows">Windows Security खोलें</string>
-    <string name="structure_group_space">समूह का आयाम</string>
-    <string name="structure_group_keep_3d">3D बनाए रखें</string>
-    <string name="structure_group_flatten_2d">2D में समतल करें</string>
 </resources>

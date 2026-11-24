@@ -2873,7 +2873,4 @@
     <string name="send_help_linux">یقینی بنائیں کہ دونوں آلات ایک ہی Wi-Fi پر ہیں اور کوئی فائر وال AbsentMotion کو نہیں روک رہا۔</string>
     <string name="send_open_mac">سسٹم سیٹنگز کھولیں</string>
     <string name="send_open_windows">‏Windows سیکیورٹی کھولیں</string>
-    <string name="structure_group_space">گروپ کی جہت</string>
-    <string name="structure_group_keep_3d">سہ جہتی رکھیں</string>
-    <string name="structure_group_flatten_2d">دو جہتی بنائیں</string>
 </resources>
