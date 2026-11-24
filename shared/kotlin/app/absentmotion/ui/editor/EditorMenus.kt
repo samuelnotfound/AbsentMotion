@@ -283,6 +283,20 @@ internal fun TransformMenu(state: EditorState, tab: Int, turn: Turn?, extra: (@C
     MenuPopup(AboveLeft, onDismiss, TransformOrigin(0f, 1f)) {
         extra?.invoke(onDismiss)
         val layer = state.selected
+        if (tab == 0 && layer != null) {
+            val separated = layer.positionDimensionsSeparated
+            val checked = !state.settings.positionRulers(separated)
+            MenuRow(stringResource(R.string.transform_move_pad), trailing = if (checked) PanelIcons.Check else null, divider = true) {
+                state.settings.switchSpatialControls(separated)
+                onDismiss()
+            }
+        }
+        if (tab == ROTATE_TAB && turn != null) {
+            MenuRow(stringResource(R.string.transform_free_rotate), trailing = if (state.settings.rotateFree) PanelIcons.Check else null, divider = true) {
+                state.settings.rotateFree = !state.settings.rotateFree
+                onDismiss()
+            }
+        }
         val dimensions = when {
             layer == null -> null
             tab == 0 -> PropRef.Location to layer.positionDimensionsSeparated

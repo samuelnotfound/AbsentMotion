@@ -227,6 +227,11 @@ class UiContracts(unittest.TestCase):
         self.assertIn('state.settings.rotateFree -> TurnTab(state, layer, turn)', panel)
         self.assertIn('else if (turn != null) state.settings.rotateFree = !state.settings.rotateFree', tools)
         self.assertIn('state.keyTarget = turn.target(layer, axis)', source('ui/editor/panels/Turning.kt'))
+        menus = source('ui/editor/EditorMenus.kt')
+        self.assertIn('MenuRow(stringResource(R.string.transform_free_rotate), trailing = if (state.settings.rotateFree)', menus)
+        self.assertIn('MenuRow(stringResource(R.string.transform_move_pad), trailing = if (checked)', menus)
+        self.assertIn('state.settings.switchSpatialControls(separated)', menus)
+        self.assertIn('state.settings.switchSpatialControls(layer.positionDimensionsSeparated)', tools)
         self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])
         axes = panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0]
         self.assertIn('TurnHook(state, turn)', axes)

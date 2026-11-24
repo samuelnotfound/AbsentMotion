@@ -89,7 +89,7 @@ import app.absentmotion.ui.HoldName
 internal fun MoveTransformPanel(state: EditorState, layer: Layer, tab: Int, turn: Turn?, modifier: Modifier = Modifier, onFlip: (() -> Unit)? = null) {
     Box(modifier) {
         when (tab) {
-            0 -> PositionTab(state, layer, onFlip, rulers = layer.positionDimensionsSeparated || state.settings.positionRulers())
+            0 -> PositionTab(state, layer, onFlip, rulers = state.settings.positionRulers(layer.positionDimensionsSeparated))
             1, 3 -> when {
                 turn == null -> RotationTab(state, layer)
                 state.settings.rotateFree -> TurnTab(state, layer, turn)
