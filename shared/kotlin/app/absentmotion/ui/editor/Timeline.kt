@@ -1799,7 +1799,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             Drag.Keys -> updateKeyMove(at)
             Drag.TrimStart, Drag.TrimEnd -> {
                 trimBy(delta.x, start = drag == Drag.TrimStart)
-                if (deskLayout) autoEdge(at.x, drag == Drag.TrimStart)
+                autoEdge(at.x, drag == Drag.TrimStart)
             }
             Drag.Reorder -> reorderTo(at.y)
             Drag.WorkAreaStart, Drag.WorkAreaEnd -> {
@@ -1928,9 +1928,10 @@ private class TimelineView(val state: EditorState, private val density: Density,
     private var panBias = 0f
 
     private fun autoEdge(x: Float, trimStart: Boolean?) {
-        autoX = x
+        val zone = min(48.dp.px, (size.width - headerWidth) / 3f)
+        autoX = x.takeIf { zone > 0f && (it > size.width - zone || it < headerWidth + zone) }
         autoTrim = trimStart
-        if (autoJob?.isActive != true) autoJob = scope.launch { autoLoop() }
+        if (autoX != null && autoJob?.isActive != true) autoJob = scope.launch { autoLoop() }
     }
 
     private fun autoStop() {
@@ -1945,18 +1946,28 @@ private class TimelineView(val state: EditorState, private val density: Density,
             val step = min((now - last) / 1e9f, 0.05f)
             last = now
             val x = autoX ?: break
-            val zone = 48.dp.px
+            val zone = min(48.dp.px, (size.width - headerWidth) / 3f)
+            if (zone <= 0f) break
             val over = when {
                 x > size.width - zone -> (x - (size.width - zone)) / zone
                 x < headerWidth + zone -> -(headerWidth + zone - x) / zone
                 else -> 0f
             }.coerceIn(-1.5f, 1.5f)
             if (over == 0f) continue
-            val before = viewStartMs
-            pan(over * 700.dp.px * step)
-            val moved = viewStartMs - before
-            if (moved == 0f) continue
+            val pixels = over * 700.dp.px * step
             val trim = autoTrim
+            val moved = if (deskLayout) {
+                val before = viewStartMs
+                pan(pixels)
+                viewStartMs - before
+            } else {
+                val before = nowMs
+                val wanted = before + pixels / timeScale().pxPerMs
+                val canGrow = trim == null || (!trim && dragId !in limits)
+                val limit = if (canGrow) Float.POSITIVE_INFINITY else TimelineMath.frameTimeMs(state.scene.lastFrame + 1, fps)
+                wanted.coerceIn(0f, limit) - before
+            }
+            if (moved == 0f) continue
             if (trim != null) {
                 edgeMs += moved
                 trimBy(0f, trim)
@@ -1964,6 +1975,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
                 panBias += moved
                 moveApply()
             }
+            if (!deskLayout) scrubBy(-moved * timeScale().pxPerMs)
         }
     }
 
@@ -2086,7 +2098,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             if (moveArmed) {
                 moveDx = at.x - liftStartX
                 moveApply()
-                if (deskLayout) autoEdge(at.x, null)
+                autoEdge(at.x, null)
             }
         }
         liftUpdate()
