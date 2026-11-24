@@ -109,7 +109,10 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
     val spatial = layer.uses3D
     val separated = layer.positionDimensionsSeparated
     val focus = state.inlineComponent(PropRef.Location)
-    var activeAxis by remember(layer.id, spatial, focus) { mutableIntStateOf((focus ?: 0).coerceAtMost(if (spatial) 2 else 1)) }
+    var activeAxis by remember(layer.id, spatial, focus, separated) {
+        val axis = if (separated) state.inlineTransformAxis else focus ?: 0
+        mutableIntStateOf(axis.coerceIn(0, if (spatial) 2 else 1))
+    }
     SideEffect { state.inlineTransformAxis = activeAxis }
     val depth = spatial && activeAxis == 2
     fun colour(which: Int): Color {
@@ -524,14 +527,17 @@ private fun SizeTab(state: EditorState, layer: Layer) {
     val linked = layer.scaleLinked
     val (measured, box) = layerBox(state, layer)
     val upright = measured?.sides?.upright == true
-    val focus = if (linked) null else state.inlineComponent(PropRef.Scale)
-    var active by remember(layer.id, focus, upright) { mutableIntStateOf(if (upright && focus != null) 1 - focus else focus ?: 0) }
-    if (focus != null) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
+    val separated = layer.scaleDimensionsSeparated
+    val focus = state.inlineComponent(PropRef.Scale)
+    var active by remember(layer.id, focus, upright, separated) {
+        val axis = if (separated) state.inlineTransformAxis.coerceIn(0, 1) else 0
+        mutableIntStateOf(if (upright && separated) 1 - axis else axis)
+    }
+    if (separated) SideEffect { state.inlineTransformAxis = if (upright) 1 - active else active }
     val percent = state.editingGroupMember
     val (boxW, boxH) = if (percent) abs(layer.scale[0]) * 100f to abs(layer.scale[1]) * 100f else box ?: (0f to 0f)
     val unit = if (percent) "%" else ""
-    fun Layer.updateScale(x: Float, y: Float): Layer =
-        if (focus == null) withTransform("scale", x, y) else withTransformAxes(PropRef.Scale, x, y)
+    fun Layer.updateScale(x: Float, y: Float): Layer = withTransform("scale", x, y)
 
     fun stretch(factor: Float, isWidth: Boolean, key: Any? = null) = state.editSelected(key) { l ->
         val s = l.scale

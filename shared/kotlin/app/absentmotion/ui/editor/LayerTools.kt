@@ -495,11 +495,12 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
         move -> if (selected.kind == "camera" && shown == SIZE_TAB) KeyTarget(app.absentmotion.model.CameraFov, "60.000000") else TransformTargets[shown].let { base ->
             val axisTarget = when {
                 base.ref == PropRef.Location -> layer.positionDimensionsSeparated
-                base.ref == PropRef.Scale && layer.scaleLinked -> false
+                base.ref == PropRef.Scale -> layer.scaleDimensionsSeparated
                 else -> requestedTransform == base.ref && requestedAxis != null
             }
             if (axisTarget) {
-                val axis = if (base.ref == PropRef.Location && !layer.uses3D) state.inlineTransformAxis.coerceIn(0, 1) else state.inlineTransformAxis
+                val axis = if (base.ref == PropRef.Scale || base.ref == PropRef.Location && !layer.uses3D)
+                    state.inlineTransformAxis.coerceIn(0, 1) else state.inlineTransformAxis
                 KeyTarget(base.ref.copy(component = axis), base.default.split(',').getOrElse(axis) { "0" })
             } else base
         }
