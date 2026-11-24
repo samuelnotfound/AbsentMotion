@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.SideEffect
@@ -208,6 +209,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 state, ::colour, { formatFixed(at[it], 2) }, ::openKeypad, onSelect = { activeAxis = it }, depthEnabled = spatial,
                 activeAxis = activeAxis.takeIf { separated },
                 keyed = { layer.onKeyframe(PropRef.Location.copy(component = it)) },
+                fieldWidth = 180.px, fieldHeight = 78.px,
                 onDrag = { which, amount ->
                     state.editSelected(key = "position-$which") { l ->
                         val v = l.location.copyOf().also { it[which] += amount }
@@ -236,7 +238,7 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
                 }
             }
             AxisFields(layer.uses3D, { formatFixed(at[it], 2) }, ::colour, { activeAxis = it }, ::openKeypad,
-                Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true)
+                Modifier.align(Alignment.TopCenter).padding(top = 17.px), depthVisible = true, width = 167.px, height = 78.px)
         }
     }
 }
@@ -245,18 +247,18 @@ private fun PositionTab(state: EditorState, layer: Layer, onFlip: (() -> Unit)?,
 private fun AxisFields(
     spatial: Boolean, value: (Int) -> String, colour: (Int) -> Color, onSelect: (Int) -> Unit, onType: (Int) -> Unit,
     modifier: Modifier = Modifier, depthVisible: Boolean = spatial,
+    width: Dp = 153.px, height: Dp = 70.px,
 ) {
-    val width = 153.px
     Column(modifier) {
         Row {
-            Row(Modifier.width(width * 2).height(70.px).clip(PanelShape).background(Am.Field)) {
+            Row(Modifier.width(width * 2).height(height).clip(PanelShape).background(Am.Field)) {
                 ValueCell(value(0), colour(0), Modifier.weight(1f), "X", { onSelect(0) }) { onType(0) }
                 ValueCell(value(1), colour(1), Modifier.weight(1f), "Y", { onSelect(1) }) { onType(1) }
             }
             if (depthVisible) {
                 Spacer(Modifier.width(20.px))
                 NumberBox(value(2), if (spatial) colour(2) else Am.OnDarkDim,
-                    Modifier.width(width).height(70.px).alpha(if (spatial) 1f else 0.55f),
+                    Modifier.width(width).height(height).alpha(if (spatial) 1f else 0.55f),
                     fontSize = 10.5f, onSelect = { onSelect(2) }, onType = if (spatial) { { onType(2) } } else null)
             }
         }
@@ -820,6 +822,7 @@ private fun TransformRulers(
     state: EditorState, colour: (Int) -> Color, value: (Int) -> String, onType: (Int) -> Unit,
     onSelect: (Int) -> Unit, onDrag: (Int, Float) -> Unit, onReset: (Int) -> Unit, depthEnabled: Boolean = true,
     activeAxis: Int? = null, keyed: (Int) -> Boolean = { false },
+    fieldWidth: Dp = 167.px, fieldHeight: Dp = 70.px,
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.px, vertical = 12.px)) {
         for (which in transformAxisOrder) {
@@ -852,7 +855,7 @@ private fun TransformRulers(
                     onStart = { onSelect(which) },
                     onReset = { onReset(which) }, enabled = enabled,
                 )
-                NumberBox(value(which), tint, Modifier.width(167.px).height(70.px),
+                NumberBox(value(which), tint, Modifier.width(fieldWidth).height(fieldHeight),
                     fontSize = 10.5f, onSelect = { onSelect(which) }, onType = if (enabled) { { onType(which) } } else null)
             }
         }

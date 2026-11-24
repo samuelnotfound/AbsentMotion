@@ -229,6 +229,7 @@ struct Placement {
     float rotation, z;
     SkM44 tilt, space, turn;
     float pivotZ = 0;
+    float depthScale = 1;
 };
 
 struct Light {

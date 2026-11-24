@@ -65,6 +65,22 @@ int main() {
     Expect(ids == std::vector<int64_t>({2, 9, 1, 3, 6, 7, 4, 5}), "2D layers separate depth runs");
     const auto flatPlacement = am::EffectivePlacement(input, flatLayer, 0);
     Expect(flatPlacement.z == 0 && flatPlacement.tilt == SkM44(), "2D placement ignores saved depth and tilt");
+    am::Layer root = spatial(50, 0);
+    root.kind = "nullobj";
+    root.force3d = false;
+    root.scale.value = {0.5f, 0.5f};
+    am::Layer face = spatial(51, 80);
+    face.parent = root.id;
+    face.location.value = {40, 60, 80};
+    am::Layer detail = spatial(52, 20);
+    detail.parent = face.id;
+    const std::vector<am::Layer> rig{root, face, detail};
+    const auto facePose = am::EffectivePlacement(rig, face, 0);
+    Expect(facePose.location.fX == 70 && facePose.location.fY == 80 && facePose.z == 40 && facePose.scale.fX == 0.5f,
+           "scaling a null scales both the faces and depth offsets of its rig");
+    Expect(am::EffectivePlacement(rig, detail, 0).z == 50, "null depth scale carries through spatial descendants");
+    face.force3d = false;
+    Expect(am::EffectivePlacement(rig, face, 0).z == 0, "null depth scale leaves flat descendants flat");
     input[0].location.value[2] = 300;
     am::SeeLayers(input, 100, 100, true, 30, 0, true, &output);
     ids.clear();
@@ -164,13 +180,13 @@ int main() {
             <embedScene id="20" collapseTransforms="true" startTime="100" endTime="999">
                 <transform><location value="50,50,0"/></transform>
                 <scene width="100" height="100" totalTime="899">
-                    <shape id="21" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="899">
+                    <shape id="21" s=".rect" fillType="color" threeD="true" startTime="0" endTime="899">
                         <transform><location value="50,50,-40"/></transform><fillColor value="#ffffffff"/>
                         <property name="size" type="vec2" value="30,30"/>
                     </shape>
                 </scene>
             </embedScene>
-            <shape id="22" s=".rect" fillType="color" threeD="true" collapseTransforms="true" startTime="0" endTime="999">
+            <shape id="22" s=".rect" fillType="color" threeD="true" collapseTransforms="false" startTime="0" endTime="999">
                 <transform><location value="50,50,80"/></transform><fillColor value="#ffffffff"/>
                 <property name="size" type="vec2" value="30,30"/>
             </shape>
@@ -179,11 +195,24 @@ int main() {
         const bool parsedGroup = am::ParseScene(collapsedXml, &nested, &error);
         Expect(parsedGroup && am::TopLayerAt(nested, 200, 50, 50, {}) == 20,
                "collapsed children share scene depth with layers outside their group");
-        if (parsedGroup && !nested.layers.empty()) {
-            nested.layers[0].renderSpace = am::RenderSpace::Flat;
+        if (parsedGroup && nested.layers.size() == 2) {
+            Expect(nested.layers[1].spatial(), "regular layers use their 3D switch for scene rendering");
+            nested.layers[0].renderSpace = am::RenderSpace::Automatic;
             Expect(am::TopLayerAt(nested, 200, 50, 50, {}) == 22,
                    "a flat group stays in its position in the layer stack");
         }
+        am::Scene rotatedGroup;
+        const auto rotatedGroupXml = R"xml(<scene width="100" height="100" totalTime="999">
+            <embedScene id="30" threeD="true" collapseTransforms="false" startTime="0" endTime="999">
+                <transform><location value="50,50,0"/><tilt value="20,35"/></transform>
+                <scene width="100" height="100" totalTime="999"/>
+            </embedScene>
+        </scene>)xml";
+        const bool parsedRotation = am::ParseScene(rotatedGroupXml, &rotatedGroup, &error);
+        Expect(parsedRotation && !rotatedGroup.layers.empty() && rotatedGroup.layers[0].spatial() &&
+               rotatedGroup.layers[0].renderSpace == am::RenderSpace::Automatic &&
+               am::EffectivePlacement(rotatedGroup.layers, rotatedGroup.layers[0], now).tilt != SkM44(),
+               "a flat group keeps its own 3D rotation");
         am::Layer tilted = camera;
         tilted.tilt.value = {20, 35};
         am::Layer near = spatial(11, 0);

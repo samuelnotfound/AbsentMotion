@@ -242,7 +242,7 @@ void LayerGizmoMatrices(const Scene& scene, const Layer& layer, double timeMs, f
     if (const Layer* parent = scene.layer(layer.parent); parent && parent->id != layer.id) {
         const Placement p = EffectivePlacement(scene.layers, *parent, timeMs);
         parentBasis = SkM44::Rotate({0, 0, 1}, p.rotation * radians)
-            * (parent->spatial() ? p.tilt : SkM44()) * SkM44::Scale(p.scale.fX, p.scale.fY, 1);
+            * (parent->spatial() ? p.tilt : SkM44()) * SkM44::Scale(p.scale.fX, p.scale.fY, p.depthScale);
     }
     SkM44 inverse;
     const bool movable = parentBasis.invert(&inverse);

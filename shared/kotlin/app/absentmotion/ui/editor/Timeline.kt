@@ -228,7 +228,7 @@ private val ThreeDZone = 22.dp
 private val ThumbZone = 22.dp
 private val DisclosureZone = 24.dp
 internal val HeaderWidth: Dp = EyeZone + ThumbZone + DisclosureZone
-private val ExpandedControls = LockZone + ThreeDZone * 2
+private val ExpandedControls = LockZone + ThreeDZone
 private val HeaderInset = 1.dp
 private val TagStripWidth = 2.1.dp
 private val EyeCentre = EyeZone / 2
@@ -236,7 +236,9 @@ private val LockCentre = EyeZone + LockZone / 2
 private val CubeLeft = EyeZone + LockZone
 private val CollapseLeft = CubeLeft + ThreeDZone
 private val ThumbSize = 16.dp
-private fun thumbLeft(controls: Boolean) = EyeZone + (if (controls) ExpandedControls else 0.dp) + (ThumbZone - ThumbSize) / 2
+private fun expandedControlsWidth(layer: Layer) = ExpandedControls + if (layer.isPlainGroup) ThreeDZone else 0.dp
+private fun thumbLeft(layer: Layer, controls: Boolean) =
+    EyeZone + (if (controls) expandedControlsWidth(layer) else 0.dp) + (ThumbZone - ThumbSize) / 2
 private val ClipTrim = 8.dp
 private val DeskClipTrim = 12.dp
 private const val HIDDEN_ALPHA = 0.55f
@@ -559,7 +561,7 @@ private fun RowSemantics(view: TimelineView) {
                         CustomAccessibilityAction(threeD) { view.state.toggleLayer3D(layer.id); true }.takeIf { view.showsLayerControls(layer) && layer.canToggle3D && !layer.locked },
                         CustomAccessibilityAction(if (layer.collapsesTransforms) expand else collapse) {
                             view.state.toggleCollapseTransforms(layer.id); true
-                        }.takeIf { view.showsLayerControls(layer) && layer.canChooseRenderSpace && !layer.locked },
+                        }.takeIf { view.showsLayerControls(layer) && layer.isPlainGroup && !layer.locked },
                     )
                 })
             }
@@ -623,7 +625,7 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                     val lifted = layer.id == view.liftId
                     val open = view.inlinePosition(layer)
                     val controls = view.showsLayerControls(layer)
-                    val thumbStart = thumbLeft(controls)
+                    val thumbStart = thumbLeft(layer, controls)
                     if (deskLayout) {
                         val eyeLabel = stringResource(if (layer.hidden) R.string.a11y_show_layer else R.string.a11y_hide_layer)
                         Box(Modifier.offset { IntOffset(0, (view.rowTop(row) - view.rulerH).roundToInt()) }) {
@@ -654,7 +656,7 @@ private fun HeaderPictures(view: TimelineView, drawLift: DrawScope.() -> Unit) {
                         app.absentmotion.ui.editor.panels.PanelIcon(
                             ChromeIcons.ObjectTab, if (layer.uses3D) Layer3DColor else Am.OnDarkDim, size = 16.dp)
                     }
-                    if (controls && layer.canChooseRenderSpace) Box(Modifier.offset { IntOffset(CollapseLeft.roundToPx(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
+                    if (controls && layer.isPlainGroup) Box(Modifier.offset { IntOffset(CollapseLeft.roundToPx(), (view.shownTop(row, layer.id) - view.rulerH).roundToInt()) }
                         .size(ThreeDZone, RowHeight), contentAlignment = Alignment.Center) {
                         val label = stringResource(if (layer.collapsesTransforms) R.string.layer_expand_transforms else R.string.layer_collapse_transforms)
                         val tint = if (layer.collapsesTransforms) Layer3DColor else Am.OnDarkDim
@@ -821,7 +823,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
     fun showsLayerControls(layer: Layer): Boolean =
         (!state.editingGroupMember && state.showsLayerInspector && layer.id == state.selectedId) ||
             layer.id in MultiSelect.rootIds || inlinePosition(layer)
-    fun rowHeaderWidth(layer: Layer): Float = if (!deskLayout && showsLayerControls(layer)) headerWidth + ExpandedControls.px else headerWidth
+    fun rowHeaderWidth(layer: Layer): Float = if (!deskLayout && showsLayerControls(layer)) headerWidth + expandedControlsWidth(layer).px else headerWidth
     private var inlinePositions by mutableStateOf<Set<List<Long>>>(emptySet())
     private var inlineSectionsToggled by mutableStateOf<Set<Pair<List<Long>, String>>>(emptySet())
     val inlineKeySelection = InlineKeySelection()
@@ -995,7 +997,8 @@ private class TimelineView(val state: EditorState, private val density: Density,
             if (ref != null && !app.absentmotion.editor.InlineTrack(ref, "").linked(layer)) {
                 for (frame in keyFrames(layer)) {
                     val at = Offset(inlineKeyX(frame), top + rowH / 2)
-                    if (at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
+                    val time = state.scene.frameStart(frame)
+                    if (time in layer.startTime..layer.endTime && at.x >= rowHeaderWidth(layer)) yield(InlineKey(layer.id, ref, frame) to at)
                 }
             }
             tracks(layer, state.scene, inlineSections(layer), top + rowH, emptyList(), ::inlineKeyX)
@@ -1006,7 +1009,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             val height = child.headerHeightPx(density)
             val ref = state.keyScope?.ref?.takeIf { child.selected(state) && state.showsLayerInspector }
             if (ref != null && !app.absentmotion.editor.InlineTrack(ref, "").linked(child.layer)) {
-                val headerWidth = with(density) { child.clipLaneStart(state, expandedPath(child.path)).toPx() }
+                val headerWidth = with(density) { child.sidebarWidth(state, expandedPath(child.path)).toPx() }
                 for (ms in child.layer.keyframeTimes(KeyScope(ref))) {
                     val frame = child.owner.frameAt(ms)
                     val x = xOf(frame) ?: continue
@@ -1642,7 +1645,7 @@ private class TimelineView(val state: EditorState, private val density: Density,
             at.x < EyeZone.px -> Hit.Eye(layer.id)
             controls && at.x < CubeLeft.px -> Hit.Lock(layer.id)
             controls && at.x < CollapseLeft.px -> if (layer.canToggle3D) Hit.Cube(layer.id) else Hit.Header(layer.id)
-            controls && at.x < (CollapseLeft + ThreeDZone).px -> if (layer.canChooseRenderSpace) Hit.CollapseTransforms(layer.id) else Hit.Header(layer.id)
+            controls && layer.isPlainGroup && at.x < (CollapseLeft + ThreeDZone).px -> Hit.CollapseTransforms(layer.id)
             at.x in (header - DisclosureZone.px)..header -> Hit.Inline(layer.id)
             at.x < header -> Hit.Header(layer.id)
             deskLayout && at.x - left in -zone..zone -> Hit.Grip(layer.id, start = true)
@@ -2779,11 +2782,11 @@ private fun DrawScope.drawGroupClip(
     val bottom = size.height - top
     val duration = (layer.endTime + 1f - layer.startTime).coerceAtLeast(1f)
     val scale = (right - left) / duration
-    if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, top, bottom, scale, clipToLane = true)
+    if (layer.kind == "audio") drawAudioBar(outline, layer, left, right, top, bottom, scale)
     else drawBar(outline, left, right, top, bottom, stripe, null, layer.startTime, scale,
-        layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj", clipToLane = true)
-    if (left >= 0f) layer.labelColour?.let { drawTagCorner(outline, left, top, (bottom - top) / 2, Color(it.start)) }
-    drawLabel(layer.shownName(), measurer, maxOf(0f, left), minOf(size.width, right), top, bottom, if (layer.kind == "audio") styles.audioLabel else styles.label)
+        layer.kind == "text", layer.kind == "camera", layer.isPlainGroup, layer.kind == "nullobj")
+    layer.labelColour?.let { drawTagCorner(outline, left, top, (bottom - top) / 2, Color(it.start)) }
+    drawLabel(layer.shownName(), measurer, left, right, top, bottom, if (layer.kind == "audio") styles.audioLabel else styles.label)
 }
 
 private fun DrawScope.drawDeskClipFrame(left: Float, right: Float, top: Float, bottom: Float, headerWidth: Float, chosen: Boolean, hovered: Boolean, limit: Boolean?) {
@@ -2824,18 +2827,17 @@ private fun DrawScope.drawDeskHeader(layer: Layer, chosen: Boolean, hovered: Boo
     val icon = eye.intrinsicSize
     translate(EyeCentre.toPx() - icon.width / 2, top + (height - icon.height) / 2) { with(eye) { draw(icon) } }
     if (controls) drawPadlock(lock, top, height)
-    val left = (thumbLeft(controls) + ThumbSize + 4.dp).toPx()
+    val left = (thumbLeft(layer, controls) + ThumbSize + 4.dp).toPx()
     val room = (width - trim - left - DisclosureZone.toPx()).toInt()
     if (room < 1) return
     val text = measurer.measure(layer.shownName(), if (layer.hidden) styles.hiddenHeader else styles.header, TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = room))
     drawText(text, topLeft = Offset(left, top + (height - text.size.height) / 2))
 }
 
-private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false, nullLayer: Boolean = false, clipToLane: Boolean = false) {
+private fun DrawScope.drawBar(outline: Path, left: Float, right: Float, top: Float, bottom: Float, stripe: Float, picture: StripPicture?, startTime: Int, pxPerMs: Float, text: Boolean = false, camera: Boolean = false, group: Boolean = false, nullLayer: Boolean = false) {
     val radius = BarRadius.toPx()
-    val bleed = if (clipToLane) 0f else 2 * radius
-    val from = max(left, -bleed)
-    val to = min(right, size.width + bleed)
+    val from = max(left, -2 * radius)
+    val to = min(right, size.width + 2 * radius)
     if (from >= to) return
     drawRect(BarShadow, Offset(from, bottom - radius), Size(to - from, radius + BarShadowHeight.toPx()))
     outline.rewind()

@@ -45,6 +45,16 @@ def english(key):
 
 
 class RemainingContracts(unittest.TestCase):
+    def test_nested_clip_labels_follow_timeline_coordinates(self):
+        text = kotlin('ui/editor/TimelineGroupContents.kt').split('private fun GroupMemberClip(', 1)[1]
+        clip_row = text.split('private fun EditorState.editGroupMember(', 1)[0]
+        self.assertIn('drawClip(layer, outline, left, right)', clip_row)
+        self.assertIn('artwork.place(0, 0)', clip_row)
+        self.assertIn('tapTarget?.place(tapLeft, 0)', clip_row)
+        self.assertNotIn('sidebarWidth.toPx()', clip_row)
+        clip = kotlin('ui/editor/Timeline.kt').split('private fun DrawScope.drawGroupClip(', 1)[1].split('private fun DrawScope.drawDeskClipFrame(', 1)[0]
+        self.assertIn('drawLabel(layer.shownName(), measurer, left, right,', clip)
+
     def test_wheel_scrubbing_settles_after_the_last_event(self):
         text = kotlin('ui/editor/Timeline.kt')
         self.assertIn('\n                view.finishWheelScrub()\n', text)

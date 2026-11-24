@@ -45,6 +45,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.tan
 import kotlin.math.sin
+import kotlin.math.sqrt
 import app.absentmotion.model.remapped
 import app.absentmotion.model.effectProperty
 import app.absentmotion.model.effects
@@ -208,7 +209,10 @@ internal fun Scene.grouped(ids: Set<Long>, blend: String?, id: Long, label: Stri
     }
     val attrs = linkedMapOf("id" to "$id", "label" to label, "startTime" to "$start", "endTime" to "$end")
     if (top in stranded) attrs["clippingMask"] = "true"
-    if (keep3D) attrs["threeD"] = "true"
+    if (keep3D) {
+        attrs["threeD"] = "true"
+        attrs["collapseTransforms"] = "true"
+    }
     val group = groupNode(attrs, nested, end - start)
     return Scene(flat.node.copy(children = flat.node.children.mapNotNull { node ->
         val layerId = if (node.name in Scene.LAYER_TAGS) Layer(node).id else null
@@ -228,7 +232,10 @@ fun EditorState.toggleClippingMask() {
 
 val EditorState.canClip: Boolean get() = selectedId?.let { id -> scene.layers.indexOfFirst { it.id == id } > 0 } == true
 
-internal data class Place(val x: Float, val y: Float, val px: Float, val py: Float, val sx: Float, val sy: Float, val rot: Float, val z: Float = 0f) {
+internal data class Place(
+    val x: Float, val y: Float, val px: Float, val py: Float, val sx: Float, val sy: Float,
+    val rot: Float, val z: Float = 0f, val depthScale: Float = 1f,
+) {
     fun part(name: String): FloatArray = when (name) {
         "location" -> floatArrayOf(x, y, z)
         "scale" -> floatArrayOf(sx, sy)
@@ -245,12 +252,16 @@ internal data class Place(val x: Float, val y: Float, val px: Float, val py: Flo
 private val MOVED = listOf("location", "scale", "rotation")
 private val PLACED = MOVED + "pivot"
 
+internal fun Layer.nullDepthScale(sx: Double, sy: Double): Double =
+    if (kind == "nullobj") sqrt(abs(sx * sy)) else 1.0
+
 private fun ownPlace(layer: Layer, timeMs: Int, fps: Int): Place {
     val at = layer.at(timeMs, fps)
     val loc = at.location
     val piv = at.pivot
     val scale = at.scale
-    return Place(loc[0], loc[1], piv[0], piv[1], scale[0], scale[1], at.transform("rotation", 0f)[0], loc[2])
+    return Place(loc[0], loc[1], piv[0], piv[1], scale[0], scale[1], at.transform("rotation", 0f)[0], loc[2],
+        layer.nullDepthScale(scale[0].toDouble(), scale[1].toDouble()).toFloat())
 }
 
 private val SAME = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
@@ -291,18 +302,19 @@ internal fun Layer.pull(timeMs: Int, fps: Int): ParentPull? {
 
 private fun lifted(p: Place, q: Pose?, pull: ParentPull? = null): Place {
     val o = q?.place ?: return p
-    val v = q.turn.on((p.x * o.sx).toDouble(), (p.y * o.sy).toDouble(), p.z.toDouble())
+    val v = q.turn.on((p.x * o.sx).toDouble(), (p.y * o.sy).toDouble(), (p.z * o.depthScale).toDouble())
     return Place((o.x + v[0]).toFloat(), (o.y + v[1]).toFloat(), p.px, p.py, p.sx * (pull?.scale(o.sx) ?: o.sx), p.sy * (pull?.scale(o.sy) ?: o.sy),
-        p.rot + (pull?.rotation(o.rot) ?: o.rot), (o.z + v[2]).toFloat())
+        p.rot + (pull?.rotation(o.rot) ?: o.rot), (o.z + v[2]).toFloat(), p.depthScale * o.depthScale)
 }
 
 private fun lowered(w: Place, q: Pose?, pull: ParentPull? = null): Place? {
     val o = q?.place ?: return w
     val fx = pull?.scale(o.sx) ?: o.sx
     val fy = pull?.scale(o.sy) ?: o.sy
-    if (o.sx == 0f || o.sy == 0f || fx == 0f || fy == 0f) return null
+    if (o.sx == 0f || o.sy == 0f || o.depthScale == 0f || fx == 0f || fy == 0f) return null
     val v = q.turn.inverse().on((w.x - o.x).toDouble(), (w.y - o.y).toDouble(), (w.z - o.z).toDouble())
-    return Place((v[0] / o.sx).toFloat(), (v[1] / o.sy).toFloat(), w.px, w.py, w.sx / fx, w.sy / fy, w.rot - (pull?.rotation(o.rot) ?: o.rot), v[2].toFloat())
+    return Place((v[0] / o.sx).toFloat(), (v[1] / o.sy).toFloat(), w.px, w.py, w.sx / fx, w.sy / fy, w.rot - (pull?.rotation(o.rot) ?: o.rot),
+        (v[2] / o.depthScale).toFloat(), w.depthScale / o.depthScale)
 }
 
 private fun compose(p: Place, q: Place?, pull: ParentPull? = null): Place = lifted(p, q?.let { Pose(it, spin(2, it.rot.toDouble())) }, pull)

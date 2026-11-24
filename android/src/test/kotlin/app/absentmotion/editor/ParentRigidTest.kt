@@ -32,6 +32,27 @@ class ParentRigidTest {
         assertEquals(50f, moved.rot, 1e-3f)
     }
 
+    @Test fun aNullScalesItsSpatialDescendantsAlongDepth() {
+        val root = layer(1, null, "300,310,0", "0,0", scale = "0.5,0.5").copy(name = "nullobj")
+        val face = layer(2, 1, "40,60,80", "0,0")
+        val detail = layer(3, 2, "0,0,20", "0,0")
+        val flat = layer(4, 1, "40,60,80", "0,0").with("threeD", "false")
+        val scene = sceneOf(root, face, detail, flat)
+
+        val placed = scene.place(scene.layer(2)!!, 0)
+        assertEquals(320f, placed.x, 1e-3f)
+        assertEquals(340f, placed.y, 1e-3f)
+        assertEquals(40f, placed.z, 1e-3f)
+        assertEquals(0.5f, placed.sx, 1e-3f)
+        assertEquals(50f, scene.place(scene.layer(3)!!, 0).z, 1e-3f)
+        assertEquals(0f, scene.place(scene.layer(4)!!, 0).z, 1e-3f)
+
+        val detached = scene.rebased(scene.layer(2)!!, null)!!
+        assertEquals(40f, detached.location[2], 1e-3f)
+        val withDetached = sceneOf(root, detached.node)
+        assertEquals(80f, withDetached.rebased(detached, 1)!!.location[2], 1e-3f)
+    }
+
     @Test fun linkingAndUnlinkingKeepsWhereTheLayerIsWhenPivotsDiffer() {
         val scene = sceneOf(layer(1, null, "300,310,0", "0,60", rotation = "35", scale = "1.2,0.8"), layer(2, null, "120,80,0", "10,-40", rotation = "12"))
         val before = scene.place(scene.layer(2)!!, 0)

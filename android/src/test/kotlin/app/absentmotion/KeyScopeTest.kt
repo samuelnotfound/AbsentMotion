@@ -108,6 +108,12 @@ class KeyScopeTest {
         assertEquals(listOf(0, 60), scene.inlineNavigationStops(emptyList()))
     }
 
+    @Test fun expandedTracksKeepBookmarksInsideAndOutsideTheWorkArea() {
+        val marked = scene.withWorkArea(12, 42).withBookmarks(listOf(5, 25, 45, 50).map(scene::frameStart))
+        assertEquals(listOf(0, 5, 10, 12, 25, 30, 42, 45, 50, 60),
+            marked.inlineNavigationStops(listOf(10, 30, 45)))
+    }
+
     @Test fun selectedLayerEdgesRemainStopsWithAWorkAreaAndExpandedTracks() {
         val area = scene.withWorkArea(12, 42)
         val clip = shapeLayer(start = scene.frameStart(15), end = scene.frameStart(36))
@@ -135,6 +141,27 @@ class KeyScopeTest {
         val (moved, selection) = move.apply(atNeighbor, -30)
         assertEquals(listOf(0, 10), moved.layers.single().keys(radius))
         assertEquals(setOf(key.copy(frame = 0)), selection)
+    }
+
+    @Test fun movingAnExpandedKeyPastEitherClipEdgeKeepsTheClipTiming() {
+        val position = XmlNode("location", children = listOf(
+            XmlNode("kf", mapOf("t" to "0", "v" to "20,10,0")),
+            XmlNode("kf", mapOf("t" to "1", "v" to "40,10,0")),
+        ))
+        val clip = shapeLayer(id = 2, start = 500, end = 999, children = listOf(XmlNode("transform", children = listOf(position))))
+        val withClip = scene.add(clip)
+        val ref = PropRef.Location
+        val first = InlineKey(clip.id, ref, 15)
+        val last = InlineKey(clip.id, ref, 29)
+        val (earlier, atStart) = InlineKeyMove(withClip, setOf(first)).apply(withClip, -10)
+        val (later, atEnd) = InlineKeyMove(earlier, setOf(last)).apply(earlier, 15)
+        val moved = later.layer(clip.id)!!
+        assertEquals(clip.startTime, moved.startTime)
+        assertEquals(clip.endTime, moved.endTime)
+        assertEquals(listOf(5, 44), moved.keys(ref))
+        assertEquals(setOf(first.copy(frame = 5)), atStart)
+        assertEquals(setOf(last.copy(frame = 44)), atEnd)
+        assertEquals(listOf(5, 44), Scene.parse(later.toXml()).layer(clip.id)!!.keys(ref))
     }
 
     @Test fun timelinePropertiesOpenTheirNativeEditors() {

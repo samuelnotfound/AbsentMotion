@@ -207,7 +207,7 @@ class NativeFixesTest {
     @Test fun editorViewsChangePickingAndKeepRendersOnTheSceneView() {
         val handle = DesktopNative.create()
         try {
-            val xml = """<scene width="400" height="400" totalTime="999" fps="30"><shape id="1" threeD="true" collapseTransforms="true" startTime="0" endTime="999" fillType="color" s=".rect"><transform><location value="200,200,150" /><tilt value="15,25" /></transform><fillColor value="#ffffffff" /><property name="size" type="vec2" value="80,60" /></shape><shape id="2" startTime="0" endTime="999" fillType="color" s=".rect"><transform><location value="200,200,0" /></transform><fillColor value="#ffff0000" /><property name="size" type="vec2" value="100,100" /></shape></scene>"""
+            val xml = """<scene width="400" height="400" totalTime="999" fps="30"><shape id="1" threeD="true" startTime="0" endTime="999" fillType="color" s=".rect"><transform><location value="200,200,150" /><tilt value="15,25" /></transform><fillColor value="#ffffffff" /><property name="size" type="vec2" value="80,60" /></shape><shape id="2" startTime="0" endTime="999" fillType="color" s=".rect"><transform><location value="200,200,0" /></transform><fillColor value="#ffff0000" /><property name="size" type="vec2" value="100,100" /></shape></scene>"""
             assertEquals(null, DesktopNative.setScene(handle, xml))
             DesktopNative.setCameraView(handle, false)
             val still = DesktopNative.still(handle, 0.0, 40, 40, true, false)!!
