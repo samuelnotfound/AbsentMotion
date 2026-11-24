@@ -219,23 +219,28 @@ internal class SpatialGizmo(
     }
 
     fun drawRings(draw: DrawScope, surface: Path?) = with(draw) {
-        for ((axis, color) in AxisColors.withIndex()) {
-            val back = Path()
-            val front = Path()
-            for (arc in arcs) {
-                if (arc.axis != axis) continue
-                val path = if (occluded(arc.a, arc.b)) back else front
-                path.moveTo(arc.a.at.x, arc.a.at.y)
-                path.lineTo(arc.b.at.x, arc.b.at.y)
-            }
-            fun ring(path: Path, tint: Color) {
-                drawPath(path, GizmoShadow, style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))
-                drawPath(path, tint, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
-            }
-            val far = color.copy(alpha = 0.60f)
-            if (surface == null) ring(back, far) else clipPath(surface, ClipOp.Difference) { ring(back, far) }
-            ring(front, color)
+        val rearPaths = Array(AxisColors.size) { Path() }
+        val frontPaths = Array(AxisColors.size) { Path() }
+        for (arc in arcs) {
+            val path = if (occluded(arc.a, arc.b)) rearPaths[arc.axis] else frontPaths[arc.axis]
+            path.moveTo(arc.a.at.x, arc.a.at.y)
+            path.lineTo(arc.b.at.x, arc.b.at.y)
         }
+
+        fun ring(path: Path, tint: Color, alpha: Float = 1f) {
+            drawPath(path, GizmoShadow, alpha = alpha, style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(path, tint, alpha = alpha, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+        }
+        for ((axis, color) in AxisColors.withIndex()) {
+            val rear = rearPaths[axis]
+            if (surface == null) {
+                ring(rear, color, 0.60f)
+            } else {
+                clipPath(surface, ClipOp.Difference) { ring(rear, color, 0.60f) }
+                clipPath(surface) { ring(rear, color, 0.32f) }
+            }
+        }
+        for ((axis, color) in AxisColors.withIndex()) ring(frontPaths[axis], color)
         centre?.let { drawCircle(Color.White, 2.2.dp.toPx(), it) }
     }
 }
