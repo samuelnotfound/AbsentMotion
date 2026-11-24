@@ -190,7 +190,9 @@ private fun geoOf(size: IntSize, easing: Easing, overshoot: Boolean): Geo? {
 
 @Composable
 private fun Graph(state: EditorState, easing: Easing, overshoot: Boolean, enabled: Boolean, modifier: Modifier) {
-    val samples = remember(easing) { NativeEngine.ease(easing.toString(), FloatArray(SAMPLES) { it / (SAMPLES - 1f) }) }
+    val samples = remember(easing, enabled) {
+        if (enabled) NativeEngine.ease(easing.toString(), FloatArray(SAMPLES) { it / (SAMPLES - 1f) }) else FloatArray(0)
+    }
     val handles = easing.handles()
     val progress = if (enabled) state.keyTarget?.ref?.let { state.keyLayer?.stretchProgress(it) } else null
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -294,6 +296,7 @@ private fun DrawScope.drawGraph(g: Geo, samples: FloatArray, handles: List<Easin
         y += step
     }
 
+    if (samples.isEmpty()) return
     val dashes = PathEffect.dashPathEffect(floatArrayOf(8f, 4f))
     for (edge in listOf(top, bottom)) drawLine(Am.OnDark.copy(alpha = 0.45f), Offset(left, edge), Offset(right, edge), 3.5f, pathEffect = dashes)
     if (progress != null) {
