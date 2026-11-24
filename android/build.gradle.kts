@@ -11,6 +11,7 @@ plugins {
 
 val appVersion = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
 val timelineTest = providers.gradleProperty("amTimelineTest").map(String::toBoolean).getOrElse(false)
+val lagTest = providers.gradleProperty("amLagTest").map(String::toBoolean).getOrElse(false)
 val appAbi = providers.gradleProperty("amAbi").getOrElse("arm64-v8a")
 require(appAbi in setOf("arm64-v8a", "x86_64")) { "amAbi must be arm64-v8a or x86_64, not $appAbi" }
 
@@ -29,8 +30,16 @@ android {
     ndkVersion = "30.0.16248370"
 
     defaultConfig {
-        applicationId = if (timelineTest) "app.absentmotion.timeline" else "app.absentmotion"
-        manifestPlaceholders["appLabel"] = if (timelineTest) "AbsentMotion Timeline Test" else "AbsentMotion"
+        applicationId = when {
+            lagTest -> "app.absentmotion.lagtest"
+            timelineTest -> "app.absentmotion.timeline"
+            else -> "app.absentmotion"
+        }
+        manifestPlaceholders["appLabel"] = when {
+            lagTest -> "AbsentMotion Lag Test"
+            timelineTest -> "AbsentMotion Timeline Test"
+            else -> "AbsentMotion"
+        }
         minSdk = 33
         targetSdk = 37
         versionCode = appVersion.getProperty("versionCode").toInt()

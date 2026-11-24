@@ -1,9 +1,11 @@
 name: Timeline work area APK
+run-name: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'AbsentMotion Lag Test APK' || 'Timeline work area APK' }}
 
 on:
   push:
     branches:
       - feature/expandable-layer-rows
+      - fix/timeline-scrub-responsiveness
 
 permissions:
   contents: read
@@ -14,6 +16,11 @@ jobs:
     timeout-minutes: 170
     container: debian:trixie
     env:
+      TEST_FLAG: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'amLagTest' || 'amTimelineTest' }}
+      TEST_PACKAGE: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'app.absentmotion.lagtest' || 'app.absentmotion.timeline' }}
+      TEST_LABEL: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'AbsentMotion Lag Test' || 'AbsentMotion Timeline Test' }}
+      TEST_APK: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'AbsentMotion-Lag-Test.apk' || 'AbsentMotion-timeline-test.apk' }}
+      TEST_ARTIFACT: ${{ github.ref_name == 'fix/timeline-scrub-responsiveness' && 'absentmotion-lag-test-apk' || 'timeline-work-area-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_HOME: /opt/android-sdk
       ANDROID_NDK: /opt/android-sdk/ndk/30.0.16248370
@@ -53,7 +60,7 @@ jobs:
         run: |
           keytool -genkeypair -storetype JKS -keystore "$RUNNER_TEMP/timeline-test.jks" \
             -alias timeline-test -keyalg RSA -keysize 2048 -validity 3650 \
-            -storepass android -keypass android -dname "CN=AbsentMotion Timeline Test"
+            -storepass android -keypass android -dname "CN=$TEST_LABEL"
           cat > signing.properties <<EOF
           storeFile=$RUNNER_TEMP/timeline-test.jks
           storePassword=android
@@ -68,17 +75,19 @@ jobs:
             --tests app.absentmotion.editor.PreviewDependenciesTest \
             --tests app.absentmotion.TrimLimitTest \
             --tests app.absentmotion.KeyScopeTest
-      - name: Build the signed timeline APK
+      - name: Build the signed test APK
         run: |
-          ./gradlew :app:assembleFossRelease -PamTimelineTest=true --no-daemon
-          cp android/build/outputs/apk/foss/release/app-foss-release.apk AbsentMotion-timeline-test.apk
-      - name: Verify APK package and signature
-        run: python3 tools/apk_check.py --any-signer --package-id app.absentmotion.timeline AbsentMotion-timeline-test.apk
+          ./gradlew :app:assembleFossRelease "-P${TEST_FLAG}=true" --no-daemon
+          cp android/build/outputs/apk/foss/release/app-foss-release.apk "$TEST_APK"
+      - name: Verify APK package, label, and signature
+        run: |
+          python3 tools/apk_check.py --any-signer --package-id "$TEST_PACKAGE" "$TEST_APK"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt2" dump badging "$TEST_APK" | grep -Fx "application-label:'$TEST_LABEL'"
       - name: Check the Android API floor
-        run: python3 tools/api_floor.py AbsentMotion-timeline-test.apk
+        run: python3 tools/api_floor.py "$TEST_APK"
       - name: Upload the signed APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: timeline-work-area-apk
-          path: AbsentMotion-timeline-test.apk
+          name: ${{ env.TEST_ARTIFACT }}
+          path: ${{ env.TEST_APK }}
           if-no-files-found: error
