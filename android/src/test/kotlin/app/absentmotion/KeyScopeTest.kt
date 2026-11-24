@@ -88,6 +88,13 @@ class KeyScopeTest {
         assertEquals(listOf(0, 60), scene.inlineNavigationStops(emptyList()))
     }
 
+    @Test fun selectedLayerEdgesRemainStopsWithAWorkAreaAndExpandedTracks() {
+        val area = scene.withWorkArea(12, 42)
+        val clip = shapeLayer(start = scene.frameStart(15), end = scene.frameStart(36))
+        assertEquals(listOf(0, 12, 15, 36, 42, 59), area.navigationStops(clip))
+        assertEquals(listOf(0, 10, 12, 15, 30, 36, 42, 45, 60), area.inlineNavigationStops(listOf(10, 30, 45), clip))
+    }
+
     @Test fun movingSelectedTracksTogetherStopsBeforeAnUnselectedKey() {
         val base = scene.layers.single()
         val picked = setOf(InlineKey(base.id, radius, 10), InlineKey(base.id, alpha, 10), InlineKey(base.id, alpha, 50))

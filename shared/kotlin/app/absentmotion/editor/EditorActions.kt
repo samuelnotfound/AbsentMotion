@@ -186,29 +186,37 @@ internal fun Scene.withSplits(ids: List<Long>, frame: Int, sampleMs: Int): Scene
 internal fun Scene.navigationStops(layer: Layer?, scope: KeyScope? = null): List<Int> {
     val editEnd = lastFrame.coerceAtLeast(0)
     val workAreaStops = listOf(workAreaStartFrame, workAreaEndFrame).filter { it in 1 until editEnd }
-    val times = if (layer == null || workAreaStops.isNotEmpty()) listOf(0, totalTime)
-        else listOf(layer.startTime, layer.endTime) + layer.keyframeTimes(scope).filter { it in layer.startTime..layer.endTime }
+    val bounds = layer?.let { listOf(it.startTime, it.endTime) }.orEmpty()
+    val times = if (layer == null || workAreaStops.isNotEmpty()) listOf(0, totalTime) + bounds
+        else bounds + layer.keyframeTimes(scope).filter { it in layer.startTime..layer.endTime }
     return ((times + bookmarks).map { frameAt(it).coerceIn(0, editEnd) } + workAreaStops).distinct().sorted()
 }
 
-internal fun Scene.inlineNavigationStops(keys: List<Int>): List<Int> =
-    (keys.filter { it in 0..lastFrame } + listOf(0, workAreaStartFrame, workAreaEndFrame, lastFrame.coerceAtLeast(0) + 1))
+internal fun Scene.inlineNavigationStops(keys: List<Int>, layer: Layer? = null): List<Int> {
+    val editEnd = lastFrame.coerceAtLeast(0)
+    val bounds = layer?.let { listOf(frameAt(it.startTime), frameAt(it.endTime)) }.orEmpty()
+    return ((keys + bounds).filter { it in 0..editEnd } + listOf(0, workAreaStartFrame, workAreaEndFrame, editEnd + 1))
         .distinct().sorted()
+}
 
-private fun EditorState.stops(): List<Int> = scene.navigationStops(selected, keyScope)
+private fun EditorState.stops(): List<Int> = if (timelineDetailsOpen) {
+    scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty(), selected)
+} else {
+    scene.navigationStops(selected, keyScope)
+}
 
 fun EditorState.skipBack() {
-    val stops = if (timelineDetailsOpen) scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty()) else stops()
-    stepTo(stops.lastOrNull { it < playheadFrame } ?: 0)
+    stepTo(stops().lastOrNull { it < playheadFrame } ?: 0)
 }
 
 fun EditorState.skipForward() {
+    val next = stops().firstOrNull { it > playheadFrame }
     if (timelineDetailsOpen) {
-        scene.inlineNavigationStops(inlineKeyframes?.invoke().orEmpty()).firstOrNull { it > playheadFrame }?.let(::stepTo)
+        next?.let(::stepTo)
         return
     }
-    val next = stops().firstOrNull { it > frame }
-    if (next == null || next >= scene.lastFrame) parkAtEnd() else frame = next
+    val layerEnd = selected?.endTime?.let(scene::frameAt)
+    if (next == null || (next >= scene.lastFrame && next != layerEnd)) parkAtEnd() else stepTo(next)
 }
 
 internal fun EditorState.togglePositionDimensions() {
