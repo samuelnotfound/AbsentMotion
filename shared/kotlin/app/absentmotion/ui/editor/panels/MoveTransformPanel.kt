@@ -361,19 +361,17 @@ internal class SnapAxis(snaps: List<Snap>, private val threshold: Float = 25f) {
 @Composable
 internal fun TrackpadCorners() {
     Canvas(Modifier.fillMaxSize()) {
-        val far = 718.5f
-        val near = 24.5f
-        val bottom = 537.5f
-        corner(near, near, 1f, 1f)
-        corner(far, near, -1f, 1f)
-        corner(near, bottom, 1f, -1f)
-        corner(far, bottom, -1f, -1f)
+        val inset = 24.5f.px.toPx()
+        val right = size.width - inset
+        val bottom = size.height - inset
+        corner(inset, inset, 1f, 1f)
+        corner(right, inset, -1f, 1f)
+        corner(inset, bottom, 1f, -1f)
+        corner(right, bottom, -1f, -1f)
     }
 }
 
-private fun DrawScope.corner(xPx: Float, yPx: Float, dx: Float, dy: Float) {
-    val x = xPx.px.toPx()
-    val y = yPx.px.toPx()
+private fun DrawScope.corner(x: Float, y: Float, dx: Float, dy: Float) {
     val length = 25.px.toPx()
     val radius = 9.px.toPx()
     val mark = Path().apply {
