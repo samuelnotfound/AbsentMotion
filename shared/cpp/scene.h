@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <array>
 
 #include "depth.h"
@@ -183,6 +184,7 @@ struct Layer {
     const std::vector<Layer>& inner() const;
     int innerWidth = 0, innerHeight = 0;
     uint32_t innerBackground = 0;
+    std::optional<bool> innerDepthOrder, innerPieceOrder;
     Retiming retiming;
     Anim frame;
     bool fixedPrecompose = false;

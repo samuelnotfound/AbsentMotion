@@ -90,6 +90,19 @@ class GroupAndSnapTest {
         assertTrue(roundTrip.rendersIn3D)
     }
 
+    @Test fun openingAGroupUsesTheHostDepthOrderWithoutSavingItOnTheGroup() {
+        val parent = project.withDepthOrder(true).withPieceOrder(true).grouped(setOf(2, 3), null, 77, "G")
+        val path = listOf(77L)
+        val inner = parent.focused(path)!!
+        assertTrue(inner.depthOrder)
+        assertTrue(inner.pieceOrder)
+        val changed = parent.withFocused(path, inner.update(2) { it.withLabel("Edited") })
+        assertNull(changed.layer(77)!!.nested!!.node["depthOrder"])
+        assertNull(changed.layer(77)!!.nested!!.node["depthSort"])
+        assertEquals("Edited", changed.focused(path)!!.layer(2)!!.label)
+        assertFalse(changed.withDepthOrder(false).focused(path)!!.depthOrder)
+    }
+
     @Test fun aGroupCanCollapseTransformsIndependentlyOfTheCube() {
         val group = scene(layer(1, 0, 999)).grouped(setOf(1), null, 2, "G").group()
         assertTrue(group.canChooseRenderSpace)

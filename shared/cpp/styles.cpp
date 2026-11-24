@@ -631,8 +631,8 @@ void DrawGroup(SkCanvas* canvas, const Layer& l, double timeMs, const MediaPictu
             scene.width = group.innerWidth;
             scene.height = group.innerHeight;
             scene.fps = std::max(1, (int)group.retiming.fps);
-            scene.depthOrder = previous && previous->depthOrder;
-            scene.pieceOrder = previous && previous->pieceOrder;
+            scene.depthOrder = group.innerDepthOrder.value_or(previous && previous->depthOrder);
+            scene.pieceOrder = group.innerPieceOrder.value_or(previous && previous->pieceOrder);
             if (previous) {
                 for (const double beat : previous->beats) {
                     const double inner = NestedTime(group, beat * 1000);

@@ -35,10 +35,17 @@ internal fun Layer.withFrameHold(): Layer {
 
 private fun Scene.groupNode(id: Long): XmlNode? = node.children.firstOrNull { it.name in Scene.LAYER_TAGS && Layer(it).id == id }
 
+private val inheritedGroupSettings = listOf("depthOrder", "depthSort")
+
 internal fun Scene.focused(path: List<Long>): Scene? {
     if (path.isEmpty()) return this
     var inner: Scene = this
-    for (id in path) inner = inner.groupNode(id)?.let(::Layer)?.takeIf { it.isPlainGroup }?.nested ?: return null
+    for (id in path) {
+        val nested = inner.groupNode(id)?.let(::Layer)?.takeIf { it.isPlainGroup }?.nested ?: return null
+        inner = Scene(inheritedGroupSettings.fold(nested.node) { child, key ->
+            if (child[key] == null) child.with(key, inner.node[key]) else child
+        })
+    }
     val have = inner.media.map { it.uri }.toSet()
     val shared = node.children.filter { it.name == "media" && it["uri"] !in have }
     return Scene(inner.node.copy(children = shared + inner.node.children))
@@ -69,11 +76,15 @@ internal fun Scene.withFocused(path: List<Long>, edited: Scene): Scene {
     if (path.isEmpty()) return edited
     val rootUris = media.map { it.uri }.toSet()
     val (mediaNodes, others) = edited.node.children.partition { it.name == "media" }
-    val original = focused(path.dropLast(1))?.groupNode(path.last())?.let(::Layer)?.nested
+    val host = focused(path.dropLast(1))
+    val original = host?.groupNode(path.last())?.let(::Layer)?.nested
     val ownUris = original?.media?.map { it.uri }?.toSet().orEmpty()
     val kept = mediaNodes.filter { it["uri"] in ownUris && it["uri"] !in rootUris }
     val added = mediaNodes.filter { it["uri"] !in ownUris && it["uri"] !in rootUris }
-    val inner = Scene(edited.node.copy(children = kept + others))
+    val saved = inheritedGroupSettings.fold(edited.node) { child, key ->
+        if (original?.node?.get(key) == null && child[key] == host?.node?.get(key)) child.with(key, null) else child
+    }
+    val inner = Scene(saved.copy(children = kept + others))
     val placed = replaceInside(path, inner)
     val withAdded = if (added.isEmpty()) placed else Scene(placed.node.copy(children = added + placed.node.children))
     return withAdded.withoutOrphanMedia(node.mediaUris())

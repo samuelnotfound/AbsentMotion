@@ -496,6 +496,8 @@ void ParseGroup(const XmlNode& scene, int fps, Layer* group) {
     group->innerHeight = std::clamp(IntAttr(scene, "height", 1080), 1, 8192);
     const char* bg = scene.attr("bgcolor");
     group->innerBackground = bg && *bg == '#' ? (uint32_t)strtoul(bg + 1, nullptr, 16) : 0;
+    if (scene.attr("depthOrder")) group->innerDepthOrder = StrAttr(scene, "depthOrder") == "true";
+    if (scene.attr("depthSort")) group->innerPieceOrder = StrAttr(scene, "depthSort") == "piece";
     Retiming& r = group->retiming;
     r.length = IntAttr(scene, "totalTime", 0);
     r.fps = FpsAttr(scene);
