@@ -91,6 +91,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
@@ -560,16 +561,19 @@ private fun RowSemantics(view: TimelineView) {
 @Composable
 private fun InlineRows(view: TimelineView) {
     if (!view.hasInlinePositions) return
-    val rows by remember(view) { derivedStateOf { view.visibleRows() } }
-    Box(Modifier.fillMaxSize().padding(top = RulerHeight).clipToBounds()) {
-        for (row in rows) {
-            val layer = view.layerAt(row) ?: continue
-            if (!view.inlinePosition(layer)) continue
-            if (view.liftId == layer.id) continue
-            val top = view.shownTop(row, layer.id) + view.rowH
-            if (top >= view.rowsEnd) continue
-            key(layer.id) {
-                Column(Modifier.offset { IntOffset(0, (top - view.rulerH).roundToInt()) }.fillMaxWidth()) {
+    val rows by remember(view) {
+        derivedStateOf {
+            view.visibleRows().mapNotNull { row ->
+                view.layerAt(row)?.takeIf { view.inlinePosition(it) && view.liftId != it.id }?.let { row to it }
+            }
+        }
+    }
+    val visible = rows
+    Layout(
+        modifier = Modifier.fillMaxWidth().padding(top = RulerHeight).clipToBounds(),
+        content = {
+            for ((_, layer) in visible) key(layer.id) {
+                Column(Modifier.fillMaxWidth()) {
                     val sections = view.inlineSections(layer)
                     if (sections.isNotEmpty() || !layer.isPlainGroup) {
                         InlinePositionDetails(view.state, layer, sections, Modifier.fillMaxWidth(),
@@ -579,6 +583,17 @@ private fun InlineRows(view: TimelineView) {
                     TimelineGroupContents(view.state, view.groupRows(layer), view.inlineKeySelection,
                         view::projectTimeX, view::expandedPath, view::toggleGroupRow, view::openGroupRow, view::toggleInlineEffect)
                 }
+            }
+        },
+    ) { measurables, constraints ->
+        val unbounded = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+        val content = measurables.map { it.measure(unbounded) }
+        val viewport = (view.rowsEnd - view.rulerH).roundToInt().coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(constraints.maxWidth, viewport) {
+            content.forEachIndexed { index, child ->
+                val (row, layer) = visible[index]
+                val top = view.shownTop(row, layer.id) + view.rowH - view.rulerH
+                child.placeRelative(0, top.roundToInt())
             }
         }
     }
@@ -772,7 +787,7 @@ private const val MOVE_EDIT = "clip-move"
 private const val KEYFRAME_HOLD_MS = 250L
 
 
-private class TimelineView(val state: EditorState, density: Density, private val scope: CoroutineScope) {
+private class TimelineView(val state: EditorState, private val density: Density, private val scope: CoroutineScope) {
     var wide = false
     var rail = false
     private val scale = density.density
@@ -921,8 +936,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
         }
         for (section in inlineSections(layer)) for (track in section.visibleTracks) {
             if (track.linked(layer)) continue
-            val offset = inlineTrackOffset(inlineSections(layer), track.ref) ?: continue
-            val center = top + rowH + offset.px + inlineTrackHeight.px / 2
+            val offset = with(density) { inlineTrackOffset(inlineSections(layer), track.ref) } ?: continue
+            val center = top + rowH + offset + with(density) { inlineTrackHeight.roundToPx() } / 2f
             for (frame in track.frames(state.scene, layer)) {
                 yield(InlineKey(layer.id, track.ref, frame) to Offset(inlineKeyX(frame), center))
             }
@@ -1312,8 +1327,8 @@ private class TimelineView(val state: EditorState, density: Density, private val
                 offset += rowH
                 if (inlinePosition(layer)) {
                     val sections = inlineSections(layer)
-                    if (sections.isNotEmpty() || !layer.isPlainGroup) offset += inlineDetailsHeight(sections).px
-                    offset += groupRows(layer).sumOf { it.height.px.toDouble() }.toFloat()
+                    if (sections.isNotEmpty() || !layer.isPlainGroup) offset += with(density) { inlineDetailsHeight(sections) }
+                    offset += groupRows(layer).sumOf { it.heightPx(density) }
                 }
             }
             add(offset)
