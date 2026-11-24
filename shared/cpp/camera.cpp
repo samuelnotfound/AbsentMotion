@@ -268,7 +268,7 @@ bool EditorCameraOn() { return (bool)gEditorCamera; }
 bool CameraViewOn() { return gCameraView; }
 
 bool CameraHidesLayer(const std::vector<Layer>& layers, const Layer& layer, double timeMs) {
-    if (layer.spatial() || !DrawsInScene(layer)) return false;
+    if (layer.spatial() || layer.showInCamera || !DrawsInScene(layer)) return false;
     if (EditorCameraOn()) return true;
     if (!gCameraView) return false;
     const Layer* camera = ActiveCamera(layers, timeMs);
@@ -556,7 +556,7 @@ bool SeeLayers(const std::vector<Layer>& layers, int width, int height, bool top
         copy.sight = {&layers, &l, l.spatial() ? camera : nullptr, width, height, cameraOnly && l.spatial()};
         copy.sight.editorView = editor;
         float d = 0;
-        bool drop = cameraOnly && !l.spatial() && DrawsInScene(l);
+        bool drop = cameraOnly && !l.spatial() && !l.showInCamera && DrawsInScene(l);
         if (l.spatial() && DrawsInScene(l)) {
             const Seen s = Look(now, ContentPlacement(p));
             d = s.depth;

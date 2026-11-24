@@ -71,6 +71,17 @@ class GroupAndSnapTest {
         assertTrue(inner.layer(1)!!.uses3D)
     }
 
+    @Test fun olderDepthTransformsAreKeptUntilTheLayerIsExplicitlySetToFlat() {
+        val legacy = Layer(layer(1, 0, 999)).withTransform("location", 540f, 960f, 30f)
+        assertNull(legacy.node["threeD"])
+        assertTrue(legacy.uses3D)
+        val flat = legacy.withThreeD(false).withCameraVisibility(true)
+        assertFalse(flat.uses3D)
+        assertTrue(flat.visibleInCamera)
+        assertEquals(30f, flat.location[2])
+        assertTrue(flat.withThreeD(true).uses3D)
+    }
+
     @Test fun groupingKeepsMasksClippingTheirLayerAndLeavesCamerasOutside() {
         val s = scene(layer(1, 0, 999), layer(2, 0, 999, extra = mapOf("clippingMask" to "true")), layer(3, 0, 999, extra = mapOf("clippingMask" to "true")),
             shapeNode("camera", id = 4, end = 999))

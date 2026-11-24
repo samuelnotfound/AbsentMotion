@@ -162,7 +162,7 @@ struct Layer {
     std::string label, shape, fillType, outlineShape;
     std::string mediaUri, mediaFillMode;
     int startTime = 0, endTime = 0;
-    bool hidden = false, video = false, force3d = false, mixPieces = true, alight = false;
+    bool hidden = false, video = false, force3d = false, showInCamera = false, mixPieces = true, alight = false;
     Anim location, pivot, scale, rotation, skew, opacity, fillColor, tilt;
     std::vector<Property> props;
     std::vector<LayerEffect> effects;

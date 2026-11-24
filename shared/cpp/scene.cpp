@@ -526,6 +526,16 @@ std::string OutlineMark(const char* d) {
     return out;
 }
 
+bool HasDepthComponent(const Anim& animation, size_t component) {
+    if (component < animation.axes.size() && !animation.axes[component].empty())
+        return HasDepthComponent(animation.axes[component], 0);
+    const auto nonzero = [component](const std::vector<float>& values) {
+        return component < values.size() && std::isfinite(values[component]) && values[component] != 0;
+    };
+    return nonzero(animation.value) || (animation.hasLead && nonzero(animation.lead.v)) ||
+        std::any_of(animation.keys.begin(), animation.keys.end(), [&](const Keyframe& key) { return nonzero(key.v); });
+}
+
 bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     const XmlNode* n = &node;
     if (n->name != "shape" && n->name != "text" && n->name != "embedScene" && n->name != "nullobj" && n->name != "drawing" && n->name != "camera" &&
@@ -571,7 +581,9 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
     l.startTime = IntAttr(*n, "startTime", 0);
     l.endTime = std::max(l.startTime, IntAttr(*n, "endTime", 0));
     l.hidden = StrAttr(*n, "hidden") == "true";
-    l.force3d = StrAttr(*n, "threeD") == "true";
+    const std::string spatial = StrAttr(*n, "threeD");
+    l.force3d = spatial == "true";
+    l.showInCamera = StrAttr(*n, "showInCamera") == "true";
     l.mixPieces = StrAttr(*n, "mixPieces") != "false";
     if (const XmlNode* t = n->child("transform")) {
         l.location = ParseAnim(t->child("location"));
@@ -582,6 +594,7 @@ bool ParseLayer(const XmlNode& node, int fps, Layer* out) {
         l.tilt = ParseAnim(t->child("tilt"));
         l.skew = ParseAnim(t->child("skew"));
         l.opacity = ParseAnim(t->child("opacity"));
+        if (spatial.empty()) l.force3d = HasDepthComponent(l.location, 2) || HasDepthComponent(l.tilt, 0) || HasDepthComponent(l.tilt, 1);
     }
     l.fillColor = ParseAnim(n->child("fillColor"));
     if (l.kind == "camera") ParseCamera(*n, &l.camera);
