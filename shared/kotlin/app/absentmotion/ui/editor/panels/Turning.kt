@@ -18,10 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -102,11 +98,12 @@ internal data class Turn(val effect: Int = -1, private val axes: List<EffectPara
 
     fun default(axis: Int): Float = if (effect < 0) 0f else axes[axis].default.finiteFloat() ?: 0f
 
-    fun target(axis: Int): KeyTarget =
-        if (effect >= 0) KeyTarget(PropRef.effect(effect, axes[axis].id), axes[axis].default, axes[axis].type)
-        else TransformTargets[if (axis < 2) TILT_TAB else ROTATE_TAB]
-
-    fun linked(a: Int, b: Int): Boolean = a == b || (effect < 0 && a < 2 && b < 2)
+    fun target(layer: Layer, axis: Int): KeyTarget = when {
+        effect >= 0 -> KeyTarget(PropRef.effect(effect, axes[axis].id), axes[axis].default, axes[axis].type)
+        layer.uses3D && !layer.rotationDimensionsSeparated -> KeyTarget(PropRef.RotationXYZ, "0,0,0")
+        layer.uses3D && axis < 2 -> KeyTarget(PropRef.Tilt.copy(component = axis), "0")
+        else -> TransformTargets[if (axis < 2) TILT_TAB else ROTATE_TAB]
+    }
 }
 
 internal fun turnFor(layer: Layer, catalog: EffectCatalog, tab: Int, threeD: Boolean = false): Turn? {
@@ -189,19 +186,26 @@ internal fun TurnHook(state: EditorState, turn: Turn) {
     }
 }
 
-@Composable
-internal fun TurnTab(state: EditorState, layer: Layer, turn: Turn) {
-    var axis by remember(layer.id) { mutableIntStateOf(0) }
-    SideEffect { state.keyTarget = turn.target(axis) }
-    TurnHook(state, turn)
-    val values = turn.values(layer)
-    val labels = listOf(stringResource(R.string.tilt_x_rotation), stringResource(R.string.tilt_y_rotation), stringResource(R.string.tilt_z_rotation))
-    fun openKeypad(which: Int) {
-        axis = which
-        state.keypad = KeypadRequest(labels.mapIndexed { i, label -> KeypadField(label, values[i], "\u00B0") }, which) { v ->
-            state.editSelected { turn.withValues(it, v.toFloatArray()) }
+internal fun Turn.openKeypad(state: EditorState, layer: Layer, axis: Int) {
+    state.inlineTransformAxis = axis
+    val fields = if (effect < 0 && layer.rotationDimensionsSeparated) listOf(axis) else listOf(0, 1, 2)
+    val angles = values(layer)
+    state.keypad = KeypadRequest(fields.map { KeypadField("XYZ"[it].toString(), angles[it], "\u00B0") }, fields.indexOf(axis)) { applied ->
+        state.editSelected { current ->
+            val next = values(current)
+            fields.forEachIndexed { index, component -> next[component] = applied[index] }
+            withValues(current, next)
         }
     }
+}
+
+@Composable
+internal fun TurnTab(state: EditorState, layer: Layer, turn: Turn) {
+    val axis = state.inlineTransformAxis
+    SideEffect { state.keyTarget = turn.target(layer, axis) }
+    TurnHook(state, turn)
+    val values = turn.values(layer)
+    val joined = turn.effect < 0 && !layer.rotationDimensionsSeparated
     Box(
         Modifier.fillMaxSize().pointerInput(state) {
             awaitEachGesture {
@@ -225,10 +229,11 @@ internal fun TurnTab(state: EditorState, layer: Layer, turn: Turn) {
         Text(stringResource(R.string.drag_here_to_rotate_in_3d), Modifier.align(Alignment.Center).padding(horizontal = 22.px), color = PanelCaption, maxLines = 1, softWrap = false, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(9.sp, 15.sp, 0.5.sp))
         Column(Modifier.align(Alignment.TopCenter).padding(top = 17.px)) {
             Row(horizontalArrangement = Arrangement.spacedBy(20.px)) {
-                for (i in 0..2) NumberBox(formatFixed(values[i], 1) + "º", if (turn.linked(i, axis)) Am.Accent else Am.OnDark, Modifier.width(177.px).height(70.px), fontSize = 13.5f, onSelect = { axis = i }) { openKeypad(i) }
+                for (i in 0..2) NumberBox(formatFixed(values[i], 1) + "º", if (joined || i == axis) Am.Accent else Am.OnDark,
+                    Modifier.width(177.px).height(70.px), fontSize = 13.5f, onSelect = { state.inlineTransformAxis = i }) { turn.openKeypad(state, layer, i) }
             }
             Row(Modifier.height(23.px), Arrangement.spacedBy(20.px)) {
-                for (label in labels) Caption(label, Modifier.width(177.px).fillMaxHeight())
+                for (name in "XYZ") Caption(name.toString(), Modifier.width(177.px).fillMaxHeight())
             }
         }
     }

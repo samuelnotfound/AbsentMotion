@@ -223,7 +223,10 @@ class UiContracts(unittest.TestCase):
         self.assertIn('val turn = if (move && selected.uses3D)', tools)
         self.assertIn('turnFor(selected, catalog, shown, threeD = true)', tools)
         panel = source('ui/editor/panels/MoveTransformPanel.kt')
-        self.assertIn('if (turn == null) RotationTab(state, layer) else AxesTab(state, layer, turn)', panel)
+        self.assertIn('turn == null -> RotationTab(state, layer)', panel)
+        self.assertIn('state.settings.rotateFree -> TurnTab(state, layer, turn)', panel)
+        self.assertIn('else if (turn != null) state.settings.rotateFree = !state.settings.rotateFree', tools)
+        self.assertIn('state.keyTarget = turn.target(layer, axis)', source('ui/editor/panels/Turning.kt'))
         self.assertIn('dialAngle', panel.split('private fun RotationTab', 1)[1].split('internal class Sides', 1)[0])
         axes = panel.split('private fun AxesTab', 1)[1].split('\n@Composable', 1)[0]
         self.assertIn('TurnHook(state, turn)', axes)

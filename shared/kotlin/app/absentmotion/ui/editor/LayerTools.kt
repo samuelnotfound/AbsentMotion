@@ -589,6 +589,10 @@ fun LayerPanel(state: EditorState, modifier: Modifier = Modifier) {
                     onDoubleClick = if (i == 0 && canPivot) { { pivotMode = shown != PIVOT_TAB; tab = 0 } } else null,
                 ) {
                     if (i == 0 && shown == 0) state.settings.switchSpatialControls()
+                    if (i == ROTATE_TAB) {
+                        if (shown != ROTATE_TAB) state.inlineTransformAxis = 2
+                        else if (turn != null) state.settings.rotateFree = !state.settings.rotateFree
+                    }
                     tab = i
                     if (i == 0) pivotMode = false
                 } else Modifier.dimmed())

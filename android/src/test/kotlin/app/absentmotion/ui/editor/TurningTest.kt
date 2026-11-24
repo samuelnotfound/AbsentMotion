@@ -58,7 +58,7 @@ class TurningTest {
 
     @Test fun onThePhoneRotateCarries3dAndMovePivotSoThereAreFourTabs() {
         assertEquals(listOf(0, ROTATE_TAB, SIZE_TAB, SKEW_TAB), transformTabs(basic = false, desktop = false))
-        assertEquals((0..PIVOT_TAB).toList(), transformTabs(basic = false, desktop = true))
+        assertEquals((0..PIVOT_TAB).filter { it != TILT_TAB }, transformTabs(basic = false, desktop = true))
         assertEquals(-1, turnFor(shapeLayer(), catalog, ROTATE_TAB, threeD = true)!!.effect)
         assertEquals(-1, turnFor(shapeLayer("camera"), catalog, ROTATE_TAB, threeD = true)!!.effect)
         assertFalse(shapeLayer().hasTilt())
@@ -99,7 +99,7 @@ class TurningTest {
         val turn = turnFor(model, catalog, TILT_TAB)!!
         val turned = turn.turned(model, Offset(0f, 10f), 0f)
         assertArrayEquals(floatArrayOf(-10f * TURN_PER_DP, 0f), turned.tilt, 1e-4f)
-        assertNull(turned.node.child("transform")?.child("rotation"))
+        assertEquals(0f, turned.rotation, 1e-4f)
         val twisted = turn.turned(turned, Offset.Zero, 45f)
         assertEquals(-45f, twisted.rotation, 1e-4f)
         assertArrayEquals(floatArrayOf(0f, 0f, 0f), turn.values(turn.reset(twisted)), 1e-4f)
@@ -119,15 +119,19 @@ class TurningTest {
         assertEquals("12.000000", typed.effects[0].effectProperty("rotZ")!!["value"])
     }
 
-    @Test fun theKeyframeButtonFollowsTheChosenAxis() {
-        val turn = turnFor(shapeLayer().addEffect(effect("cube")), catalog, ROTATE_TAB)!!
-        assertEquals(PropRef.effect(0, "rotY"), turn.target(1).ref)
-        val tilt = turnFor(shapeLayer("model"), catalog, TILT_TAB)!!
-        assertEquals(PropRef.Tilt, tilt.target(0).ref)
-        assertEquals(PropRef.Tilt, tilt.target(1).ref)
-        assertEquals(PropRef.Rotation, tilt.target(2).ref)
-        assertTrue(tilt.linked(0, 1))
-        assertFalse(turn.linked(0, 1))
-        assertNotNull(turn.target(2).default.toFloatOrNull())
+    @Test fun theKeyframeButtonFollowsTheRotationModeAndChosenAxis() {
+        val shape = shapeLayer().addEffect(effect("cube"))
+        val turn = turnFor(shape, catalog, ROTATE_TAB)!!
+        assertEquals(PropRef.effect(0, "rotY"), turn.target(shape, 1).ref)
+        assertNotNull(turn.target(shape, 2).default.toFloatOrNull())
+
+        val model = shapeLayer("model")
+        val tilt = turnFor(model, catalog, TILT_TAB)!!
+        for (axis in 0..2) assertEquals(PropRef.RotationXYZ, tilt.target(model, axis).ref)
+
+        val split = model.withRotationDimensionsSeparated(true)!!
+        assertEquals(PropRef.Tilt.copy(component = 0), tilt.target(split, 0).ref)
+        assertEquals(PropRef.Tilt.copy(component = 1), tilt.target(split, 1).ref)
+        assertEquals(PropRef.Rotation, tilt.target(split, 2).ref)
     }
 }
